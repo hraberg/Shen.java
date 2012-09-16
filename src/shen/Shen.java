@@ -3,11 +3,11 @@ package shen;
 import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
-import java.util.functions.BinaryOperator;
-import java.util.functions.Mapper;
+import java.util.functions.*;
 
 import static java.lang.String.*;
 import static java.lang.invoke.MethodHandles.lookup;
@@ -37,6 +37,43 @@ public class Shen {
         iterable(Shen.class.getDeclaredMethods())
                 .filter(m -> isPublic(m.getModifiers()))
                 .forEach(m -> { defunInternal(intern(unscramble(m.getName())), m); });
+
+        op("=", (BinaryOperator<Object>) (left, right) -> Objects.deepEquals(left, right));
+        op("+", (IntBinaryOperator) (left, right) -> left + right);
+        op("-", (IntBinaryOperator) (left, right) -> left - right);
+        op("*", (IntBinaryOperator) (left, right) -> left * right);
+        op("/", (IntBinaryOperator) (left, right) -> left / right);
+        op("+", (LongBinaryOperator) (left, right) -> left + right);
+        op("-", (LongBinaryOperator) (left, right) -> left - right);
+        op("*", (LongBinaryOperator) (left, right) -> left * right);
+        op("/", (LongBinaryOperator) (left, right) -> left / right);
+        op("+", (DoubleBinaryOperator) (left, right) -> left + right);
+        op("-", (DoubleBinaryOperator) (left, right) -> left - right);
+        op("*", (DoubleBinaryOperator) (left, right) -> left * right);
+        op("/", (DoubleBinaryOperator) (left, right) -> left / right);
+        op("<", (BiPredicate<Integer, Integer>) (left, right) -> left < right);
+        op("<=", (BiPredicate<Integer, Integer>) (left, right) -> left <= right);
+        op(">", (BiPredicate<Integer, Integer>) (left, right) -> left > right);
+        op(">=", (BiPredicate<Integer, Integer>) (left, right) -> left >= right);
+        op("<", (BiPredicate<Long, Long>) (left, right) -> left < right);
+        op("<=", (BiPredicate<Long, Long>) (left, right) -> left <= right);
+        op(">", (BiPredicate<Long, Long>) (left, right) -> left > right);
+        op(">=", (BiPredicate<Long, Long>) (left, right) -> left >= right);
+        op("<", (BiPredicate<Double, Double>) (left, right) -> left < right);
+        op("<=", (BiPredicate<Double, Double>) (left, right) -> left <= right);
+        op(">", (BiPredicate<Double, Double>) (left, right) -> left > right);
+        op(">=", (BiPredicate<Double, Double>) (left, right) -> left >= right);
+    }
+
+    private static Object op(String name, Object op) {
+        try {
+            Symbol symbol = intern(name);
+            Method m = op.getClass().getDeclaredMethods()[0];
+            symbol.fn.add(lookup.unreflect(m).bindTo(op));
+            return symbol;
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static class Cons {
@@ -279,20 +316,26 @@ public class Shen {
 
                 if (fn.type().parameterCount() == 0) return (MethodHandle) fn.invoke();
 
-                if (fn.type().parameterCount() == 1) {
+
+                if (fn.type().parameterCount() == 1 && fn.type().parameterArray()[0] != Object[].class) {
                     return args.reduce(fn,
                          (left, right) -> {try {
                               return ((MethodHandle) left).invoke(right);
                          } catch (Throwable t) {
-                              throw new RuntimeException(t);
+                             System.out.println(hd + " " + left + " " + right + " " + fn);
+                             throw new RuntimeException(t);
                          }});
                 }
                 for (MethodHandle h : ((Symbol) hd).fn)
                     try {
                         return h.invokeWithArguments(args);
                     } catch (NoSuchMethodException ignore) {
+                    } catch (WrongMethodTypeException ignore) {
                     } catch (ClassCastException ignore) {
                     } catch (IncompatibleClassChangeError ignore) {
+                    } catch (Throwable t) {
+                        System.out.println(hd + " " + h  + " " + args);
+                        throw t;
                     }
             }
         } catch (Throwable throwable) {
@@ -301,7 +344,7 @@ public class Shen {
         throw new IllegalArgumentException();
     }
 
-    public static Object defunInternal(Symbol name, Method m) {
+    public static Symbol defunInternal(Symbol name, Method m) {
         try {
             name.fn.add(lookup.unreflect(m));
             return name;
@@ -310,7 +353,7 @@ public class Shen {
         }
     }
 
-    public static Object defun(Symbol name, List<Symbol> args, Object body) {
+    public static Symbol defun(Symbol name, List<Symbol> args, Object body) {
         Collections.reverse(args);
         name.fn.clear();
         MethodHandle fn;
@@ -334,17 +377,17 @@ public class Shen {
 
     public static void main(String[] args) throws Throwable {
 
-/*
         asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types")
             .forEach(f -> {
                 load(format("shen/klambda/%s.kl", f));
             });
-*/
 
         System.out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         System.out.println(eval_kl(intern("x")));
         System.out.println(readEval("'(1 2 3)"));
+        System.out.println(readEval("(+ 1.0 2.0)"));
+        System.out.println(readEval("(* 5 2)"));
         System.out.println(readEval("(tl '(1 2 3))"));
         System.out.println(readEval("(let x 42 x)"));
         System.out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
@@ -408,12 +451,9 @@ public class Shen {
     }
 
     public static <T> Object cond(Object... clauses) throws Exception {
-        Iterator<Object> i = iterable(clauses).iterator();
-        while (i.hasNext()) {
-            Object test = i.next();
-            Object body = i.next();
-            if (isTrue(eval_kl(test))) return eval_kl(body);
-        }
+        for (Object clause : clauses)
+            if (isTrue(eval_kl(((List) clause).getFirst())))
+                return eval_kl(((List) clause).get(1));
         throw new IllegalArgumentException();
     }
 
@@ -469,6 +509,7 @@ public class Shen {
         if (find(sc, "'")) return asList(intern("quote"), tokenize(sc));
         if (find(sc, "\\)")) return null;
         if (sc.hasNextBoolean()) return sc.nextBoolean();
+        if (sc.hasNextInt()) return sc.nextInt();
         if (sc.hasNextLong()) return sc.nextLong();
         if (sc.hasNextDouble()) return sc.nextDouble();
         if (sc.hasNext()) return intern(sc.next());
