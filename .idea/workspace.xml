@@ -65,10 +65,9 @@
       <file leaf-file-name="Shen.java" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/shen/Shen.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state line="359" column="22" selection-start="10714" selection-end="10714" vertical-scroll-proportion="0.36548224">
+            <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0">
               <folding>
                 <element signature="imports" expanded="true" />
-                <element signature="e#9234#9250#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -122,7 +121,7 @@
       <file leaf-file-name="MapStream.java" pinned="false" current="false" current-in-tab="false">
         <entry file="jar:///opt/jdk1.8.0-lambda/src.zip!/java/lang/MapStream.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state line="524" column="34" selection-start="17553" selection-end="17553" vertical-scroll-proportion="0.0">
+            <state line="401" column="44" selection-start="13653" selection-end="13653" vertical-scroll-proportion="0.0">
               <folding />
             </state>
           </provider>
@@ -732,13 +731,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="jar:///opt/jdk1.8.0-lambda/src.zip!/java/lang/MapStream.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state line="524" column="34" selection-start="17553" selection-end="17553" vertical-scroll-proportion="0.0">
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/shen/klambda/sys.kl">
       <provider selected="true" editor-type-id="text-editor">
         <state line="552" column="25" selection-start="21087" selection-end="21087" vertical-scroll-proportion="0.0">
@@ -767,12 +759,18 @@
         </state>
       </provider>
     </entry>
+    <entry file="jar:///opt/jdk1.8.0-lambda/src.zip!/java/lang/MapStream.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="401" column="44" selection-start="13653" selection-end="13653" vertical-scroll-proportion="0.0">
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/shen/Shen.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state line="359" column="22" selection-start="10714" selection-end="10714" vertical-scroll-proportion="0.36548224">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0">
           <folding>
             <element signature="imports" expanded="true" />
-            <element signature="e#9234#9250#0" expanded="true" />
           </folding>
         </state>
       </provider>

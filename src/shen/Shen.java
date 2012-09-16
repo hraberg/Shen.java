@@ -30,7 +30,6 @@ public class Shen {
         set("*home-directory*", System.getProperty("user.dir"));
     }
 
-    private static boolean keepFrame;
     private static Set<Symbol> specialForms = asList("let", "lambda", "cond", "quote",
             "if", "and", "or", "defun").map(Shen::intern).into(new HashSet());
 
@@ -258,8 +257,7 @@ public class Shen {
 
     private static final Stack<HashMap<Symbol,Object>> locals = new Stack<>();
 
-    public static Object eval_kl(Object kl, Object... env) {
-        pushFrame(env);
+    public static Object eval_kl(Object kl) {
         try {
             if (kl instanceof Number) return kl;
             if (kl instanceof Mapper) return kl;
@@ -279,18 +277,12 @@ public class Shen {
                 if (fn.type().parameterCount() == 0) return (MethodHandle) fn.invoke();
 
                 if (fn.type().parameterCount() == 1) {
-                    try {
-                        keepFrame = true;
-                        return args.reduce(fn,
-                                (left, right) -> {try {
-                                   return ((MethodHandle) left).invoke(right);
-                                } catch (Throwable t) {
-                                    throw new RuntimeException(t);
-                                }});
-
-                    } finally {
-                        keepFrame = false;
-                    }
+                    return args.reduce(fn,
+                         (left, right) -> {try {
+                              return ((MethodHandle) left).invoke(right);
+                         } catch (Throwable t) {
+                              throw new RuntimeException(t);
+                         }});
                 }
                 for (MethodHandle h : ((Symbol) hd).fn)
                     try {
@@ -301,27 +293,8 @@ public class Shen {
             }
         } catch (Throwable throwable) {
             throw new RuntimeException(throwable);
-        } finally {
-            popFrame();
         }
         throw new IllegalArgumentException();
-    }
-
-    private static void popFrame() {
-        if (!keepFrame) locals.pop();
-    }
-
-    private static void pushFrame(Object... env) {
-        if (!keepFrame) locals.push(new HashMap<>());
-        locals.peek().putAll(Shen.<Symbol, Object>asMap(env));
-    }
-
-    private static <K,V> Map<K, V> asMap(Object... kvs) {
-        Map<Object, Object> map = new HashMap<>();
-        Iterator<Object> i = iterable(kvs).iterator();
-        while (i.hasNext())
-            map.put(i.next(), i.next());
-        return (Map<K, V>) map;
     }
 
     public static Object defunInternal(Symbol name, Method m) {
@@ -368,6 +341,7 @@ public class Shen {
         System.out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
         System.out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
         System.out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
+        System.out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
         System.out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
         System.out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
         System.out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tail"), asList(intern("quote"), asList(1, 2, intern("x")))))));
@@ -442,13 +416,19 @@ public class Shen {
         return true;
     }
 
-    public static MethodHandle lambda(Symbol x, Object y) {
+    public static MethodHandle lambda(final Symbol x, final Object y) {
         try {
+            HashMap<Symbol, Object> scope = locals.reduce(new HashMap<>(), (left, right) -> right.into(left));
             Mapper<Object, Object> lambda = (X) -> {
+                locals.push(new HashMap<Symbol, Object>(scope) {{
+                    put(x, X);
+                }});
                 try {
-                    return eval_kl(y, x, X);
+                    return eval_kl(y);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
+                } finally {
+                     locals.pop();
                 }
             };
             return lookup.unreflect(lambda.getClass().getDeclaredMethods()[0]).bindTo(lambda);
