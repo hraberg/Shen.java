@@ -13,6 +13,7 @@ import static java.lang.String.*;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
+import static java.util.Collections.EMPTY_LIST;
 import static java.util.Collections.nCopies;
 import static java.util.Iterables.into;
 import static java.util.functions.Mappers.constant;
@@ -21,6 +22,10 @@ public class Shen {
     private static final MethodHandles.Lookup lookup = lookup();
     private static final Map<String, Symbol> symbols = new HashMap<>();
 
+    private static Set<Symbol> specialForms = asList("let", "lambda", "cond", "quote",
+            "if", "and", "or", "defun").map(Shen::intern).into(new HashSet());
+    private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class);
+
     static {
         set("*language*", "Java");
         set("*implementation*", format("[jvm %s]", System.getProperty("java.version")));
@@ -28,10 +33,11 @@ public class Shen {
         set("*stinput*", System.in);
         set("*stoutput*", System.out);
         set("*home-directory*", System.getProperty("user.dir"));
-    }
 
-    private static Set<Symbol> specialForms = asList("let", "lambda", "cond", "quote",
-            "if", "and", "or", "defun").map(Shen::intern).into(new HashSet());
+        iterable(Shen.class.getDeclaredMethods())
+                .filter(m -> isPublic(m.getModifiers()))
+                .forEach(m -> { defunInternal(intern(unscramble(m.getName())), m); });
+    }
 
     public static class Cons {
         public final Object car, cdr;
@@ -94,7 +100,7 @@ public class Shen {
         return list.isEmpty() ? null : list.get(0);
     }
 
-    public static List<Object> tail(List<Object> list) {
+    public static List<Object> tl(List<Object> list) {
         return list.isEmpty() ? null : list.subList(1, list.size());
     }
 
@@ -259,19 +265,16 @@ public class Shen {
 
     public static Object eval_kl(Object kl) {
         try {
-            if (kl instanceof Number) return kl;
-            if (kl instanceof Mapper) return kl;
-            if (kl instanceof String) return kl;
-            if (kl instanceof Boolean) return kl;
+            if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
+            if (EMPTY_LIST.equals(kl)) return kl;
             if (kl instanceof Symbol) return ((Symbol) kl).resolve();
-            if (asList().equals(kl)) return kl;
             if (kl instanceof List) {
                 List<Object> list = (List) kl;
 
                 Object hd = hd(list);
                 MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
 
-                List<Object> args = tail(list);
+                List<Object> args = tl(list);
                 args = specialForms.contains(hd) ? args : into(args.map(Shen::eval_kl), new ArrayList<Object>());
 
                 if (fn.type().parameterCount() == 0) return (MethodHandle) fn.invoke();
@@ -288,8 +291,9 @@ public class Shen {
                     try {
                         return h.invokeWithArguments(args);
                     } catch (NoSuchMethodException ignore) {
+                    } catch (ClassCastException ignore) {
+                    } catch (IncompatibleClassChangeError ignore) {
                     }
-                throw new IllegalArgumentException();
             }
         } catch (Throwable throwable) {
             throw new RuntimeException(throwable);
@@ -329,14 +333,19 @@ public class Shen {
     }
 
     public static void main(String[] args) throws Throwable {
-        iterable(Shen.class.getDeclaredMethods())
-                .filter(m -> isPublic(m.getModifiers()))
-                .forEach(m -> { defunInternal(intern(unscramble(m.getName())), m); });
 
-//        load("shen/klambda/sys.kl");
+/*
+        asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
+                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types")
+            .forEach(f -> {
+                load(format("shen/klambda/%s.kl", f));
+            });
+*/
+
         System.out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         System.out.println(eval_kl(intern("x")));
         System.out.println(readEval("'(1 2 3)"));
+        System.out.println(readEval("(tl '(1 2 3))"));
         System.out.println(readEval("(let x 42 x)"));
         System.out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
         System.out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
@@ -344,7 +353,7 @@ public class Shen {
         System.out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
         System.out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
         System.out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
-        System.out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tail"), asList(intern("quote"), asList(1, 2, intern("x")))))));
+        System.out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
         System.out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
         System.out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
         System.out.println(str(eval_kl(asList(intern("my-fun"), 3))));
@@ -352,8 +361,12 @@ public class Shen {
         System.out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
     }
 
-    private static Object load(String file) throws Exception {
-        return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
+    private static Object load(String file) {
+        try {
+            return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static Object readEval(String shen) throws Exception {
@@ -455,6 +468,7 @@ public class Shen {
         if (find(sc, "\\s")) return tokenize(sc);
         if (find(sc, "'")) return asList(intern("quote"), tokenize(sc));
         if (find(sc, "\\)")) return null;
+        if (sc.hasNextBoolean()) return sc.nextBoolean();
         if (sc.hasNextLong()) return sc.nextLong();
         if (sc.hasNextDouble()) return sc.nextDouble();
         if (sc.hasNext()) return intern(sc.next());
