@@ -390,6 +390,8 @@ public class Shen {
                     return result;
                 }
 
+                if (isFixedArityPartial(fn, args)) return insertArguments(fn, 0, args.toArray());
+
                 @SuppressWarnings("SuspiciousToArrayCall")
                 MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
                         .into(new ArrayList<>())
@@ -419,6 +421,10 @@ public class Shen {
             throw uncheck(t);
         }
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
+    }
+
+    static boolean isFixedArityPartial(MethodHandle fn, List<Object> args) {
+        return !fn.isVarargsCollector() && fn.type().parameterCount() > args.size();
     }
 
     static boolean isLambda(Object hd, MethodHandle fn) {
@@ -600,7 +606,7 @@ public class Shen {
     }
 
     static List tokenizeAll(Scanner sc) throws Exception {
-        LinkedList<Object> list = new LinkedList<>();
+        List<Object> list = new LinkedList<>();
         Object x;
         while ((x = tokenize(sc)) != null) list.add(x);
         return list;
@@ -658,7 +664,7 @@ public class Shen {
         out.println(readEval("(absvector? ())"));
         out.println(readEval("'(1 2 3)"));
         out.println(readEval("(+ 1 2)"));
-        out.println(readEval("(+ 1 2)"));
+        out.println(readEval("((+ 6) 2)"));
         out.println(readEval("(+ 1.0 2.0)"));
         out.println(readEval("(* 5 2)"));
         out.println(readEval("(tl '(1 2 3))"));
