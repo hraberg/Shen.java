@@ -30,7 +30,7 @@ public class Shen {
 
     static MethodHandles.Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
-    static Stack<Map<Symbol,Object>> locals = new Stack<>();
+    static Stack<Map<Symbol, Object>> locals = new Stack<>();
 
     @Retention(RetentionPolicy.RUNTIME)
     public @interface Macro {}
@@ -52,9 +52,9 @@ public class Shen {
                 .forEach(m -> { defun(m); });
 
         op("=", (BiPredicate<Object, Object>)
-                (left, right) -> left instanceof Number && right instanceof  Number
-                                ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
-                                : deepEquals(left, right));
+                (left, right) -> left instanceof Number && right instanceof Number
+                        ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
+                        : deepEquals(left, right));
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
@@ -191,7 +191,7 @@ public class Shen {
     }
 
     public static MethodHandle freeze(Object x) {
-        return findSAM((Factory<Object>) () -> x) ;
+        return findSAM((Factory<Object>) () -> x);
     }
 
     public static Object[] absvector(int n) {
@@ -256,7 +256,7 @@ public class Shen {
         if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
 
         File file = new File((String) value("*home-directory*"), string);
-        switch(direction.symbol) {
+        switch (direction.symbol) {
             case "in": return new FileInputStream(file);
             case "out": return new FileOutputStream(file);
         }
@@ -270,7 +270,7 @@ public class Shen {
     }
 
     public static long get_time(Symbol time) {
-        switch(time.symbol) {
+        switch (time.symbol) {
             case "run": return System.nanoTime();
             case "unix": return System.currentTimeMillis() / 1000;
         }
@@ -369,7 +369,7 @@ public class Shen {
                 List<Object> list = (List) kl;
 
                 Object hd = hd(list);
-                MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
+                MethodHandle fn = (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
 
                 List<Object> args = tl(list);
                 //noinspection Convert2Diamond,SuspiciousMethodCalls
@@ -407,7 +407,7 @@ public class Shen {
                         err.println("Candidates: " + symbol.fn);
                         symbol.demote(h);
                     } catch (Throwable t) {
-                        err.println(hd + " " + h  + " " + args);
+                        err.println(hd + " " + h + " " + args);
                         err.println(symbol.fn);
                         throw uncheck(t);
                     }
