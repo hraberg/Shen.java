@@ -29,7 +29,9 @@ public class Shen {
     private static final MethodHandles.Lookup lookup = lookup();
     private static final Map<String, Symbol> symbols = new HashMap<>();
 
-    private static Set specialForms = asList("let", "lambda", "cond", "quote",
+    private static final boolean debug = false;
+
+    private static Set macros = asList("let", "lambda", "cond", "quote",
             "if", "and", "or", "defun", "trap-error").map(s -> intern(s)).into(new HashSet());
     private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class);
 
@@ -271,6 +273,11 @@ public class Shen {
             }
             return this;
         }
+
+        public void demote(MethodHandle h) {
+            fn.remove(h);
+            fn.add(h);
+        }
     }
 
     public static Symbol intern(String string) {
@@ -321,7 +328,7 @@ public class Shen {
     }
 
     private static Object eval_kl(Object kl, boolean tail) {
-        System.err.println(kl);
+        if (debug) err.println(kl);
         try {
             if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
             if (EMPTY_LIST.equals(kl)) return kl;
@@ -331,18 +338,18 @@ public class Shen {
                 List<Object> list = (List) kl;
 
                 Object hd = hd(list);
-                MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd, tail);
+                MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
 
                 List<Object> args = tl(list);
                 //noinspection Convert2Diamond
-                args = specialForms.contains(hd) ? args : into(args.map(k -> eval_kl(k, false)), new ArrayList<Object>());
+                args = macros.contains(hd) ? args : into(args.map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
                 if (intern("this").resolve().equals(fn)) {
                     if (tail) {
-                        System.out.println("RECUR in " + hd + " " + args);
+                        if (debug) out.println("Recur: " + hd + " " + args);
                         return new Recur(args.toArray());
                     }
-                    System.err.println("Can only recur from tail position " + hd);
+                    if (debug) err.println("Can only recur from tail position: " + hd);
                 }
 
                 if (fn.type().parameterCount() == 1 && !fn.isVarargsCollector()) {
@@ -351,6 +358,7 @@ public class Shen {
                         result = ((MethodHandle) result).invoke(arg);
                     return result;
                 }
+
                 @SuppressWarnings("SuspiciousToArrayCall")
                 MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
                         .into(new ArrayList<>())
@@ -359,13 +367,14 @@ public class Shen {
                 if (!(hd instanceof Symbol)) return invokeVarArgs(fn, targetType, args.toArray());
 
                 Symbol symbol = (Symbol) hd;
-                for (MethodHandle h : symbol.fn)
+                for (MethodHandle h : new ArrayList<>(symbol.fn))
                     try {
                         return invokeVarArgs(h, targetType, args.toArray());
                     } catch (WrongMethodTypeException | IncompatibleClassChangeError ignore) {
                         err.println(ignore);
-                        err.println(h + " " + hd + " " + args);
-                        err.println(symbol.fn);
+                        err.println(hd + " " + h + " " + args);
+                        err.println("Candidates: " + symbol.fn);
+                        symbol.demote(h);
                     } catch (Throwable t) {
                         err.println(hd + " " + h  + " " + args);
                         err.println(symbol.fn);
@@ -373,9 +382,10 @@ public class Shen {
                     }
             }
         } catch (Throwable t) {
+            err.println("Exception: " + kl + " (" + kl.getClass() + ")");
             throw uncheck(t);
         }
-        throw new IllegalArgumentException("Cannot eval " + kl + " (" + kl.getClass() + ")");
+        throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
     }
 
     private static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) throws Throwable {
@@ -404,10 +414,7 @@ public class Shen {
     private static MethodHandle partials(final MethodHandle lambda, Object... knownArgs) {
         return findSAM((Defun) newArgs -> {
             try {
-                List<Object> args = new ArrayList<>();
-                args.addAll(asList(knownArgs));
-                args.addAll(asList(newArgs));
-                return lambda.invokeWithArguments(args);
+                return lambda.invokeWithArguments(asList(newArgs).into(new ArrayList<>(asList(knownArgs))));
             } catch (Throwable t) {
                 throw uncheck(t);
             }
