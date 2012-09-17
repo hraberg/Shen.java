@@ -289,7 +289,7 @@ public class Shen {
         return x.var = y;
     }
 
-    public static Object set(String x, Object y) {
+    private static Object set(String x, Object y) {
         return set(intern(x), y);
     }
 
@@ -309,7 +309,7 @@ public class Shen {
         return x.fn.getFirst();
     }
 
-    public static MethodHandle function(String x) {
+    private static MethodHandle function(String x) {
         return function(intern(x));
     }
 
@@ -328,9 +328,9 @@ public class Shen {
 
                 List<Object> args = tl(list);
                 args = specialForms.contains(hd) ? args : into(args.map(Shen::eval_kl), new ArrayList<Object>());
+                System.out.println(hd + " " + args);
 
-                if (fn.type().parameterCount() == 0) return (MethodHandle) fn.invoke();
-
+                if (fn.type().parameterCount() == 0) return fn.invoke();
 
                 if (fn.type().parameterCount() == 1 && fn.type().parameterArray()[0] != Object[].class) {
                     Object result = fn;
@@ -346,6 +346,8 @@ public class Shen {
                         return insertArguments(h.asType(targetType), 0, args.toArray()).invokeExact();
                     } catch (WrongMethodTypeException ignore) {
                         System.out.println(ignore);
+                        System.out.println(h + " " + hd + " " + args);
+                        System.out.println(((Symbol) hd).fn);
 /*
                     } catch (NoSuchMethodException ignore) {
                     } catch (ClassCastException ignore) {
@@ -372,13 +374,13 @@ public class Shen {
     }
 
     public static Symbol defun(Symbol name, List<Symbol> args, Object body) {
-        Collections.reverse(args);
         name.fn.clear();
         MethodHandle fn;
         if (args.isEmpty()) {
             fn = (MethodHandle) eval_kl(asList(intern("lambda"), intern("_"), body));
-            fn.bindTo(null);
+            fn = fn.bindTo(null);
         } else {
+            Collections.reverse(args);
             for (Symbol arg : args)
                 body = asList(intern("lambda"), arg, body);
             fn = (MethodHandle) eval_kl(body);
@@ -394,15 +396,16 @@ public class Shen {
     }
 
     public static void main(String[] args) throws Throwable {
-
+        asList("sys", "writer", "core", "prolog", "yacc", "declarations"
 /*
-        asList("sys", "writer", "core", "prolog", "yacc", "load",
-                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types")
+                , "load",
+                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"
+*/
+        )
             .forEach(f -> {
                 load(format("shen/klambda/%s.kl", f));
             });
-*/
-
+/*
         System.out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         System.out.println(eval_kl(intern("x")));
         System.out.println(readEval("'(1 2 3)"));
@@ -424,10 +427,12 @@ public class Shen {
         System.out.println(str(eval_kl(asList(intern("my-fun"), 3))));
         System.out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
         System.out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
+*/
     }
 
     private static Object load(String file) {
         try {
+            System.out.println("LOADING " + file);
             return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
         } catch (Exception e) {
             throw new RuntimeException(e);
