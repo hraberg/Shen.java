@@ -1,6 +1,8 @@
 package shen;
 
 import java.io.*;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -26,13 +28,15 @@ import static shen.Shen.UncheckedException.uncheck;
 
 @SuppressWarnings("UnusedDeclaration")
 public class Shen {
+    private static final boolean debug = false;
+
     private static final MethodHandles.Lookup lookup = lookup();
     private static final Map<String, Symbol> symbols = new HashMap<>();
 
-    private static final boolean debug = false;
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Macro {}
 
-    private static Set macros = asList("let", "lambda", "cond", "quote",
-            "if", "and", "or", "defun", "trap-error").map(s -> intern(s)).into(new HashSet());
+    private static Set<Symbol> macros = new HashSet<>();
     private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class);
 
     static {
@@ -136,6 +140,7 @@ public class Shen {
         throw new RuntimeException(s);
     }
 
+    @Macro
     public static Object trap_error(Object x, Object f) {
         try {
             return eval_kl(x);
@@ -173,8 +178,8 @@ public class Shen {
         return x.substring(1);
     }
 
-    public static Mapper<Object, Object> freeze(Object x) {
-        return constant(x);
+    public static MethodHandle freeze(Object x) {
+        return findSAM(constant(x)) ;
     }
 
     public static Object[] absvector(int n) {
@@ -240,7 +245,7 @@ public class Shen {
     }
 
     public static long get_time(Symbol time) {
-        switch(time.symbol ) {
+        switch(time.symbol) {
             case "run": return System.nanoTime();
             case "unix": return System.currentTimeMillis() / 1000;
         }
@@ -297,6 +302,7 @@ public class Shen {
         return x.var;
     }
 
+    @Macro
     public static Object quote(Object x) {
         return x;
     }
@@ -341,7 +347,7 @@ public class Shen {
                 MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
 
                 List<Object> args = tl(list);
-                //noinspection Convert2Diamond
+                //noinspection Convert2Diamond,SuspiciousMethodCalls
                 args = macros.contains(hd) ? args : into(args.map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
                 if (intern("this").resolve().equals(fn)) {
@@ -394,6 +400,7 @@ public class Shen {
 
     private static Symbol defun(Symbol name, Method m) {
         try {
+            if (m.isAnnotationPresent(Macro.class)) macros.add(name);
             name.fn.add(lookup.unreflect(m));
             return name;
         } catch (IllegalAccessException e) {
@@ -401,6 +408,7 @@ public class Shen {
         }
     }
 
+    @Macro
     public static Symbol defun(Symbol name, final List<Symbol> args, Object body) {
         name.fn.clear();
         name.fn.add(defun(args, body));
@@ -492,14 +500,17 @@ public class Shen {
         return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
     }
 
+    @Macro
     public static Object kl_if(Object test, Object then, Object _else) throws Exception {
         return isTrue(eval_kl(test)) ? eval_kl(then) : eval_kl(_else);
     }
 
+    @Macro
     public static <T> Object kl_if(Object test, Object then) throws Exception {
         return kl_if(test, then, false);
     }
 
+    @Macro
     public static <T> Object cond(Object... clauses) throws Exception {
         for (Object clause : clauses)
             if (isTrue(eval_kl(((List) clause).getFirst())))
@@ -507,18 +518,21 @@ public class Shen {
         throw new IllegalArgumentException();
     }
 
+    @Macro
     public static <T> boolean or(Object... clauses) throws Exception {
         for (Object clause : clauses)
             if (isTrue(eval_kl(clause))) return true;
         return false;
     }
 
+    @Macro
     public static <T> boolean and(Object... clauses) throws Exception {
         for (Object clause : clauses)
             if (!isTrue(eval_kl(clause))) return false;
         return true;
     }
 
+    @Macro
     public static MethodHandle lambda(final Symbol x, final Object y) {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
@@ -537,12 +551,9 @@ public class Shen {
         return findSAM(lambda);
     }
 
-    public static Object let(Symbol x, Object y, Object z) {
-        try {
-            return lambda(x, z).invoke(eval_kl(y));
-        } catch (Throwable t) {
-            throw uncheck(t);
-        }
+    @Macro
+    public static Object let(Symbol x, Object y, Object z) throws Throwable {
+        return lambda(x, z).invoke(eval_kl(y));
     }
 
     private static boolean isTrue(Object test) {
