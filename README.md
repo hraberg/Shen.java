@@ -21,7 +21,7 @@ It's loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has
 Currently an interpreter using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive.
 This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff.
 
-The idea is to compile this down to bytecode eventually. Note that I don't vouch for any of the implementation details regarding this - I'm learning as I go.
+The idea is to compile this down to bytecode eventually. Note that I don't vouch for any of the implementation details regarding this - I'm learning as we go.
 
 No build exists yet, but there's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrains.net/display/IDEADEV/IDEA+12+EAP) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/).
 
@@ -37,9 +37,10 @@ No build exists yet, but there's an IntelliJ project, which requires [Leda EAP](
 * Shen - it cannot bootstrap Shen yet, dies loading `declarations.kl`, with various errors.
 * This means no REPL (one could do a KL only REPL).
 * Compilation - it's currently an interpreter, but doesn't intend to stay like one.
-* Use of MethodHandle - it does work, but not sure it will simplifiy anything later.
-* I create lambdas only to turn them into MethodHandles, with the assumption that this will be useful later down the line when compiling, but don't really know.
-* I use varargs method handles, but want to generate more exact methods, but to do that, I need interfaces with loads of arities defined.
+* Use of MethodHandle - it does work, but not sure it will simplify anything later.
+* Creating lambdas only to turn them into MethodHandles, with the assumption that this will be useful later down the line when compiling, but don't really know.
+* Varargs method handles, but I want to generate more exact methods, but to do that, I need to generate interfaces dynamically - but I'm holding off bytecode generation until Shen "works".
+* There's a very simplistic idea of having more than one MethodHandle registered per function, but it just tries them instead of picking the best one. I guess this will evolve into guards and callsites in the invokedynamic world.
 * JDK < 8. Should be easy to backport by removing use of lambdas and `java.util.functions`.
 
 

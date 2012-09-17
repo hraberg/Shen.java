@@ -14,6 +14,7 @@ import java.util.functions.*;
 
 import static java.lang.String.format;
 import static java.lang.System.err;
+import static java.lang.System.in;
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
@@ -43,7 +44,7 @@ public class Shen {
         set("*language*", "Java");
         set("*implementation*", format("[jvm %s]", System.getProperty("java.version")));
         set("*porters*", "Håkan Råberg");
-        set("*stinput*", System.in);
+        set("*stinput*", in);
         set("*stoutput*", out);
         set("*home-directory*", System.getProperty("user.dir"));
 
