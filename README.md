@@ -36,7 +36,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 ### What doesn't work?
 
-* Shen - it cannot bootstrap Shen yet, dies loading `declarations.kl`, with various errors.
+* Shen - it cannot bootstrap Shen yet, dies loading [`declarations.kl`](https://github.com/hraberg/Shen.java/blob/master/shen/klambda/declarations.kl), with various errors.
 * This means no REPL (one could do a KL only REPL).
 * Compilation - it's currently an interpreter, but doesn't intend to stay like one.
 * Use of MethodHandle - it does work, but not sure it will simplify anything later.
