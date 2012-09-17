@@ -223,15 +223,15 @@ public class Shen {
 
     public static String n_gt_string(int n) {
         if (n < 0) throw new IllegalArgumentException();
-        return "" + (char) n;
+        return Character.toString((char) n);
+    }
+
+    public static String byte_gt_string(byte n) {
+        return n_gt_string(n);
     }
 
     public static int string_gt_n(String s) {
         return (int) s.charAt(0);
-    }
-
-    public static String byte_gt_string(byte n) {
-        return "" + (char) n;
     }
 
     public static int read_byte(InputStream s) throws IOException {
