@@ -72,10 +72,8 @@ public class Shen {
         op(">=", (BiPredicate<Double, Double>) (left, right) -> left >= right);
     }
 
-    private static Object op(String name, Object op) {
-        Symbol symbol = intern(name);
-        symbol.fn.add(findSAM(op));
-        return symbol;
+    private static void op(String name, Object op) {
+        intern(name).fn.add(findSAM(op));
     }
 
     private static MethodHandle findSAM(Object lambda) {
@@ -446,58 +444,6 @@ public class Shen {
                 .replaceAll("-?lt-?", "<-").replaceAll("^kl-", "");
     }
 
-    public static void main(String[] args) throws Throwable {
-/*
-        asList("sys", "writer", "core", "prolog", "yacc", "declarations"
-                , "load",
-                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"
-
-
-        )
-            .forEach(f -> {
-                load(format("shen/klambda/%s.kl", f));
-            });
-*/
-
-        out.println(let(intern("x"), 2, eval_kl(intern("x"))));
-        out.println(eval_kl(intern("x")));
-        out.println(readEval("(cons 2 3)"));
-        out.println(readEval("(cons? (cons 2 '(3)))"));
-        out.println(readEval("(absvector? (absvector 10))"));
-        out.println(readEval("(absvector? ())"));
-        out.println(readEval("'(1 2 3)"));
-        out.println(readEval("(+ 1 2)"));
-        out.println(readEval("(+ 1 2)"));
-        out.println(readEval("(+ 1.0 2.0)"));
-        out.println(readEval("(* 5 2)"));
-        out.println(readEval("(tl '(1 2 3))"));
-        out.println(readEval("(let x 42 x)"));
-        out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
-        out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
-        out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
-        out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
-        out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
-
-        out.println(readEval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
-        out.println(readEval("(fib 10)"));
-
-        out.println(readEval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
-        out.println(readEval("(factorial 10 1)"));
-        out.println(readEval("(factorial 12)"));
-        out.println(readEval("((factorial 12) 1)"));
-
-        out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
-        out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
-        out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
-        out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
-        out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
-        out.println(str(eval_kl(asList(intern("my-fun"), 3))));
-        out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
-        out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
-        out.println(eval_kl(asList(intern("defun"), intern("my-fun3"), asList(), "Hello")));
-        out.println(str(eval_kl(asList(intern("my-fun3")))));
-    }
-
     private static Object load(String file) {
         try {
             out.println("LOADING " + file);
@@ -627,14 +573,12 @@ public class Shen {
     }
 
     public static class UncheckedException extends RuntimeException {
-        public static Set<String> filteredPackages = new HashSet<>();
 
-        static {
-            filteredPackages.add("sun.reflect");
-            filteredPackages.add("org.junit");
-            filteredPackages.add("java.lang.reflect");
-        }
-
+        public static Set<String> filteredPackages = new HashSet<String>() {{
+            add("sun.reflect");
+            add("org.junit");
+            add("java.lang.reflect");
+        }};
         Throwable wrapped;
 
         public static RuntimeException uncheck(Throwable t) {
@@ -673,5 +617,58 @@ public class Shen {
             String message = getLocalizedMessage();
             return (message != null) ? (s + ": " + message) : s;
         }
+
+    }
+
+    public static void main(String[] args) throws Throwable {
+/*
+        asList("sys", "writer", "core", "prolog", "yacc", "declarations"
+                , "load",
+                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"
+
+
+        )
+            .forEach(f -> {
+                load(format("shen/klambda/%s.kl", f));
+            });
+*/
+
+        out.println(let(intern("x"), 2, eval_kl(intern("x"))));
+        out.println(eval_kl(intern("x")));
+        out.println(readEval("(cons 2 3)"));
+        out.println(readEval("(cons? (cons 2 '(3)))"));
+        out.println(readEval("(absvector? (absvector 10))"));
+        out.println(readEval("(absvector? ())"));
+        out.println(readEval("'(1 2 3)"));
+        out.println(readEval("(+ 1 2)"));
+        out.println(readEval("(+ 1 2)"));
+        out.println(readEval("(+ 1.0 2.0)"));
+        out.println(readEval("(* 5 2)"));
+        out.println(readEval("(tl '(1 2 3))"));
+        out.println(readEval("(let x 42 x)"));
+        out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
+        out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
+        out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
+        out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
+        out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
+
+        out.println(readEval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
+        out.println(readEval("(fib 10)"));
+
+        out.println(readEval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
+        out.println(readEval("(factorial 10 1)"));
+        out.println(readEval("(factorial 12)"));
+        out.println(readEval("((factorial 12) 1)"));
+
+        out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
+        out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
+        out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
+        out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
+        out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
+        out.println(str(eval_kl(asList(intern("my-fun"), 3))));
+        out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
+        out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
+        out.println(eval_kl(asList(intern("defun"), intern("my-fun3"), asList(), "Hello")));
+        out.println(str(eval_kl(asList(intern("my-fun3")))));
     }
 }
