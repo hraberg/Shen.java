@@ -275,14 +275,14 @@ public class ShenTest {
 //        is(true, 神("(---5 5.0)"));
     }
 
-    private void is(Object expected, Object actual) {
+    void is(Object expected, Object actual) {
         if (expected instanceof Class)
             assertThat(actual, instanceOf((Class<?>) expected));
         else
             assertThat(actual, equalTo(expected));
     }
 
-    private Object 神(String shen) {
+    Object 神(String shen) {
         try {
             return readEval(shen);
         } catch (Exception e) {
