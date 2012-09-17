@@ -43,7 +43,7 @@ public class Shen {
 
         iterable(Shen.class.getDeclaredMethods())
                 .filter(m -> isPublic(m.getModifiers()))
-                .forEach(m -> { defunInternal(intern(unscramble(m.getName())), m); });
+                .forEach(m -> { defun(intern(unscramble(m.getName())), m); });
 
         op("=", (BinaryOperator<Object>) (left, right) -> Objects.deepEquals(left, right));
         op("+", (IntBinaryOperator) (left, right) -> left + right);
@@ -73,18 +73,18 @@ public class Shen {
     }
 
     private static Object op(String name, Object op) {
+        Symbol symbol = intern(name);
+        symbol.fn.add(findSAM(op));
+        return symbol;
+    }
+
+    private static MethodHandle findSAM(Object lambda) {
         try {
-            Symbol symbol = intern(name);
-            symbol.fn.add(findSAM(op).bindTo(op));
-            return symbol;
+            return lookup.unreflect(asList(lambda.getClass().getDeclaredMethods())
+                    .filter(m -> !m.isSynthetic()).getFirst()).bindTo(lambda);
         } catch (IllegalAccessException e) {
             throw uncheck(e);
         }
-    }
-
-    private static MethodHandle findSAM(Object lambda) throws IllegalAccessException {
-        return lookup.unreflect(asList(lambda.getClass().getDeclaredMethods())
-                .filter(m -> !m.isSynthetic()).getFirst());
     }
 
     public static class Cons {
@@ -322,7 +322,20 @@ public class Shen {
 
     private static final Stack<Map<Symbol,Object>> locals = new Stack<>();
 
+    public static class Recur {
+        Object[] args;
+
+        public Recur(Object[] args) {
+            this.args = args;
+        }
+    }
+
     public static Object eval_kl(Object kl) {
+        return eval_kl(kl, true);
+    }
+
+    private static Object eval_kl(Object kl, boolean tail) {
+        System.err.println(kl);
         try {
             if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
             if (EMPTY_LIST.equals(kl)) return kl;
@@ -332,13 +345,19 @@ public class Shen {
                 List<Object> list = (List) kl;
 
                 Object hd = hd(list);
-                MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
+                MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd, tail);
 
                 List<Object> args = tl(list);
                 //noinspection Convert2Diamond
-                args = specialForms.contains(hd) ? args : into(args.map(k -> eval_kl(k)), new ArrayList<Object>());
+                args = specialForms.contains(hd) ? args : into(args.map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
-                if (fn.type().parameterCount() == 0) return fn.invoke();
+                if (intern("this").resolve().equals(fn)) {
+                    if (tail) {
+                        System.out.println("RECUR in " + hd + " " + args);
+                        return new Recur(args.toArray(new Object[0]));
+                    }
+                    System.err.println("Can only recur from tail position " + hd);
+                }
 
                 if (fn.type().parameterCount() == 1 && fn.type().parameterArray()[0] != Object[].class) {
                     Object result = fn;
@@ -350,11 +369,14 @@ public class Shen {
                 MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
                         .into(new ArrayList<>())
                         .toArray(new Class[args.size()]));
+
+                if (!(hd instanceof Symbol)) return invokeVarArgs(fn, targetType, args.toArray());
+
                 Symbol symbol = (Symbol) hd;
                 for (MethodHandle h : symbol.fn)
                     try {
-                        return insertArguments(h.asType(targetType), 0, args.toArray()).invokeExact();
-                    } catch (WrongMethodTypeException ignore) {
+                        return invokeVarArgs(h, targetType, args.toArray());
+                    } catch (WrongMethodTypeException | IncompatibleClassChangeError ignore) {
                         err.println(ignore);
                         err.println(h + " " + hd + " " + args);
                         err.println(symbol.fn);
@@ -367,10 +389,14 @@ public class Shen {
         } catch (Throwable t) {
             throw uncheck(t);
         }
-        throw new IllegalArgumentException();
+        throw new IllegalArgumentException("Cannot eval " + kl + " (" + kl.getClass() + ")");
     }
 
-    public static Symbol defunInternal(Symbol name, Method m) {
+    private static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) throws Throwable {
+        return insertArguments(fn.asType(targetType), 0, args).invokeExact();
+    }
+
+    private static Symbol defun(Symbol name, Method m) {
         try {
             name.fn.add(lookup.unreflect(m));
             return name;
@@ -379,20 +405,51 @@ public class Shen {
         }
     }
 
-    public static Symbol defun(Symbol name, List<Symbol> args, Object body) {
+    public static Symbol defun(Symbol name, final List<Symbol> args, Object body) {
         name.fn.clear();
-        MethodHandle fn;
-        if (args.isEmpty()) {
-            fn = (MethodHandle) eval_kl(asList(intern("lambda"), intern("_"), body));
-            fn = fn.bindTo(null);
-        } else {
-            Collections.reverse(args);
-            for (Symbol arg : args)
-                body = asList(intern("lambda"), arg, body);
-            fn = (MethodHandle) eval_kl(body);
-        }
-        name.fn.add(fn);
+        name.fn.add(defun(args, body));
         return name;
+    }
+
+    public interface Defun {
+        Object call(Object... args);
+    }
+
+    private static MethodHandle partials(final MethodHandle lambda, Object... knownArgs) {
+        return findSAM((Defun) newArgs -> {
+            try {
+                List<Object> args = new ArrayList<>();
+                args.addAll(asList(knownArgs));
+                args.addAll(asList(newArgs));
+                return lambda.invokeWithArguments(args);
+            } catch (Throwable t) {
+                throw uncheck(t);
+            }
+        }).asVarargsCollector(Object[].class);
+    }
+
+    private static MethodHandle defun(List<Symbol> args, Object body) {
+        final MethodHandle[] lambda = new MethodHandle[1];
+        Defun defun = xs -> {
+            if (xs.length < args.size()) return partials(lambda[0], xs);
+            locals.push(new HashMap<>());
+            locals.peek().put(intern("this"), lambda[0]);
+            try {
+                while (xs != null) {
+                    for (int i = 0; i < args.size(); i++)
+                        locals.peek().put(args.get(i), xs[i]);
+                    xs = null;
+                    Object result = eval_kl(body);
+                    if (result instanceof Recur)
+                        xs = ((Recur) result).args;
+                    else return result;
+                }
+                throw new IllegalStateException();
+            } finally {
+                locals.pop();
+            }
+        };
+        return lambda[0] = findSAM(defun).asVarargsCollector(Object[].class);
     }
 
     private static String unscramble(String s) {
@@ -404,20 +461,20 @@ public class Shen {
     public static void main(String[] args) throws Throwable {
 /*
         asList("sys", "writer", "core", "prolog", "yacc", "declarations"
-*/
-/*
                 , "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"
-*//*
+
 
         )
             .forEach(f -> {
                 load(format("shen/klambda/%s.kl", f));
             });
 */
+
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
         out.println(readEval("'(1 2 3)"));
+        out.println(readEval("(+ 1 2)"));
         out.println(readEval("(+ 1 2)"));
         out.println(readEval("(+ 1.0 2.0)"));
         out.println(readEval("(* 5 2)"));
@@ -428,6 +485,15 @@ public class Shen {
         out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
         out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
         out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
+
+        out.println(readEval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
+        out.println(readEval("(fib 10)"));
+
+        out.println(readEval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
+        out.println(readEval("(factorial 10 1)"));
+        out.println(readEval("(factorial 12)"));
+        out.println(readEval("((factorial 12) 1)"));
+
         out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
         out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
         out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
@@ -436,6 +502,8 @@ public class Shen {
         out.println(str(eval_kl(asList(intern("my-fun"), 3))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
         out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
+        out.println(eval_kl(asList(intern("defun"), intern("my-fun3"), asList(), "Hello")));
+        out.println(str(eval_kl(asList(intern("my-fun3")))));
     }
 
     private static Object load(String file) {
@@ -479,7 +547,7 @@ public class Shen {
         return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
     }
 
-    public static <T> Object kl_if(Object test, Object then, Object _else) throws Exception {
+    public static Object kl_if(Object test, Object then, Object _else) throws Exception {
         return isTrue(eval_kl(test)) ? eval_kl(then) : eval_kl(_else);
     }
 
@@ -507,25 +575,21 @@ public class Shen {
     }
 
     public static MethodHandle lambda(final Symbol x, final Object y) {
-        try {
-            Map<Symbol, Object> scope = new HashMap<>();
-            if (!locals.isEmpty()) scope.putAll(locals.peek());
-            Mapper<Object, Object> lambda = (X) -> {
-                locals.push(new HashMap<Symbol, Object>(scope) {{
-                    put(x, X);
-                }});
-                try {
-                    return eval_kl(y);
-                } catch (Exception e) {
-                    throw uncheck(e);
-                } finally {
-                     locals.pop();
-                }
-            };
-            return findSAM(lambda).bindTo(lambda);
-        } catch (IllegalAccessException e) {
-            throw uncheck(e);
-        }
+        Map<Symbol, Object> scope = new HashMap<>();
+        if (!locals.isEmpty()) scope.putAll(locals.peek());
+        Mapper<Object, Object> lambda = (X) -> {
+            locals.push(new HashMap<Symbol, Object>(scope) {{
+                put(x, X);
+            }});
+            try {
+                return eval_kl(y);
+            } catch (Exception e) {
+                throw uncheck(e);
+            } finally {
+                 locals.pop();
+            }
+        };
+        return findSAM(lambda);
     }
 
     public static Object let(Symbol x, Object y, Object z) {
