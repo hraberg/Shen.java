@@ -656,7 +656,7 @@ public class Shen {
     }
 
     public static void main(String[] args) throws Throwable {
-        install();
+//        install();
 
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
