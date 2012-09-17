@@ -24,12 +24,13 @@ import static java.util.Iterables.into;
 import static java.util.functions.Mappers.constant;
 import static shen.Shen.UncheckedException.uncheck;
 
+@SuppressWarnings("UnusedDeclaration")
 public class Shen {
     private static final MethodHandles.Lookup lookup = lookup();
     private static final Map<String, Symbol> symbols = new HashMap<>();
 
-    private static Set<Symbol> specialForms = asList("let", "lambda", "cond", "quote",
-            "if", "and", "or", "defun", "trap-error").map(Shen::intern).into(new HashSet());
+    private static Set specialForms = asList("let", "lambda", "cond", "quote",
+            "if", "and", "or", "defun", "trap-error").map(s -> intern(s)).into(new HashSet());
     private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class);
 
     static {
@@ -234,7 +235,7 @@ public class Shen {
     }
 
     public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
-        if (type.symbol != "file") throw new IllegalArgumentException();
+        if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
 
         File file = new File(valueOf("*home-directory*"), string);
         switch(direction.symbol) {
@@ -278,7 +279,7 @@ public class Shen {
         public Object resolve() throws Exception {
             ListIterator<HashMap<Symbol, Object>> i = locals.listIterator(locals.size());
             while (i.hasPrevious()) {
-                HashMap map = i.previous();
+                HashMap<Symbol, Object> map = i.previous();
                 if (map.containsKey(this))
                     return map.get(this);
             }
@@ -327,13 +328,15 @@ public class Shen {
             if (EMPTY_LIST.equals(kl)) return kl;
             if (kl instanceof Symbol) return ((Symbol) kl).resolve();
             if (kl instanceof List) {
+                @SuppressWarnings("unchecked")
                 List<Object> list = (List) kl;
 
                 Object hd = hd(list);
                 MethodHandle fn =  (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
 
                 List<Object> args = tl(list);
-                args = specialForms.contains(hd) ? args : into(args.map(Shen::eval_kl), new ArrayList<Object>());
+                //noinspection Convert2Diamond
+                args = specialForms.contains(hd) ? args : into(args.map(k -> eval_kl(k)), new ArrayList<Object>());
 
                 if (fn.type().parameterCount() == 0) return fn.invoke();
 
@@ -343,9 +346,10 @@ public class Shen {
                         result = ((MethodHandle) result).invoke(arg);
                     return result;
                 }
-                MethodType targetType = methodType(Object.class, args.map(Object::getClass)
-                                                                        .into(new ArrayList<>())
-                                                                        .toArray(new Class[args.size()]));
+                @SuppressWarnings("SuspiciousToArrayCall")
+                MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
+                        .into(new ArrayList<>())
+                        .toArray(new Class[args.size()]));
                 Symbol symbol = (Symbol) hd;
                 for (MethodHandle h : symbol.fn)
                     try {
@@ -435,6 +439,7 @@ public class Shen {
     private static Object load(String file) {
         try {
             out.println("LOADING " + file);
+            //noinspection unchecked,RedundantCast
             return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
         } catch (Exception e) {
             throw uncheck(e);
@@ -451,6 +456,7 @@ public class Shen {
 
     private static String pprint(Object x, int level) {
         if (x instanceof List)
+            //noinspection unchecked,RedundantCast
             return format("%s(%s)\n", join("", nCopies(level, " ")),
                 join(" ", ((List) x).map((Mapper) o -> pprint(o, level + 1))))
                   .replaceAll("\n\\s*\\)", ")").replaceAll(" +\\(", " (");
