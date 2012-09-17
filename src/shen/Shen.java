@@ -277,9 +277,9 @@ public class Shen {
         }
 
         public Object resolve() throws Exception {
-            ListIterator<HashMap<Symbol, Object>> i = locals.listIterator(locals.size());
+            ListIterator<Map<Symbol, Object>> i = locals.listIterator(locals.size());
             while (i.hasPrevious()) {
-                HashMap<Symbol, Object> map = i.previous();
+                Map<Symbol, Object> map = i.previous();
                 if (map.containsKey(this))
                     return map.get(this);
             }
@@ -320,7 +320,7 @@ public class Shen {
         return function(intern(x));
     }
 
-    private static final Stack<HashMap<Symbol,Object>> locals = new Stack<>();
+    private static final Stack<Map<Symbol,Object>> locals = new Stack<>();
 
     public static Object eval_kl(Object kl) {
         try {
@@ -402,16 +402,19 @@ public class Shen {
     }
 
     public static void main(String[] args) throws Throwable {
+/*
         asList("sys", "writer", "core", "prolog", "yacc", "declarations"
+*/
 /*
                 , "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"
-*/
+*//*
+
         )
             .forEach(f -> {
                 load(format("shen/klambda/%s.kl", f));
             });
-/*
+*/
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
         out.println(readEval("'(1 2 3)"));
@@ -433,7 +436,6 @@ public class Shen {
         out.println(str(eval_kl(asList(intern("my-fun"), 3))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
         out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
-*/
     }
 
     private static Object load(String file) {
@@ -506,7 +508,8 @@ public class Shen {
 
     public static MethodHandle lambda(final Symbol x, final Object y) {
         try {
-            HashMap<Symbol, Object> scope = locals.reduce(new HashMap<>(), (left, right) -> right.into(left));
+            Map<Symbol, Object> scope = new HashMap<>();
+            if (!locals.isEmpty()) scope.putAll(locals.peek());
             Mapper<Object, Object> lambda = (X) -> {
                 locals.push(new HashMap<Symbol, Object>(scope) {{
                     put(x, X);
