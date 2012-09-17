@@ -51,7 +51,6 @@ public class Shen {
                 .filter(m -> isPublic(m.getModifiers()))
                 .forEach(m -> { defun(m); });
 
-        op("=", (BiPredicate<Number, Number>) (left, right) -> left.doubleValue() == right.doubleValue());
         op("=", (BiPredicate<Object, Object>) (left, right) -> left instanceof Number && right instanceof  Number
                                                                     ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
                                                                     : deepEquals(left, right));
