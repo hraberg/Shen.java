@@ -37,7 +37,7 @@ public class Shen {
     public @interface Macro {}
 
     private static Set<Symbol> macros = new HashSet<>();
-    private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class);
+    private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class, Exception.class);
 
     static {
         set("*language*", "Java");
@@ -55,11 +55,11 @@ public class Shen {
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
-        op("/", (IntBinaryOperator) (left, right) -> left / right);
+        op("/", (BiMapper<Integer, Integer, Number>) (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (LongBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right);
         op("*", (LongBinaryOperator) (left, right) -> left * right);
-        op("/", (LongBinaryOperator) (left, right) -> left / right);
+        op("/", (BiMapper<Long, Long, Number>) (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (DoubleBinaryOperator) (left, right) -> left + right);
         op("-", (DoubleBinaryOperator) (left, right) -> left - right);
         op("*", (DoubleBinaryOperator) (left, right) -> left * right);
@@ -142,6 +142,10 @@ public class Shen {
         throw new RuntimeException(s);
     }
 
+    public static String error_to_string(Exception e) {
+        return e.getMessage();
+    }
+
     @Macro
     public static Object trap_error(Object x, Object f) {
         try {
@@ -168,16 +172,9 @@ public class Shen {
     }
 
     public static String str(Object x) {
-        if (x != null && x.getClass().isArray()) return str((Object[]) x);
+        if (cons_p(x)) throw new IllegalArgumentException();
+        if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
         return String.valueOf(x);
-    }
-
-    public static String str(Object[] x) {
-        return deepToString(x);
-    }
-
-    public static String str(List x) {
-        throw new IllegalArgumentException();
     }
 
     public static String pos(String x, int n) {
@@ -209,6 +206,14 @@ public class Shen {
     public static Object[] address_gt(Object[] vector, int n, Object value) {
         vector[n] = value;
         return vector;
+    }
+
+    public static boolean number_p(Object x) {
+        return x instanceof Number;
+    }
+
+    public static boolean string_p(Object x) {
+        return x instanceof String;
     }
 
     public static String n_gt_string(int n) {
@@ -263,7 +268,7 @@ public class Shen {
     }
 
     public static String cn(String s1, String s2) {
-        return str(s1) + str(s2);
+        return s1 + s2;
     }
 
     public static class Symbol {
@@ -309,6 +314,7 @@ public class Shen {
     }
 
     public static Object value(Symbol x) {
+        x.var.getClass();
         return x.var;
     }
 
@@ -486,7 +492,7 @@ public class Shen {
         }
     }
 
-    private static Object readEval(String shen) throws Exception {
+    static Object readEval(String shen) throws Exception {
         return eval_kl(read(shen).getFirst());
     }
 
@@ -573,8 +579,8 @@ public class Shen {
         return lambda(x, z).invoke(eval_kl(y));
     }
 
-    private static boolean isTrue(Object test) {
-        return test != null && test != Boolean.FALSE;
+    static boolean isTrue(Object test) {
+        return ((Boolean) test);
     }
 
     private static Object tokenize(Scanner sc) throws Exception {

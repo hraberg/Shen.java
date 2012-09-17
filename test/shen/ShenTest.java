@@ -1,120 +1,158 @@
 package shen;
 
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static shen.Shen.UncheckedException.uncheck;
+import static shen.Shen.intern;
+import static shen.Shen.readEval;
+
 public class ShenTest {
+    @Test
+    public void equals() {
+        is(2, 神("2"));
+        is(true, 神("true"));
+        is("foo", 神("\"foo\""));
+        is(intern("bar"), 神("bar"));
+        is(false, 神("(= 2 3)"));
+        is(false, 神("(= \"foo\" \"bar\")"));
+        is(false, 神("(= true false)"));
+        is(false, 神("(= foo bar)"));
+    }
+
+    @Test
+    public void defun_lambda_and_let() {
+        is(intern("f"), 神("(defun f (x) (lambda y (+ x y)))"));
+        is(5, 神("((f 3) 2)"));
+        is(10, 神("(let x 5 (* 2 x))"));
+    }
+
+    @Test
+    public void errors() {
+        is(1.0, 神("(/ 1 1)"));
+        is(-1, 神("(trap-error (/ 1 0) (lambda E -1))"));
+        is(1.0, 神("(trap-error (/ 1 1) (lambda E -1))"));
+        is("testError", 神("(trap-error (set newError (simple-error \"testError\")) (lambda E (error-to-string E)))"));
+    }
+
+    @Test
+    public void addition() {
+        is(5, 神("(+ 2 3)"));
+        is(-1, 神("(+ 2 -3)"));
+    }
+
+    @Test
+    public void subtraction() {
+        is(-1, 神("(- 2 3)"));
+        is(5, 神("(- 2 -3)"));
+    }
+
+    @Test
+    public void multiplication() {
+        is(6, 神("(* 2 3)"));
+        is(-6, 神("(* 2 -3)"));
+    }
+
+    @Test
+    public void division() {
+        is(2.5, 神("(/ 5 2)"));
+        is(-1.0, 神("(/ 4 -4)"));
+    }
+
+    @Test
+    public void less_than() {
+        is(true, 神("(< 1 2)"));
+        is(false, 神("(< 4 4)"));
+        is(false, 神("(< 4 0)"));
+    }
+
+    @Test
+    public void less_than_or_equal() {
+        is(true, 神("(<= 1 2)"));
+        is(true, 神("(<= 4 4)"));
+        is(false, 神("(< 4 0)"));
+    }
+
+    @Test
+    public void greater_than() {
+        is(true, 神("(> 3 2)"));
+        is(false, 神("(> 4 4)"));
+        is(false, 神("(> 2 4)"));
+    }
+
+    @Test
+    public void greater_than_or_equal() {
+        is(true, 神("(>= 3 2)"));
+        is(true, 神("(>= 4 4)"));
+        is(false, 神("(>= 2 4)"));
+    }
+
+    @Test
+    public void _if() {
+        is(true, 神("(if true true false)"));
+        is(true, 神("(if false false true)"));
+        is(-1, 神("(trap-error (if 5 true true) (lambda _ -1))"));
+    }
+
+    @Test
+    public void number_p() {
+        is(true, 神("(number? 3)"));
+        is(true, 神("(number? 3.4)"));
+        is(false, 神("(number? \"fuu\")"));
+        is(false, 神("(number? bar)"));
+    }
+
+    @Test
+    public void and() {
+        is(true, 神("(and true true true)"));
+        is(false, 神("(and true false true)"));
+        is(-1, 神("(trap-error (and 2 true) (lambda E -1))"));
+    }
+
+    @Test
+    public void or() {
+        is(true, 神("(or true true true)"));
+        is(true, 神("(or true false true)"));
+        is(true, 神("(or (and false false false) true)"));
+        is(-1, 神("(trap-error (or 2 true) (lambda E -1))"));
+    }
+
+    @Test
+    public void value() {
+        is(5, 神("(set x 5)"));
+        is(5, 神("(value x)"));
+        is("foo", 神("(set x \"foo\")"));
+        is("foo", 神("(value x)"));
+        is(-1, 神("(trap-error (value valueTest) (lambda E -1))"));
+    }
+
+    @Test
+    public void string_p_str_tlstr_cn_and_pos() {
+        is(true, 神("(string? \"bar\")"));
+        is(true, 神("(string? (str \"foo\"))"));
+        is(true, 神("(string? (str 2))"));
+        is(true, 神("(string? (str true))"));
+        is(true, 神("(string? (str bar))"));
+        is("bar", 神("(str bar)"));
+        is(false, 神("(string? 55)"));
+        is("oobar", 神("(tlstr \"foobar\")"));
+        is(-1, 神("(trap-error (cn bla blub) (lambda _ -1))"));
+        is("foobar", 神("(cn \"foo\" \"bar\")"));
+        is("r", 神("(pos \"bar\" 2)"));
+    }
+
+    private void is(Object expected, Object actual) {
+        assertEquals(expected, actual);
+    }
+
+    private Object 神(String shen) {
+        try {
+            return readEval(shen);
+        } catch (Exception e) {
+            throw uncheck(e);
+        }
+    }
 /*
-    (set *failed* (set *passed* 0))
-
-            (define test-is
-    X -> (if (= X true)
-            (do (set *passed* (+ (value *passed*) 1))
-    passed)
-            (do (set *failed* (+ (value *failed*) 1))
-    failed)))
-
-            "testing ="
-
-            (test-is (= 2 2))
-            (test-is (= true true))
-            (test-is (= "foo" "foo"))
-            (test-is (= bar bar))
-
-            (test-is (= (= 2 3) false))
-            (test-is (= (= "foo" "bar") false))
-            (test-is (= (= foo bar) false))
-            (test-is (= (= true false) false))
-
-
-            "testing defun, lambda & let"
-            (defun f (x) (/. y (+ x y)))
-            (test-is (= ((f 3) 2) 5))
-            (test-is (= 10 (let x 5 (* 2 x))))
-
-            "testing errors"
-            (test-is (= 1 (/ 1 1)))
-            (test-is (=  (trap-error (/ 1 0) (/. E -1)) -1))
-            (test-is (=  (trap-error (/ 1 0) (/. E -1)) -1))
-            (test-is (=  (trap-error (/ 1 1) (/. E -1)) 1))
-            (trap-error (set newError (simple-error "testError")) (/. E (error-to-string E)))
-
-
-            "testing +"
-            (test-is (=  (+  2 3) 5))
-            (test-is (=  (+  2 -3) -1))
-
-            "testing -"
-            (test-is (=  (- 2 3) -1))
-            (test-is (=  (- 2 -3) 5))
-
-            "testing *"
-            (test-is (=  (*  2 3) 6))
-            (test-is (=  (*  2 -3) -6))
-
-            "testing /"
-            (test-is (=  (/  5 2) 2.5))
-            (test-is (=  (/  4 -4) -1))
-
-            "testing <"
-            (test-is (=  (<  1 2) true))
-            (test-is (=  (<  4 4) false))
-            (test-is (=  (<  4 0) false))
-
-            "testing <="
-            (test-is (=  (<=  1 2) true))
-            (test-is (=  (<=  4 4) true))
-            (test-is (=  (<=  4 0) false))
-
-            "testing >"
-            (test-is (=  (>  3 2) true))
-            (test-is (=  (>  4 4) false))
-            (test-is (=  (>  2 4) false))
-
-            "testing >="
-            (test-is (=  (>=  3 2) true))
-            (test-is (=  (>= 4 4) true))
-            (test-is (=  (>  2 4) false))
-
-            "testing if"
-            (test-is  (if true true false))
-            (test-is  (if false false true))
-            (test-is (= (trap-error (if 5 true true) (/. _ -1)) -1))
-
-            "testing number?"
-            (test-is (=  (number?  3) true))
-            (test-is (=  (number?  -3.4) true))
-            (test-is (=  (number?  "fuu") false))
-            (test-is (=  (number?  bar) false))
-
-            "testing and"
-            (test-is (and true true true))
-            (test-is (= (and true false true) false))
-            (test-is (= (and true false true) false))
-            (test-is (= -1 (trap-error (and 2 true) (/. E -1))))
-
-            "testing or"
-            (test-is (or true true true))
-            (test-is (or true false true))
-            (test-is (or (and false false false) true))
-            (test-is (= -1 (trap-error (or 2 true) (/. E -1))))
-
-            "testing value"
-            (set x 5)
-            (test-is (=  (value x) 5))
-            (set x "foo")
-            (test-is (=  (value x) "foo"))
-            (test-is (= -1  (trap-error (value valueTest) (/. E -1))))
-
-            "testing string?, str, tlstr, cn & pos"
-            (test-is (string? "bar"))
-            (test-is (string? (str "foo")))
-            (test-is (string? (str 2)))
-            (test-is (string? (str true)))
-            (test-is (string? (str bar)))
-            (test-is (= "bar" (str bar)))
-            (test-is (= (string? 55) false))
-            (test-is (= (tlstr "foobar") "oobar"))
-            (test-is (= (trap-error (cn bla blub) (/. _ -1)) -1))
-            (test-is (= (cn "foo" "bar") "foobar"))
-            (test-is (= (pos "bar" 2) "r"))
 
             "testing cons?, cons, hd & tl"
             (test-is (cons? [2 1 1 "foo"]))
