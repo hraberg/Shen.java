@@ -11,6 +11,8 @@ import java.util.*;
 import java.util.functions.*;
 
 import static java.lang.String.*;
+import static java.lang.System.err;
+import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
@@ -20,6 +22,7 @@ import static java.util.Collections.EMPTY_LIST;
 import static java.util.Collections.nCopies;
 import static java.util.Iterables.into;
 import static java.util.functions.Mappers.constant;
+import static shen.Shen.UncheckedException.uncheck;
 
 public class Shen {
     private static final MethodHandles.Lookup lookup = lookup();
@@ -34,7 +37,7 @@ public class Shen {
         set("*implementation*", format("[jvm %s]", System.getProperty("java.version")));
         set("*porters*", "Håkan Råberg");
         set("*stinput*", System.in);
-        set("*stoutput*", System.out);
+        set("*stoutput*", out);
         set("*home-directory*", System.getProperty("user.dir"));
 
         iterable(Shen.class.getDeclaredMethods())
@@ -74,7 +77,7 @@ public class Shen {
             symbol.fn.add(findSAM(op).bindTo(op));
             return symbol;
         } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
+            throw uncheck(e);
         }
     }
 
@@ -273,10 +276,13 @@ public class Shen {
         }
 
         public Object resolve() throws Exception {
-            for (HashMap map : locals)
+            ListIterator<HashMap<Symbol, Object>> i = locals.listIterator(locals.size());
+            while (i.hasPrevious()) {
+                HashMap map = i.previous();
                 if (map.containsKey(this))
                     return map.get(this);
-             return this;
+            }
+            return this;
         }
     }
 
@@ -328,7 +334,6 @@ public class Shen {
 
                 List<Object> args = tl(list);
                 args = specialForms.contains(hd) ? args : into(args.map(Shen::eval_kl), new ArrayList<Object>());
-                System.out.println(hd + " " + args);
 
                 if (fn.type().parameterCount() == 0) return fn.invoke();
 
@@ -341,25 +346,22 @@ public class Shen {
                 MethodType targetType = methodType(Object.class, args.map(Object::getClass)
                                                                         .into(new ArrayList<>())
                                                                         .toArray(new Class[args.size()]));
-                for (MethodHandle h : ((Symbol) hd).fn)
+                Symbol symbol = (Symbol) hd;
+                for (MethodHandle h : symbol.fn)
                     try {
                         return insertArguments(h.asType(targetType), 0, args.toArray()).invokeExact();
                     } catch (WrongMethodTypeException ignore) {
-                        System.out.println(ignore);
-                        System.out.println(h + " " + hd + " " + args);
-                        System.out.println(((Symbol) hd).fn);
-/*
-                    } catch (NoSuchMethodException ignore) {
-                    } catch (ClassCastException ignore) {
-                    } catch (IncompatibleClassChangeError ignore) {
-*/
+                        err.println(ignore);
+                        err.println(h + " " + hd + " " + args);
+                        err.println(symbol.fn);
                     } catch (Throwable t) {
-                        System.out.println(hd + " " + h  + " " + args);
-                        throw t;
+                        err.println(hd + " " + h  + " " + args);
+                        err.println(symbol.fn);
+                        throw uncheck(t);
                     }
             }
-        } catch (Throwable throwable) {
-            throw new RuntimeException(throwable);
+        } catch (Throwable t) {
+            throw uncheck(t);
         }
         throw new IllegalArgumentException();
     }
@@ -406,36 +408,36 @@ public class Shen {
                 load(format("shen/klambda/%s.kl", f));
             });
 /*
-        System.out.println(let(intern("x"), 2, eval_kl(intern("x"))));
-        System.out.println(eval_kl(intern("x")));
-        System.out.println(readEval("'(1 2 3)"));
-        System.out.println(readEval("(+ 1 2)"));
-        System.out.println(readEval("(+ 1.0 2.0)"));
-        System.out.println(readEval("(* 5 2)"));
-        System.out.println(readEval("(tl '(1 2 3))"));
-        System.out.println(readEval("(let x 42 x)"));
-        System.out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
-        System.out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
-        System.out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
-        System.out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
-        System.out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
-        System.out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
-        System.out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
-        System.out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
-        System.out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
-        System.out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
-        System.out.println(str(eval_kl(asList(intern("my-fun"), 3))));
-        System.out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
-        System.out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
+        out.println(let(intern("x"), 2, eval_kl(intern("x"))));
+        out.println(eval_kl(intern("x")));
+        out.println(readEval("'(1 2 3)"));
+        out.println(readEval("(+ 1 2)"));
+        out.println(readEval("(+ 1.0 2.0)"));
+        out.println(readEval("(* 5 2)"));
+        out.println(readEval("(tl '(1 2 3))"));
+        out.println(readEval("(let x 42 x)"));
+        out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
+        out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
+        out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
+        out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
+        out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
+        out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
+        out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
+        out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
+        out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
+        out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
+        out.println(str(eval_kl(asList(intern("my-fun"), 3))));
+        out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
+        out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
 */
     }
 
     private static Object load(String file) {
         try {
-            System.out.println("LOADING " + file);
+            out.println("LOADING " + file);
             return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw uncheck(e);
         }
     }
 
@@ -469,12 +471,12 @@ public class Shen {
         return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
     }
 
-    public static <T> Object kl_if(Object test, Object then) throws Exception {
-        return kl_if(test, then, false);
-    }
-
     public static <T> Object kl_if(Object test, Object then, Object _else) throws Exception {
         return isTrue(eval_kl(test)) ? eval_kl(then) : eval_kl(_else);
+    }
+
+    public static <T> Object kl_if(Object test, Object then) throws Exception {
+        return kl_if(test, then, false);
     }
 
     public static <T> Object cond(Object... clauses) throws Exception {
@@ -506,14 +508,14 @@ public class Shen {
                 try {
                     return eval_kl(y);
                 } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    throw uncheck(e);
                 } finally {
                      locals.pop();
                 }
             };
             return findSAM(lambda).bindTo(lambda);
         } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
+            throw uncheck(e);
         }
     }
 
@@ -521,7 +523,7 @@ public class Shen {
         try {
             return lambda(x, z).invoke(eval_kl(y));
         } catch (Throwable t) {
-            throw new RuntimeException(t);
+            throw uncheck(t);
         }
     }
 
@@ -557,5 +559,54 @@ public class Shen {
         Object x;
         while ((x = tokenize(sc)) != null) list.add(x);
         return list;
+    }
+
+    public static class UncheckedException extends RuntimeException {
+        public static Set<String> filteredPackages = new HashSet<>();
+
+        static {
+            filteredPackages.add("sun.reflect");
+            filteredPackages.add("org.junit");
+            filteredPackages.add("java.lang.reflect");
+        }
+
+        Throwable wrapped;
+
+        public static RuntimeException uncheck(Throwable t) {
+            if (t.getCause() != null)
+                return uncheck(t.getCause());
+            if (t instanceof RuntimeException) {
+                t.setStackTrace(filterStackTrace(t.getStackTrace()));
+                return (RuntimeException) t;
+            }
+            return new UncheckedException(t);
+        }
+
+        UncheckedException(Throwable t) {
+            super(t.getMessage(), t.getCause());
+            this.wrapped = t;
+            setStackTrace(filterStackTrace(t.getStackTrace()));
+        }
+
+        static StackTraceElement[] filterStackTrace(StackTraceElement[] stackTrace) {
+            List<StackTraceElement> trace = new ArrayList<>();
+            for (StackTraceElement element : stackTrace)
+                if (!isFilteredPackage(element))
+                    trace.add(element);
+            return trace.toArray(new StackTraceElement[trace.size()]);
+        }
+
+        static boolean isFilteredPackage(StackTraceElement element) {
+            for (String prefix : filteredPackages)
+                if (element.getClassName().startsWith(prefix))
+                    return true;
+            return false;
+        }
+
+        public String toString() {
+            String s = wrapped.getClass().getName();
+            String message = getLocalizedMessage();
+            return (message != null) ? (s + ": " + message) : s;
+        }
     }
 }
