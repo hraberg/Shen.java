@@ -13,9 +13,7 @@ import java.util.*;
 import java.util.functions.*;
 
 import static java.lang.String.format;
-import static java.lang.System.err;
-import static java.lang.System.in;
-import static java.lang.System.out;
+import static java.lang.System.*;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
@@ -38,7 +36,8 @@ public class Shen {
     public @interface Macro {}
 
     static Set<Symbol> macros = new HashSet<>();
-    static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class, Exception.class);
+    static List<Class<? extends Serializable>> literals =
+            asList(Number.class, String.class, Boolean.class, Exception.class);
 
     static {
         set("*language*", "Java");
@@ -466,14 +465,11 @@ public class Shen {
     public static MethodHandle lambda(final Symbol x, final Object y) {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
-        UnaryOperator<Object> lambda = (X) -> {
-            locals.push(new HashMap<Symbol, Object>(scope) {{
-                put(x, X);
-            }});
+        UnaryOperator<Object> lambda = (arg) -> {
+            locals.push(new HashMap<>(scope));
+            locals.peek().put(x, arg);
             try {
                 return eval_kl(y);
-            } catch (Exception e) {
-                throw uncheck(e);
             } finally {
                 locals.pop();
             }
@@ -508,7 +504,7 @@ public class Shen {
             name.fn.add(lookup.unreflect(m));
             return name;
         } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
+            throw uncheck(e);
         }
     }
 
@@ -611,11 +607,9 @@ public class Shen {
     }
 
     public static class UncheckedException extends RuntimeException {
-        public static Set<String> filteredPackages = new HashSet<String>() {{
-            add("sun.reflect");
-            add("org.junit");
-            add("java.lang.reflect");
-        }};
+        public static Set<String> filteredPackages =
+                new HashSet<>(asList("sun.reflect", "org.junit", "java.lang.reflect"));
+
         Throwable wrapped;
 
         public static RuntimeException uncheck(Throwable t) {
@@ -635,18 +629,13 @@ public class Shen {
         }
 
         static StackTraceElement[] filterStackTrace(StackTraceElement[] stackTrace) {
-            List<StackTraceElement> trace = new ArrayList<>();
-            for (StackTraceElement element : stackTrace)
-                if (!isFilteredPackage(element))
-                    trace.add(element);
-            return trace.toArray(new StackTraceElement[trace.size()]);
+            //noinspection ToArrayCallWithZeroLengthArrayArgument,SuspiciousToArrayCall
+            return iterable(stackTrace).filter(e -> isAllowedPackage(e))
+                    .into(new ArrayList<>()).toArray(new StackTraceElement[0]);
         }
 
-        static boolean isFilteredPackage(StackTraceElement element) {
-            for (String prefix : filteredPackages)
-                if (element.getClassName().startsWith(prefix))
-                    return true;
-            return false;
+        static boolean isAllowedPackage(StackTraceElement element) {
+            return filteredPackages.noneMatch(p -> element.getClassName().startsWith(p));
         }
 
         public String toString() {
