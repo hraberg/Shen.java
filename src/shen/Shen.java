@@ -23,6 +23,7 @@ import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
 import static java.util.Collections.nCopies;
 import static java.util.Iterables.into;
+import static java.util.Objects.deepEquals;
 import static shen.Shen.UncheckedException.uncheck;
 
 @SuppressWarnings("UnusedDeclaration")
@@ -50,7 +51,10 @@ public class Shen {
                 .filter(m -> isPublic(m.getModifiers()))
                 .forEach(m -> { defun(m); });
 
-        op("=", (BinaryOperator<Object>) (left, right) -> Objects.deepEquals(left, right));
+        op("=", (BiPredicate<Number, Number>) (left, right) -> left.doubleValue() == right.doubleValue());
+        op("=", (BiPredicate<Object, Object>) (left, right) -> left instanceof Number && right instanceof  Number
+                                                                    ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
+                                                                    : deepEquals(left, right));
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
@@ -216,11 +220,16 @@ public class Shen {
     }
 
     public static String n_gt_string(int n) {
-        return "" + n;
+        if (n < 0) throw new IllegalArgumentException();
+        return "" + (char) n;
+    }
+
+    public static int string_gt_n(String s) {
+        return (int) s.charAt(0);
     }
 
     public static String byte_gt_string(byte n) {
-        return "" + n;
+        return "" + (char) n;
     }
 
     public static int read_byte(InputStream s) throws IOException {
@@ -238,13 +247,13 @@ public class Shen {
     public static Object pr(Object x, Writer s) throws IOException {
         s.write(str(x));
         s.flush();
-        return null;
+        return x;
     }
 
     public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
         if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
 
-        File file = new File(valueOf("*home-directory*"), string);
+        File file = new File((String) value("*home-directory*"), string);
         switch(direction.symbol) {
             case "in": return new FileInputStream(file);
             case "out": return new FileOutputStream(file);
@@ -322,7 +331,7 @@ public class Shen {
         return x;
     }
 
-    public static Object value(String x) {
+    static Object value(String x) {
         return value(intern(x));
     }
 

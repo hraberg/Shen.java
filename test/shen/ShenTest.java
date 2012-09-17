@@ -1,9 +1,15 @@
 package shen;
 
+import org.junit.After;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.lang.invoke.MethodHandle;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.EMPTY_LIST;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertThat;
@@ -164,6 +170,7 @@ public class ShenTest {
         absvector[2] = 5;
         is(absvector, 神("(address-> (value v) 2 5)"));
         is(5, 神("(<-address (value v) 2)"));
+        is(-1, 神("(trap-error (<-address (value v) 5) (lambda E -1)) -1)"));
     }
 
     @Test
@@ -186,6 +193,87 @@ public class ShenTest {
     @Test
     public void get_time() {
         is(Number.class, 神("(get-time run)"));
+    }
+
+    @Test
+    public void streams() {
+        is(String.class, 神("(set fileName (cn (str (get-time run)) \".txt\"))"));
+        is(FileOutputStream.class, 神("(set writeFile (open file (value fileName) out))"));
+        is("foobar", 神("(pr \"foobar\" (value writeFile))"));
+        is(null, 神("(close (value writeFile))"));
+        is(FileInputStream.class, 神("(set readFile (open file (value fileName) in))"));
+        is(102, 神("(read-byte (value readFile))"));
+        is(111, 神("(read-byte (value readFile))"));
+        is(false, 神("(= 102 (read-byte (value readFile)))"));
+        is(null, 神("(close (value readFile))"));
+    }
+
+    @After
+    public void delete_file() {
+        try {
+            File file = new File((String) 神("(value *home-directory*)"), (String) 神("(value fileName)"));
+            if (file.exists())
+                is(true, file.delete());
+        } catch (NullPointerException ignore) {
+        }
+    }
+
+    @Test
+    public void n_gt_string() {
+        is("d", 神("(n->string 100)"));
+        is("h", 神("(n->string 104)"));
+        is("(", 神("(n->string 40)"));
+        is(false, 神("(= \"d\" (n->string 101)"));
+        is(-1, 神("(trap-error (n->string -10) (lambda E -1))"));
+    }
+
+    @Test
+    public void string_gt_n() {
+        is(100, 神("(string->n \"d\")"));
+        is(104, 神("(string->n \"h\")"));
+        is(40, 神("(string->n \"(\")"));
+        is(false, 神("(= 101 (string->n \"d\")"));
+        is(-1, 神("(trap-error (string-> \"\") (lambda E -1))"));
+    }
+
+    @Test
+    public void special_tests() {
+        is(EMPTY_LIST, 神("()"));
+        is(-1, 神("(trap-error ((4 3 2)) (lambda E -1)))"));
+        is(-1, 神("(trap-error (+4 2) (lambda E -1)))"));
+        is(-1, 神("(trap-error (+ 4 \"2\") (lambda E -1)))"));
+        is(-1, 神("(trap-error (+ 4 specialTest) (lambda E -1)))"));
+        is(-1, 神("(trap-error (+ 4 true) (lambda E -1)))"));
+    }
+
+    @Test
+    public void lists() {
+        is(-1, 神("(trap-error (hd 5) (lambda E -1)) -1)"));
+        is(-1, 神("(trap-error (tl 5) (lambda E -1)) -1)"));
+        is(1, 神("(hd '(1 2 3))"));
+        is(asList(2, 3), 神("(tl '(1 2 3))"));
+        is(new Cons(5, 10), 神("(cons 5 10)"));
+//        is(asList(5, 10), 神("(cons 5 10)"));
+    }
+
+    @Test
+    public void strings() {
+        is("hello", 神("(str \"hello\")"));
+        is("5", 神("(str 5)"));
+        is(true, 神("(string? (str 5))"));
+        is(true, 神("(string? (str hello))"));
+        is(true, 神("(string? (str \"hello\"))"));
+        is("helloWorld", 神("(cn \"hello\" \"World\")"));
+        is("hello", 神("(cn \"hello\" \"\")"));
+        is("hello", 神("(cn \"\" \"hello\")"));
+    }
+
+    @Test
+    public void number() {
+        is(1000.0, 神("10e2"));
+        is(true, 神("(= 1.0 1)"));
+//        is(true, 神("(--3 3)"));
+//        is(true, 神("(---5 5.0)"));
     }
 
     private void is(Object expected, Object actual) {
@@ -214,50 +302,10 @@ public class ShenTest {
             (test-is (= (= 102 (read-byte (value readFile))) false))
             (close (value readFile))
 
-            "testing n->string"
-            (test-is (= "d" (n->string 100)))
-            (test-is (= "h" (n->string 104)))
-            (test-is (= "(" (n->string 40)))
-            (test-is (= false (= "d" (n->string 101))))
-            (test-is (= -1  (trap-error (n->string -10) (/. E -1))))
-
-            "testing string->n"
-            (test-is (= 100 (string->n "d")))
-            (test-is (= 104 (string->n "h")))
-            (test-is (= 40 (string->n "(")))
-            (test-is (= false (= 101 (string->n "d"))))
-            (test-is (= -1 (trap-error (string->n "") (/. E -1))))
-
-            "special tests"
-            (test-is (= [] ()))
-            (test-is (= -1 (trap-error ((4 3 2)) (/. E -1))))
-            (test-is (= -1 (trap-error ([4 3 2]) (/. E -1))))
-            (test-is (= -1 (trap-error (+4 2) (/. E -1))))
-            (test-is (= -1 (trap-error (+ 4 "2") (/. E -1))))
-            (test-is (= -1 (trap-error (+ 4 specialTest) (/. E -1))))
-            (test-is (= -1 (trap-error (+ 4 true) (/. E -1))))
-
-            "Lists"
-            (test-is (= (trap-error (hd 5) (/. E -1)) -1))
-            (test-is (= (trap-error (tl 5) (/. E -1)) -1))
-            (test-is (= (hd [1 2 3]) 1))
-            (test-is (= (tl [1 2 3]) [2 3]))
-            (test-is (= (cons 5 10) [5 10]))
-
-            "Strings"
-            (test-is (= (str hello) "hello"))
-            (test-is (= (str 5) "5"))
-
+            // This test requires Shen's reader
             (test-is (= (str "hello") "c#34;helloc#34;"))
 
-            (test-is (string? (str 5)))
-            (test-is (string? (str hello)))
-            (test-is (string? (str "hello")))
-
-            (test-is (= "helloWorld" (cn "hello" "World")))
-            (test-is (= "hello" (cn "hello" "")))
-            (test-is (= "hello" (cn "" "hello")))
-
+            // The tests below require Shen
             (map (/. X (test-is (= (pos "hello" X) (pos (tlstr "hello") (- X 1))))) [1 2 3 4])
 
             "Tuples"
@@ -279,6 +327,7 @@ public class ShenTest {
             (address-> (value x) 10 100)
             (test-is (= (<-address (value x) 10) 100))
 
+            // Tested elsewhere above
             "Absvectors"
             (set x (absvector 100))
             (test-is (= (<-address (value x) 1) fail!))
