@@ -23,7 +23,8 @@ This is pretty experimental, and this entire project acts as a playground for va
 
 The idea is to compile this down to bytecode eventually. Note that I don't vouch for any of the implementation details regarding this - I'm learning as we go.
 
-No build exists yet, but there's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrains.net/display/IDEADEV/IDEA+12+EAP) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/).
+There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrains.net/display/IDEADEV/IDEA+12+EAP) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
+
 
 ### What works?
 
@@ -31,6 +32,7 @@ No build exists yet, but there's an IntelliJ project, which requires [Leda EAP](
 * Self recursion as loop.
 * Partial application.
 * Most primitives - I use [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/ShenTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
+
 
 ### What doesn't work?
 
