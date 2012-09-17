@@ -253,7 +253,6 @@ public class ShenTest {
         is(1, 神("(hd '(1 2 3))"));
         is(asList(2, 3), 神("(tl '(1 2 3))"));
         is(new Cons(5, 10), 神("(cons 5 10)"));
-//        is(asList(5, 10), 神("(cons 5 10)"));
     }
 
     @Test
@@ -290,63 +289,4 @@ public class ShenTest {
             throw uncheck(e);
         }
     }
-/*
-            "testing Streams"
-            (set fileName (cn (str (get-time run)) ".txt"))
-            (set writeFile (open file (value fileName) out))
-            (pr "foobar" (value writeFile))
-            (close (value writeFile))
-            (set readFile (open file (value fileName) in))
-            (test-is (= 102 (read-byte (value readFile))))
-            (test-is (= 111 (read-byte (value readFile))))
-            (test-is (= (= 102 (read-byte (value readFile))) false))
-            (close (value readFile))
-
-            // This test requires Shen's reader
-            (test-is (= (str "hello") "c#34;helloc#34;"))
-
-            // The tests below require Shen
-            (map (/. X (test-is (= (pos "hello" X) (pos (tlstr "hello") (- X 1))))) [1 2 3 4])
-
-            "Tuples"
-            (test-is (tuple? (@p hello ())))
-            (test-is (= (fst (@p hello ())) hello))
-            (test-is (= (snd (@p hello ())) ()))
-
-            "Symbols"
-            (test-is (symbol? x))
-            (test-is (= x (intern "x")))
-            (test-is (= (intern (cn "x" "y")) (concat x y)))
-
-            "Vectors"
-            (set x (vector 100))
-            (test-is (= (<-address (value x) 0) 100))
-            (test-is (= (<-address (value x) 1) (fail)))
-            (test-is (= (<-address (value x) 99) (fail)))
-            (test-is (= (trap-error (<-address (value x) 101) (/. E -1)) -1))
-            (address-> (value x) 10 100)
-            (test-is (= (<-address (value x) 10) 100))
-
-            // Tested elsewhere above
-            "Absvectors"
-            (set x (absvector 100))
-            (test-is (= (<-address (value x) 1) fail!))
-            (test-is (= (<-address (value x) 99) fail!))
-            (test-is (= (trap-error (<-address (value x) 100) (/. E -1)) -1))
-            (address-> (value x) 10 100)
-            (test-is (= (<-address (value x) 10) 100))
-
-            "Exceptions"
-            (test-is (= (trap-error (/ 1 0) (/. E -1)) -1))
-            (test-is (= (trap-error (/ 1 0) (/. E (error-to-string E))) "division by zero"))
-
-            "Numbers"
-            (test-is (= 10e2 1000))
-            (test-is (= 1 1.0))
-            (test-is (= --3 3))
-            (test-is (= ---5 -5.0))
-
-
-            (intoutput "~%passed ... ~A~%failed ... ~A~%Passrate ... ~A %~%" (@p (value *passed*) (@p (value *failed*) (@p (/ (* 100 (value *passed*)) (+ (value *failed*) (value *passed*))) ()))))
-*/
 }
