@@ -125,15 +125,7 @@ public class Shen {
     }
 
     public static boolean cons_p(Object x) {
-        return false;
-    }
-
-    public static boolean cons_p(List x) {
-        return !x.isEmpty();
-    }
-
-    public static boolean cons_p(Cons x) {
-        return true;
+        return x instanceof Cons || x instanceof List && !((List) x).isEmpty();
     }
 
     public static Object fail_ex() {
@@ -192,11 +184,7 @@ public class Shen {
     }
 
     public static boolean absvector_p(Object x) {
-        return false;
-    }
-
-    public static boolean absvector_p(Object[] x) {
-        return true;
+        return x != null && x.getClass() == Object[].class;
     }
 
     public static Object lt_address(Object[] vector, int n) {
@@ -354,12 +342,12 @@ public class Shen {
                 if (intern("this").resolve().equals(fn)) {
                     if (tail) {
                         System.out.println("RECUR in " + hd + " " + args);
-                        return new Recur(args.toArray(new Object[0]));
+                        return new Recur(args.toArray());
                     }
                     System.err.println("Can only recur from tail position " + hd);
                 }
 
-                if (fn.type().parameterCount() == 1 && fn.type().parameterArray()[0] != Object[].class) {
+                if (fn.type().parameterCount() == 1 && !fn.isVarargsCollector()) {
                     Object result = fn;
                     for (Object arg : args)
                         result = ((MethodHandle) result).invoke(arg);
@@ -473,6 +461,10 @@ public class Shen {
 
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
+        out.println(readEval("(cons 2 3)"));
+        out.println(readEval("(cons? (cons 2 '(3)))"));
+        out.println(readEval("(absvector? (absvector 10))"));
+        out.println(readEval("(absvector? ())"));
         out.println(readEval("'(1 2 3)"));
         out.println(readEval("(+ 1 2)"));
         out.println(readEval("(+ 1 2)"));
@@ -577,7 +569,7 @@ public class Shen {
     public static MethodHandle lambda(final Symbol x, final Object y) {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
-        Mapper<Object, Object> lambda = (X) -> {
+        UnaryOperator<Object> lambda = (X) -> {
             locals.push(new HashMap<Symbol, Object>(scope) {{
                 put(x, X);
             }});
