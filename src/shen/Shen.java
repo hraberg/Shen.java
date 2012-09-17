@@ -455,16 +455,12 @@ public class Shen {
 
     @Macro
     public static <T> boolean or(Object... clauses) throws Exception {
-        for (Object clause : clauses)
-            if (isTrue(eval_kl(clause))) return true;
-        return false;
+        return iterable(clauses).anyMatch( c -> isTrue(eval_kl(c)));
     }
 
     @Macro
     public static <T> boolean and(Object... clauses) throws Exception {
-        for (Object clause : clauses)
-            if (!isTrue(eval_kl(clause))) return false;
-        return true;
+        return iterable(clauses).allMatch( c -> isTrue(eval_kl(c)));
     }
 
     @Macro
@@ -472,8 +468,7 @@ public class Shen {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
         UnaryOperator<Object> lambda = (arg) -> {
-            locals.push(new HashMap<>(scope));
-            locals.peek().put(x, arg);
+            locals.push(new HashMap<>(scope)).put(x, arg);
             try {
                 return eval_kl(y);
             } finally {
@@ -528,8 +523,7 @@ public class Shen {
         final MethodHandle[] lambda = new MethodHandle[1];
         Defun defun = xs -> {
             if (xs.length < args.size()) return partials(lambda[0], xs);
-            locals.push(new HashMap<>());
-            locals.peek().put(intern("this"), lambda[0]);
+            locals.push(new HashMap<>()).put(intern("this"), lambda[0]);
             try {
                 while (xs != null) {
                     for (int i = 0; i < args.size(); i++)
