@@ -49,7 +49,7 @@ public class Shen {
 
         iterable(Shen.class.getDeclaredMethods())
                 .filter(m -> isPublic(m.getModifiers()))
-                .forEach(m -> { defun(intern(unscramble(m.getName())), m); });
+                .forEach(m -> { defun(m); });
 
         op("=", (BinaryOperator<Object>) (left, right) -> Objects.deepEquals(left, right));
         op("+", (IntBinaryOperator) (left, right) -> left + right);
@@ -118,11 +118,13 @@ public class Shen {
         }
     }
 
-    public static Cons cons(Object x, Object y) {
+    public static Object cons(Object x, Object y) {
+        if (y instanceof List) //noinspection unchecked
+            return cons(x, (List) y);
         return new Cons(x, y);
     }
 
-    public static List<Object> cons(Object x, List<Object> y) {
+    private static List<Object> cons(Object x, List<Object> y) {
         y = null == y ? new LinkedList<>() : y;
         y.add(0, x);
         return y;
@@ -155,6 +157,14 @@ public class Shen {
 
     public static List<Object> tl(List<Object> list) {
         return list.isEmpty() ? null : list.subList(1, list.size());
+    }
+
+    public static Object hd(Cons cons) {
+        return cons.car;
+    }
+
+    public static Object tl(Cons cons) {
+        return cons.cdr;
     }
 
     public static String str(Object x) {
@@ -358,7 +368,7 @@ public class Shen {
                     if (debug) err.println("Can only recur from tail position: " + hd);
                 }
 
-                if (fn.type().parameterCount() == 1 && !fn.isVarargsCollector()) {
+                if (isLambda(hd, fn)) {
                     Object result = fn;
                     for (Object arg : args)
                         result = ((MethodHandle) result).invoke(arg);
@@ -376,7 +386,7 @@ public class Shen {
                 for (MethodHandle h : new ArrayList<>(symbol.fn))
                     try {
                         return invokeVarArgs(h, targetType, args.toArray());
-                    } catch (WrongMethodTypeException | IncompatibleClassChangeError ignore) {
+                    } catch (WrongMethodTypeException | ClassCastException ignore) {
                         err.println(ignore);
                         err.println(hd + " " + h + " " + args);
                         err.println("Candidates: " + symbol.fn);
@@ -386,6 +396,8 @@ public class Shen {
                         err.println(symbol.fn);
                         throw uncheck(t);
                     }
+                err.println(hd + " " + targetType + " " + args);
+                err.println("Did not find matching fn: " + symbol.fn);
             }
         } catch (Throwable t) {
             err.println("Exception: " + kl + " (" + kl.getClass() + ")");
@@ -394,12 +406,17 @@ public class Shen {
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
     }
 
+    private static boolean isLambda(Object hd, MethodHandle fn) {
+        return !(hd instanceof Symbol) && fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
+    }
+
     private static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) throws Throwable {
         return insertArguments(fn.asType(targetType), 0, args).invokeExact();
     }
 
-    private static Symbol defun(Symbol name, Method m) {
+    private static Symbol defun(Method m) {
         try {
+            Symbol name = intern(unscramble(m.getName()));
             if (m.isAnnotationPresent(Macro.class)) macros.add(name);
             name.fn.add(lookup.unreflect(m));
             return name;
@@ -639,23 +656,15 @@ public class Shen {
     }
 
     public static void main(String[] args) throws Throwable {
-/*
-        asList("sys", "writer", "core", "prolog", "yacc", "declarations"
-                , "load",
-                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"
-
-
-        )
-            .forEach(f -> {
-                load(format("shen/klambda/%s.kl", f));
-            });
-*/
+        install();
 
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
         out.println(readEval("(cons 2 3)"));
         out.println(readEval("(cons? (cons 2 '(3)))"));
+        out.println(readEval("(cons 2 '(3))"));
         out.println(readEval("(absvector? (absvector 10))"));
+        out.println(readEval("(absvector 10)"));
         out.println(readEval("(absvector? ())"));
         out.println(readEval("'(1 2 3)"));
         out.println(readEval("(+ 1 2)"));
@@ -688,5 +697,13 @@ public class Shen {
         out.println(str(eval_kl(asList(intern("my-fun2"), 3, 5))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun3"), asList(), "Hello")));
         out.println(str(eval_kl(asList(intern("my-fun3")))));
+    }
+
+    private static void install() {
+        asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
+                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types")
+                .forEach(f -> {
+                    load(format("shen/klambda/%s.kl", f));
+                });
     }
 }
