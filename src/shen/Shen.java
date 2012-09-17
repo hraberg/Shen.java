@@ -23,7 +23,6 @@ import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
 import static java.util.Collections.nCopies;
 import static java.util.Iterables.into;
-import static java.util.functions.Mappers.constant;
 import static shen.Shen.UncheckedException.uncheck;
 
 @SuppressWarnings("UnusedDeclaration")
@@ -186,7 +185,7 @@ public class Shen {
     }
 
     public static MethodHandle freeze(Object x) {
-        return findSAM(constant(x)) ;
+        return findSAM((Factory<Object>) () -> x) ;
     }
 
     public static Object[] absvector(int n) {
@@ -345,6 +344,7 @@ public class Shen {
         }
     }
 
+    @Macro
     public static Object eval_kl(Object kl) {
         return eval_kl(kl, true);
     }

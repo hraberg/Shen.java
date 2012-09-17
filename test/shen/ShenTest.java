@@ -2,10 +2,13 @@ package shen;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import java.lang.invoke.MethodHandle;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.junit.Assert.assertThat;
+import static shen.Shen.*;
 import static shen.Shen.UncheckedException.uncheck;
-import static shen.Shen.intern;
-import static shen.Shen.readEval;
 
 public class ShenTest {
     @Test
@@ -141,8 +144,55 @@ public class ShenTest {
         is("r", 神("(pos \"bar\" 2)"));
     }
 
+    @Test
+    public void cons_p() {
+        is(true, 神("(cons? '(2 1 1 \"foo\"))"));
+        is(true, 神("(cons? (cons 3 '(2 1 1 \"foo\")))"));
+        is(false, 神("(cons? 53)"));
+        is(2, 神("(hd '(2 1 1))"));
+        is(1, 神("(hd (tl '(2 1 1)))"));
+    }
+
+    @Test
+    public void absvector_absvector_p_address_gt_and_lt_address() {
+        Symbol fail = intern("fail!");
+        Object[] absvector = {fail, fail, fail, fail, fail};
+        is(absvector, 神("(set v (absvector 5))"));
+        is(false, 神("(absvector? v)"));
+        is(false, 神("(absvector? 2)"));
+        is(false, 神("(absvector? \"foo\")"));
+        absvector[2] = 5;
+        is(absvector, 神("(address-> (value v) 2 5)"));
+        is(5, 神("(<-address (value v) 2)"));
+    }
+
+    @Test
+    public void eval_kl_freeze_and_thaw() {
+        is(9, 神("(eval-kl (+ 4 5))"));
+        is(4, 神("(eval-kl 4)"));
+        is(intern("hello"), 神("(eval-kl hello)"));
+        is(intern("hello"), 神("(eval-kl hello)"));
+        is(MethodHandle.class, 神("(freeze (+ 2 2))"));
+        is(4, 神("((freeze (+ 2 2)))"));
+    }
+
+    @Test
+    public void set_value_and_intern() {
+        is(5, 神("(set x 5)"));
+        is(5, 神("(value x)"));
+        is(5, 神("(value (intern \"x\"))"));
+    }
+
+    @Test
+    public void get_time() {
+        is(Number.class, 神("(get-time run)"));
+    }
+
     private void is(Object expected, Object actual) {
-        assertEquals(expected, actual);
+        if (expected instanceof Class)
+            assertThat(actual, instanceOf((Class<?>) expected));
+        else
+            assertThat(actual, equalTo(expected));
     }
 
     private Object 神(String shen) {
@@ -153,39 +203,6 @@ public class ShenTest {
         }
     }
 /*
-
-            "testing cons?, cons, hd & tl"
-            (test-is (cons? [2 1 1 "foo"]))
-            (test-is (cons? (cons 3 [2 1 1 "foo"])))
-            (test-is (= (cons? 55) false))
-            (test-is (= (hd [2 1 1]) 2))
-            (test-is (= false (= (hd [2 1 1]) 1)))
-            (test-is (= (hd (tl [2 1 1])) 1))
-
-            "testing absvector, absvector?, address-> & <-address"
-            (set v (absvector 5))
-            (test-is (absvector? (value v)))
-            (test-is (= (absvector? v) false))
-            (test-is (= (absvector? 2) false))
-            (test-is (= (absvector? "foo") false))
-            (address-> (value v) 2 5)
-            (test-is (= (<-address (value v) 2) 5))
-
-            "testing eval-without-macros, freeze & thaw"
-            (test-is (= (shen-eval-without-macros (+ 4 5)) 9))
-            (test-is (= (shen-eval-without-macros 4) (+ 2 2)))
-            (test-is (= (shen-eval-without-macros hello) hello))
-            (test-is (= (= 4 (freeze (+ 2 2))) false))
-            (test-is (= 4 (thaw (freeze (+ 2 2)))))
-
-            "testing set, value & intern"
-            (set x 5)
-            (test-is (= (value x) 5))
-            (test-is (= (value (intern "x")) 5))
-
-            "testing get-time"
-            (test-is (number?  (get-time run)))
-
             "testing Streams"
             (set fileName (cn (str (get-time run)) ".txt"))
             (set writeFile (open file (value fileName) out))
