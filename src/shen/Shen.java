@@ -3,6 +3,7 @@ package shen;
 import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -10,7 +11,9 @@ import java.util.*;
 import java.util.functions.*;
 
 import static java.lang.String.*;
+import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
+import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
@@ -23,7 +26,7 @@ public class Shen {
     private static final Map<String, Symbol> symbols = new HashMap<>();
 
     private static Set<Symbol> specialForms = asList("let", "lambda", "cond", "quote",
-            "if", "and", "or", "defun").map(Shen::intern).into(new HashSet());
+            "if", "and", "or", "defun", "trap-error").map(Shen::intern).into(new HashSet());
     private static List<Class<? extends Serializable>> literals = asList(Number.class, String.class, Boolean.class);
 
     static {
@@ -68,12 +71,16 @@ public class Shen {
     private static Object op(String name, Object op) {
         try {
             Symbol symbol = intern(name);
-            Method m = op.getClass().getDeclaredMethods()[0];
-            symbol.fn.add(lookup.unreflect(m).bindTo(op));
+            symbol.fn.add(findSAM(op).bindTo(op));
             return symbol;
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static MethodHandle findSAM(Object lambda) throws IllegalAccessException {
+        return lookup.unreflect(asList(lambda.getClass().getDeclaredMethods())
+                .filter(m -> !m.isSynthetic()).getFirst());
     }
 
     public static class Cons {
@@ -131,6 +138,14 @@ public class Shen {
 
     public static Object simple_error(String s) {
         throw new RuntimeException(s);
+    }
+
+    public static Object trap_error(Object x, Object f) {
+        try {
+            return eval_kl(x);
+        } catch (Exception e) {
+            return eval_kl(asList(f, e));
+        }
     }
 
     public static Object hd(List<Object> list) {
@@ -318,21 +333,24 @@ public class Shen {
 
 
                 if (fn.type().parameterCount() == 1 && fn.type().parameterArray()[0] != Object[].class) {
-                    return args.reduce(fn,
-                         (left, right) -> {try {
-                              return ((MethodHandle) left).invoke(right);
-                         } catch (Throwable t) {
-                             System.out.println(hd + " " + left + " " + right + " " + fn);
-                             throw new RuntimeException(t);
-                         }});
+                    Object result = fn;
+                    for (Object arg : args)
+                        result = ((MethodHandle) result).invoke(arg);
+                    return result;
                 }
+                MethodType targetType = methodType(Object.class, args.map(Object::getClass)
+                                                                        .into(new ArrayList<>())
+                                                                        .toArray(new Class[args.size()]));
                 for (MethodHandle h : ((Symbol) hd).fn)
                     try {
-                        return h.invokeWithArguments(args);
-                    } catch (NoSuchMethodException ignore) {
+                        return insertArguments(h.asType(targetType), 0, args.toArray()).invokeExact();
                     } catch (WrongMethodTypeException ignore) {
+                        System.out.println(ignore);
+/*
+                    } catch (NoSuchMethodException ignore) {
                     } catch (ClassCastException ignore) {
                     } catch (IncompatibleClassChangeError ignore) {
+*/
                     } catch (Throwable t) {
                         System.out.println(hd + " " + h  + " " + args);
                         throw t;
@@ -377,15 +395,18 @@ public class Shen {
 
     public static void main(String[] args) throws Throwable {
 
-        asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
+/*
+        asList("sys", "writer", "core", "prolog", "yacc", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types")
             .forEach(f -> {
                 load(format("shen/klambda/%s.kl", f));
             });
+*/
 
         System.out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         System.out.println(eval_kl(intern("x")));
         System.out.println(readEval("'(1 2 3)"));
+        System.out.println(readEval("(+ 1 2)"));
         System.out.println(readEval("(+ 1.0 2.0)"));
         System.out.println(readEval("(* 5 2)"));
         System.out.println(readEval("(tl '(1 2 3))"));
@@ -394,6 +415,7 @@ public class Shen {
         System.out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
         System.out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
         System.out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
+        System.out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
         System.out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
         System.out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
         System.out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
@@ -484,7 +506,7 @@ public class Shen {
                      locals.pop();
                 }
             };
-            return lookup.unreflect(lambda.getClass().getDeclaredMethods()[0]).bindTo(lambda);
+            return findSAM(lambda).bindTo(lambda);
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         }
