@@ -391,16 +391,12 @@ public class Shen {
                             .into(new ArrayList<>())
                             .toArray(new Class[args.size()]));
 
-                Mapper<MethodHandle, Object> invoker = fn.type().parameterCount() > args.size()
-                        ? h -> insertArguments(h, 0, args.toArray())
-                        : h -> invokeVarArgs(h, targetType, args.toArray());
-
-                if (!(hd instanceof Symbol)) return invoker.map(fn);
+                if (!(hd instanceof Symbol)) return apply(fn, targetType, args);
 
                 Symbol symbol = (Symbol) hd;
                 for (MethodHandle h : new ArrayList<>(symbol.fn))
                     try {
-                        return invoker.map(h);
+                        return apply(h, targetType, args);
                     } catch (WrongMethodTypeException | ClassCastException ignore) {
                         err.println(ignore);
                         err.println(hd + " " + h + " " + args);
@@ -425,9 +421,13 @@ public class Shen {
         return !(hd instanceof Symbol) && fn.type().parameterCount() == 1;
     }
 
-    static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) {
+    static Object apply(MethodHandle fn, MethodType targetType, List args) {
         try {
-            return insertArguments(fn.asType(targetType), 0, args).invokeExact();
+            return fn.type().parameterCount() > targetType.parameterCount()
+                    ? insertArguments(fn.asType(fn.type()
+                        .dropParameterTypes(0, targetType.parameterCount())
+                        .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray())
+                    : insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
         } catch (Throwable t) {
             throw uncheck(t);
         }
@@ -516,15 +516,15 @@ public class Shen {
         return self[0];
     }
 
-    static Object fnBody(List<Symbol> args, Object body, MethodHandle[] self, Object... xs) {
+    static Object fnBody(List<Symbol> args, Object body, MethodHandle[] self, Object... values) {
         locals.push(new HashMap<>()).put(intern("this"), self[0]);
         try {
             while (true) {
                 for (int i = 0; i < args.size(); i++)
-                    locals.peek().put(args.get(i), xs[i]);
+                    locals.peek().put(args.get(i), values[i]);
                 Object result = eval_kl(body);
                 if (result instanceof Recur)
-                    xs = ((Recur) result).args;
+                    values = ((Recur) result).args;
                 else return result;
             }
         } finally {
@@ -651,6 +651,7 @@ public class Shen {
         out.println(readEval("((+ 6.5) 2.0)"));
         out.println(readEval("(+ 1.0 2.0)"));
         out.println(readEval("(* 5 2)"));
+        out.println(readEval("(* 5)"));
         out.println(readEval("(tl '(1 2 3))"));
         out.println(readEval("(let x 42 x)"));
         out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
