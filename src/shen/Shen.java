@@ -362,16 +362,14 @@ public class Shen {
             if (kl instanceof List) {
                 @SuppressWarnings("unchecked")
                 List<Object> list = (List) kl;
-
-                Object hd = hd(list);
-                MethodHandle fn = (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
+                Object hd = eval_kl(hd(list), tail);
 
                 //noinspection Convert2Diamond,SuspiciousMethodCalls
                 final List<Object> args = macros.contains(hd)
                         ? tl(list)
                         : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
-                if (intern("this").resolve().equals(fn)) {
+                if (intern("this").resolve().equals(hd)) {
                     if (tail) {
                         if (debug) out.println("Recur: " + hd + " " + args);
                         return new Recur(args.toArray());
@@ -379,8 +377,8 @@ public class Shen {
                     if (debug) err.println("Can only recur from tail position: " + hd);
                 }
 
-                if (isLambda(hd, fn)) {
-                    Object result = fn;
+                if (isLambda(hd)) {
+                    Object result = hd;
                     for (Object arg : args)
                         result = ((MethodHandle) result).invoke(arg);
                     return result;
@@ -391,7 +389,7 @@ public class Shen {
                             .into(new ArrayList<>())
                             .toArray(new Class[args.size()]));
 
-                if (!(hd instanceof Symbol)) return apply(fn, targetType, args);
+                if (hd instanceof MethodHandle) return apply((MethodHandle) hd, targetType, args);
 
                 Symbol symbol = (Symbol) hd;
                 for (MethodHandle h : new ArrayList<>(symbol.fn))
@@ -417,8 +415,8 @@ public class Shen {
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
     }
 
-    static boolean isLambda(Object hd, MethodHandle fn) {
-        return !(hd instanceof Symbol) && fn.type().parameterCount() == 1;
+    static boolean isLambda(Object hd) {
+        return hd instanceof MethodHandle && ((MethodHandle) hd).type().parameterCount() == 1;
     }
 
     static Object apply(MethodHandle fn, MethodType targetType, List args) {
@@ -492,8 +490,15 @@ public class Shen {
     @Macro
     public static Symbol defun(Symbol name, final List<Symbol> args, Object body) {
         name.fn.clear();
-        name.fn.add(defun(args, body));
+        name.fn.add(fn(name, args, body));
         return name;
+    }
+
+    static MethodHandle fn(Symbol name, List<Symbol> args, Object body) {
+        if (args.isEmpty()) return findSAM((Factory) () -> fnBody(name, args, body));
+        if (args.size() == 1) return findSAM((Mapper) x -> fnBody(name, args, body, x));
+        if (args.size() == 2) return findSAM((BiMapper) (x, y) -> fnBody(name, args, body, x, y));
+        return findSAM((Defun) xs -> fnBody(name, args, body, xs)).asCollector(Object[].class, args.size());
     }
 
     static Symbol defun(Method m) {
@@ -507,17 +512,8 @@ public class Shen {
         }
     }
 
-    static MethodHandle defun(List<Symbol> args, Object body) {
-        MethodHandle[] self = new MethodHandle[1];
-        if (args.isEmpty()) self[0] = findSAM((Factory) () -> fnBody(args, body, self));
-        if (args.size() == 1) self[0] = findSAM((Mapper) x -> fnBody(args, body, self, x));
-        if (args.size() == 2) self[0] = findSAM((BiMapper) (x, y) -> fnBody(args, body, self, x, y));
-        if (args.size() > 2) self[0] = findSAM((Defun) xs -> fnBody(args, body, self, xs)).asCollector(Object[].class, args.size());
-        return self[0];
-    }
-
-    static Object fnBody(List<Symbol> args, Object body, MethodHandle[] self, Object... values) {
-        locals.push(new HashMap<>()).put(intern("this"), self[0]);
+    static Object fnBody(Symbol name, List<Symbol> args, Object body, Object... values) {
+        locals.push(new HashMap<>()).put(intern("this"), name);
         try {
             while (true) {
                 for (int i = 0; i < args.size(); i++)
