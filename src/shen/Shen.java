@@ -295,12 +295,8 @@ public class Shen {
         }
 
         public Object resolve() throws Exception {
-            ListIterator<Map<Symbol, Object>> i = locals.listIterator(locals.size());
-            while (i.hasPrevious()) {
-                Map<Symbol, Object> map = i.previous();
-                if (map.containsKey(this))
-                    return map.get(this);
-            }
+            if (!locals.isEmpty() && locals.peek().containsKey(this))
+                return locals.peek().get(this);
             return this;
         }
 
