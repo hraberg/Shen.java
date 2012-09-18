@@ -391,11 +391,11 @@ public class Shen {
                             .into(new ArrayList<>())
                             .toArray(new Class[args.size()]));
 
-                if (!(hd instanceof Symbol)) return invokeVarArgs(fn, targetType, args.toArray());
-
-                Mapper<MethodHandle, Object> invoker = isFixedArityPartial(fn, args)
+                Mapper<MethodHandle, Object> invoker = fn.type().parameterCount() > args.size()
                         ? h -> insertArguments(h, 0, args.toArray())
                         : h -> invokeVarArgs(h, targetType, args.toArray());
+
+                if (!(hd instanceof Symbol)) return invoker.map(fn);
 
                 Symbol symbol = (Symbol) hd;
                 for (MethodHandle h : new ArrayList<>(symbol.fn))
@@ -421,12 +421,8 @@ public class Shen {
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
     }
 
-    static boolean isFixedArityPartial(MethodHandle fn, List<Object> args) {
-        return !fn.isVarargsCollector() && fn.type().parameterCount() > args.size();
-    }
-
     static boolean isLambda(Object hd, MethodHandle fn) {
-        return !(hd instanceof Symbol) && fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
+        return !(hd instanceof Symbol) && fn.type().parameterCount() == 1;
     }
 
     static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) {
@@ -511,20 +507,9 @@ public class Shen {
         }
     }
 
-    static MethodHandle partials(final MethodHandle lambda, Object... knownArgs) {
-        return findSAM((Defun) newArgs -> {
-            try {
-                return lambda.invokeWithArguments(asList(newArgs).into(new ArrayList<>(asList(knownArgs))));
-            } catch (Throwable t) {
-                throw uncheck(t);
-            }
-        }).asVarargsCollector(Object[].class);
-    }
-
     static MethodHandle defun(List<Symbol> args, Object body) {
         final MethodHandle[] lambda = new MethodHandle[1];
         Defun defun = xs -> {
-            if (xs.length < args.size()) return partials(lambda[0], xs);
             locals.push(new HashMap<>()).put(intern("this"), lambda[0]);
             try {
                 while (xs != null) {
@@ -541,7 +526,7 @@ public class Shen {
                 locals.pop();
             }
         };
-        return lambda[0] = findSAM(defun).asVarargsCollector(Object[].class);
+        return lambda[0] = findSAM(defun).asCollector(Object[].class, args.size());
     }
 
     static String unscramble(String s) {
