@@ -371,9 +371,10 @@ public class Shen {
                 Object hd = hd(list);
                 MethodHandle fn = (hd instanceof Symbol) ? ((Symbol) hd).fn.getFirst() : (MethodHandle) eval_kl(hd);
 
-                List<Object> args = tl(list);
                 //noinspection Convert2Diamond,SuspiciousMethodCalls
-                args = macros.contains(hd) ? args : into(args.map(k -> eval_kl(k, false)), new ArrayList<Object>());
+                final List<Object> args = macros.contains(hd)
+                        ? tl(list)
+                        : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
                 if (intern("this").resolve().equals(fn)) {
                     if (tail) {
@@ -390,19 +391,21 @@ public class Shen {
                     return result;
                 }
 
-                if (isFixedArityPartial(fn, args)) return insertArguments(fn, 0, args.toArray());
-
                 @SuppressWarnings("SuspiciousToArrayCall")
-                MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
-                        .into(new ArrayList<>())
-                        .toArray(new Class[args.size()]));
+                final MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
+                            .into(new ArrayList<>())
+                            .toArray(new Class[args.size()]));
 
                 if (!(hd instanceof Symbol)) return invokeVarArgs(fn, targetType, args.toArray());
+
+                Mapper<MethodHandle, Object> invoker = isFixedArityPartial(fn, args)
+                        ? h -> insertArguments(h, 0, args.toArray())
+                        : h -> invokeVarArgs(h, targetType, args.toArray());
 
                 Symbol symbol = (Symbol) hd;
                 for (MethodHandle h : new ArrayList<>(symbol.fn))
                     try {
-                        return invokeVarArgs(h, targetType, args.toArray());
+                        return invoker.map(h);
                     } catch (WrongMethodTypeException | ClassCastException ignore) {
                         err.println(ignore);
                         err.println(hd + " " + h + " " + args);
@@ -431,8 +434,12 @@ public class Shen {
         return !(hd instanceof Symbol) && fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
     }
 
-    static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) throws Throwable {
-        return insertArguments(fn.asType(targetType), 0, args).invokeExact();
+    static Object invokeVarArgs(MethodHandle fn, MethodType targetType, Object... args) {
+        try {
+            return insertArguments(fn.asType(targetType), 0, args).invokeExact();
+        } catch (Throwable t) {
+            throw uncheck(t);
+        }
     }
 
     @Macro
@@ -455,7 +462,7 @@ public class Shen {
 
     @Macro
     public static <T> boolean or(Object... clauses) throws Exception {
-        return iterable(clauses).anyMatch( c -> isTrue(eval_kl(c)));
+        return iterable(clauses).anyMatch(c -> isTrue(eval_kl(c)));
     }
 
     @Macro
@@ -658,7 +665,7 @@ public class Shen {
         out.println(readEval("(absvector? ())"));
         out.println(readEval("'(1 2 3)"));
         out.println(readEval("(+ 1 2)"));
-        out.println(readEval("((+ 6) 2)"));
+        out.println(readEval("((+ 6.5) 2.0)"));
         out.println(readEval("(+ 1.0 2.0)"));
         out.println(readEval("(* 5 2)"));
         out.println(readEval("(tl '(1 2 3))"));
