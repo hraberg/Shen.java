@@ -117,7 +117,6 @@ public class Shen {
             return 31 * (car != null ? car.hashCode() : 0) + (cdr != null ? cdr.hashCode() : 0);
         }
 
-        @Override
         public String toString() {
             return "[" + car + " | " + cdr + "]";
         }
@@ -470,7 +469,7 @@ public class Shen {
     public static MethodHandle lambda(final Symbol x, final Object y) {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
-        UnaryOperator<Object> lambda = (arg) -> {
+        Mapper lambda = (arg) -> {
             locals.push(new HashMap<>(scope)).put(x, arg);
             try {
                 return eval_kl(y);
