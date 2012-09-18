@@ -508,25 +508,28 @@ public class Shen {
     }
 
     static MethodHandle defun(List<Symbol> args, Object body) {
-        final MethodHandle[] lambda = new MethodHandle[1];
-        Defun defun = xs -> {
-            locals.push(new HashMap<>()).put(intern("this"), lambda[0]);
-            try {
-                while (xs != null) {
-                    for (int i = 0; i < args.size(); i++)
-                        locals.peek().put(args.get(i), xs[i]);
-                    xs = null;
-                    Object result = eval_kl(body);
-                    if (result instanceof Recur)
-                        xs = ((Recur) result).args;
-                    else return result;
-                }
-                throw new IllegalStateException();
-            } finally {
-                locals.pop();
+        MethodHandle[] self = new MethodHandle[1];
+        if (args.isEmpty()) self[0] = findSAM((Factory) () -> fnBody(args, body, self));
+        if (args.size() == 1) self[0] = findSAM((Mapper) x -> fnBody(args, body, self, x));
+        if (args.size() == 2) self[0] = findSAM((BiMapper) (x, y) -> fnBody(args, body, self, x, y));
+        if (args.size() > 2) self[0] = findSAM((Defun) xs -> fnBody(args, body, self, xs)).asCollector(Object[].class, args.size());
+        return self[0];
+    }
+
+    static Object fnBody(List<Symbol> args, Object body, MethodHandle[] self, Object... xs) {
+        locals.push(new HashMap<>()).put(intern("this"), self[0]);
+        try {
+            while (true) {
+                for (int i = 0; i < args.size(); i++)
+                    locals.peek().put(args.get(i), xs[i]);
+                Object result = eval_kl(body);
+                if (result instanceof Recur)
+                    xs = ((Recur) result).args;
+                else return result;
             }
-        };
-        return lambda[0] = findSAM(defun).asCollector(Object[].class, args.size());
+        } finally {
+            locals.pop();
+        }
     }
 
     static String unscramble(String s) {
