@@ -37,7 +37,7 @@ public class Shen {
 
     static Set<Symbol> macros = new HashSet<>();
     static List<Class<? extends Serializable>> literals =
-            asList(Number.class, String.class, Boolean.class, Exception.class);
+            asList(Number.class, String.class, Boolean.class);
 
     static {
         set("*language*", "Java");
@@ -151,11 +151,11 @@ public class Shen {
     }
 
     @Macro
-    public static Object trap_error(Object x, Object f) {
+    public static Object trap_error(Object x, Object f) throws Throwable {
         try {
             return eval_kl(x);
         } catch (Exception e) {
-            return eval_kl(asList(f, e));
+            return ((MethodHandle) eval_kl(f)).invoke(e);
         }
     }
 
@@ -365,7 +365,7 @@ public class Shen {
                 Object hd = eval_kl(hd(list), tail);
 
                 //noinspection Convert2Diamond,SuspiciousMethodCalls
-                final List<Object> args = macros.contains(hd)
+                List<Object> args = macros.contains(hd)
                         ? tl(list)
                         : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
