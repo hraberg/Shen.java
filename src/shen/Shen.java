@@ -360,13 +360,11 @@ public class Shen {
                     ? tl(list)
                     : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
-            if (intern("this").resolve().equals(hd)) {
-                if (tail) {
-                    if (debug) out.println("Recur: " + hd + " " + args);
-                    return new Recur(args.toArray());
-                }
-                if (debug) err.println("Can only recur from tail position: " + hd);
-            }
+            if (intern("this").resolve().equals(hd)) if (tail) {
+                if (debug) out.println("Recur: " + hd + " " + args);
+                return new Recur(args.toArray());
+            } else if (debug) err.println("Can only recur from tail position: " + hd);
+
             try {
                 if (isLambda(hd)) {
                     Object result = hd;
