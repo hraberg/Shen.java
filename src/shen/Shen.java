@@ -437,13 +437,9 @@ public class Shen {
     }
 
     @Macro
-    public static Object cond() {
-        return simple_error("condition failure");
-    }
-
-    @Macro
-    public static Object cond(List clause, List... clauses) throws Exception {
-        return kl_if(clause.getFirst(), clause.get(1), cons(intern("cond"), list(clauses)));
+    public static Object cond(List... clauses) throws Exception {
+        if (clauses.length == 0) simple_error("condition failure");
+        return kl_if(clauses[0].getFirst(), clauses[0].get(1), cons(intern("cond"), tl(list(clauses))));
     }
 
     @Macro
