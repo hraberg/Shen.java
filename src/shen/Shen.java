@@ -18,7 +18,6 @@ import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
-import static java.util.Collections.EMPTY_LIST;
 import static java.util.Iterables.into;
 import static java.util.Objects.deepEquals;
 
@@ -349,11 +348,11 @@ public class Shen {
     static Object eval_kl(Object kl, boolean tail) {
         if (debug) err.println(kl);
         if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
-        if (EMPTY_LIST.equals(kl)) return kl;
         if (kl instanceof Symbol) return ((Symbol) kl).resolve();
         if (kl instanceof List) {
             @SuppressWarnings("unchecked")
             List<Object> list = (List) kl;
+            if (list.isEmpty()) return list;
             Object hd = eval_kl(hd(list), tail);
             //noinspection Convert2Diamond,SuspiciousMethodCalls
             List<Object> args = macros.contains(hd)
