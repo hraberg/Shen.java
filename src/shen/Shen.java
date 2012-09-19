@@ -162,6 +162,14 @@ public class Shen {
         return cons.cdr;
     }
 
+    static <T> T hd(T[] array) {
+        return array[0];
+    }
+
+    static <T> T[] tl(T[] array) {
+        return copyOfRange(array, 1, array.length);
+    }
+
     public static String str(Object x) {
         if (cons_p(x)) throw new IllegalArgumentException();
         if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
@@ -439,22 +447,23 @@ public class Shen {
     @Macro
     public static Object cond(List... clauses) throws Exception {
         if (clauses.length == 0) simple_error("condition failure");
-        return kl_if(clauses[0].getFirst(), clauses[0].get(1), cons(intern("cond"), tl(list(clauses))));
+        return isTrue(eval_kl(hd(clauses).getFirst()))
+                ? eval_kl(hd(clauses).get(1))
+                : cond(tl(clauses));
     }
 
     @Macro
     public static boolean or(Object x, Object y, Object... clauses) throws Exception {
-        return isTrue(kl_if(x, true, clauses.length > 0
-                ? cons(intern("or"), cons(y, list(clauses)))
-                : y));
+        return isTrue(eval_kl(x)) || (clauses.length > 0
+                ? or(y, hd(clauses), tl(clauses))
+                : isTrue(eval_kl(y)));
     }
 
     @Macro
     public static boolean and(Object x, Object y, Object... clauses) throws Exception {
-        return isTrue(kl_if(x, clauses.length > 0
-                ? cons(intern("and"), cons(y, list(clauses)))
-                : y,
-                false));
+        return isTrue(eval_kl(x)) && (clauses.length > 0
+                ? and(y, hd(clauses), tl(clauses))
+                : isTrue(eval_kl(y)));
     }
 
     @Macro
