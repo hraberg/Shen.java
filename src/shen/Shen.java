@@ -125,7 +125,6 @@ public class Shen {
     }
 
     static List<Object> cons(Object x, List<Object> y) {
-        y = null == y ? new LinkedList<>() : y;
         y.add(0, x);
         return y;
     }
@@ -155,12 +154,13 @@ public class Shen {
         }
     }
 
-    public static Object hd(List<Object> list) {
+    public static <T> T hd(List<T> list) {
         return list.isEmpty() ? null : list.get(0);
     }
 
-    public static List<Object> tl(List<Object> list) {
-        return list.isEmpty() ? null : list.subList(1, list.size());
+    public static <T> List<T> tl(List<T> list) {
+        //noinspection Convert2Diamond
+        return list.isEmpty() ? list : list.subList(1, list.size()).into(new ArrayList<T>());
     }
 
     public static Object hd(Cons cons) {
@@ -404,12 +404,14 @@ public class Shen {
     }
 
     static boolean isLambda(Object hd) {
-        return hd instanceof MethodHandle && ((MethodHandle) hd).type().parameterCount() == 1;
+        if (!(hd instanceof MethodHandle)) return false;
+        MethodHandle fn = (MethodHandle) hd;
+        return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
     }
 
     static boolean hasMatchingSignature(MethodHandle h, MethodType args, BiPredicate<Class, Class> match) {
         int last = h.type().parameterCount() - 1;
-        if (h.isVarargsCollector()) h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
+        if (h.isVarargsCollector() && args.parameterCount() - last >= 0) h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
         if (args.parameterCount() > h.type().parameterCount()) return false;
 
         Class<?>[] classes = h.type().wrap().parameterArray();
@@ -419,11 +421,13 @@ public class Shen {
     }
 
     static Object apply(MethodHandle fn, MethodType targetType, List args) throws Throwable {
-        return fn.type().parameterCount() > targetType.parameterCount()
-                ? insertArguments(fn.asType(fn.type()
+        if (fn.type().parameterCount() > targetType.parameterCount()) {
+            MethodHandle partial = insertArguments(fn.asType(fn.type()
                     .dropParameterTypes(0, targetType.parameterCount())
-                    .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray())
-                : insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
+                    .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray());
+            return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) : partial;
+        }
+        return insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
     }
 
     @Macro
@@ -432,26 +436,23 @@ public class Shen {
     }
 
     @Macro
-    public static <T> Object kl_if(Object test, Object then) throws Exception {
-        return kl_if(test, then, false);
+    public static Object cond(List... clauses) throws Exception {
+        return kl_if (clauses[0].getFirst(), clauses[0].get(1), cons(intern("cond"), tl(asList(clauses))));
     }
 
     @Macro
-    public static <T> Object cond(Object... clauses) throws Exception {
-        for (Object clause : clauses)
-            if (isTrue(eval_kl(((List) clause).getFirst())))
-                return eval_kl(((List) clause).get(1));
-        throw new IllegalArgumentException();
+    public static boolean or(Object p, Object... clauses) throws Exception {
+        return isTrue(kl_if(p, true, clauses.length > 1
+                ? cons(intern("or"), asList(clauses).into(new ArrayList<>()))
+                : clauses[0]));
     }
 
     @Macro
-    public static <T> boolean or(Object... clauses) throws Exception {
-        return iterable(clauses).anyMatch(c -> isTrue(eval_kl(c)));
-    }
-
-    @Macro
-    public static <T> boolean and(Object... clauses) throws Exception {
-        return iterable(clauses).allMatch( c -> isTrue(eval_kl(c)));
+    public static boolean and(Object p, Object... clauses) throws Exception {
+        return isTrue(kl_if(p, clauses.length > 1
+                ? cons(intern("and"), asList(clauses).into(new ArrayList<>()))
+                : clauses[0],
+                false));
     }
 
     @Macro
@@ -483,8 +484,8 @@ public class Shen {
         return ((Boolean) test);
     }
 
-    public interface Defun {
-        Object call(Object... args);
+    public interface Fn {
+        Object call(Object... args) throws Throwable;
     }
 
     @Macro
@@ -498,7 +499,7 @@ public class Shen {
         if (args.isEmpty()) return findSAM((Factory) () -> fnBody(name, args, body));
         if (args.size() == 1) return findSAM((Mapper) x -> fnBody(name, args, body, x));
         if (args.size() == 2) return findSAM((BiMapper) (x, y) -> fnBody(name, args, body, x, y));
-        return findSAM((Defun) xs -> fnBody(name, args, body, xs)).asCollector(Object[].class, args.size());
+        return findSAM((Fn) xs -> fnBody(name, args, body, xs)).asCollector(Object[].class, args.size());
     }
 
     static Symbol defun(Method m) {
@@ -596,6 +597,11 @@ public class Shen {
 //        install();
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
+        out.println(readEval("(or false)"));
+        out.println(readEval("(or false false)"));
+        out.println(readEval("(or false true)"));
+        out.println(readEval("((or false) true)"));
+        out.println(readEval("((and true) true true)"));
         out.println(readEval("()"));
         out.println(readEval("(cons 2 3)"));
         out.println(readEval("(cons? (cons 2 '(3)))"));
