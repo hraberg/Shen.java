@@ -6,7 +6,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
@@ -282,7 +281,7 @@ public class Shen {
 
     static class Symbol {
         public final String symbol;
-        public List<MethodHandle> fn = new ArrayList<>();
+        public Set<MethodHandle> fn = new HashSet<>();
         public Object var;
 
         public Symbol(String symbol) {
@@ -297,11 +296,6 @@ public class Shen {
             if (!locals.isEmpty() && locals.peek().containsKey(this))
                 return locals.peek().get(this);
             return this;
-        }
-
-        public void demote(MethodHandle h) {
-            fn.remove(h);
-            fn.add(h);
         }
     }
 
@@ -392,24 +386,18 @@ public class Shen {
                 if (hd instanceof MethodHandle) return apply((MethodHandle) hd, targetType, args);
 
                 Symbol symbol = (Symbol) hd;
-                for (MethodHandle h : new ArrayList<>(symbol.fn))
-                    try {
-                        return apply(h, targetType, args);
-                    } catch (WrongMethodTypeException | ClassCastException ignore) {
-                        err.println(ignore);
-                        err.println(hd + " " + h + " " + args);
-                        err.println("Candidates: " + symbol.fn);
-                        symbol.demote(h);
-                    } catch (Throwable t) {
-                        err.println(hd + " " + h + " " + args);
-                        err.println(symbol.fn);
-                        throw uncheck(t);
-                    }
+
+                Iterable<MethodHandle> exact = symbol.fn.filter(f -> hasMatchingSignature(f, targetType, (x, y) -> x.equals(y)));
+                if (!exact.isEmpty()) return apply(exact.getAny(), targetType, args);
+
+                Iterable<MethodHandle> assignable = symbol.fn.filter(f -> hasMatchingSignature(f, targetType, (x, y) -> x.isAssignableFrom(y)));
+                if (!assignable.isEmpty()) return apply(assignable.getAny(), targetType, args);
+
                 err.println(hd + " " + targetType + " " + args);
                 err.println("Did not find matching fn: " + symbol.fn);
             }
         } catch (Throwable t) {
-            err.println("Exception: " + kl + " (" + kl.getClass() + ")");
+            err.println("Exception: " + t + " " + kl + " (" + kl.getClass() + ")");
             throw uncheck(t);
         }
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
@@ -417,6 +405,17 @@ public class Shen {
 
     static boolean isLambda(Object hd) {
         return hd instanceof MethodHandle && ((MethodHandle) hd).type().parameterCount() == 1;
+    }
+
+    static boolean hasMatchingSignature(MethodHandle h, MethodType args, BiPredicate<Class, Class> match) {
+        int last = h.type().parameterCount() - 1;
+        if (h.isVarargsCollector()) h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
+        if (args.parameterCount() > h.type().parameterCount()) return false;
+
+        Class<?>[] classes = h.type().wrap().parameterArray();
+        for (int i = 0; i < args.parameterCount(); i++)
+            if (!match.eval(classes[i], args.parameterType(i))) return false;
+        return true;
     }
 
     static Object apply(MethodHandle fn, MethodType targetType, List args) {
@@ -633,9 +632,9 @@ public class Shen {
 
     public static void main(String[] args) throws Throwable {
 //        install();
-
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
+        out.println(readEval("()"));
         out.println(readEval("(cons 2 3)"));
         out.println(readEval("(cons? (cons 2 '(3)))"));
         out.println(readEval("(cons 2 '(3))"));
@@ -655,6 +654,7 @@ public class Shen {
         out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
         out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
         out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
+        out.println(readEval("(cond (false 1) ((> 10 3) ()))"));
 
         out.println(readEval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
         out.println(readEval("(fib 10)"));
