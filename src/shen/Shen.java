@@ -19,6 +19,7 @@ import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
+import static java.util.functions.Predicates.isEqual;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class Shen {
@@ -378,7 +379,7 @@ public class Shen {
 
                 Symbol symbol = (Symbol) hd;
 
-                MethodHandle exact = some(symbol.fn, f -> hasMatchingSignature(f, targetType, (x, y) -> x.equals(y)));
+                MethodHandle exact = some(symbol.fn, isEqual(targetType));
                 if (exact != null) return apply(exact, targetType, args);
 
                 MethodHandle match = some(symbol.fn, f -> hasMatchingSignature(f, targetType, (x, y) -> x.isAssignableFrom(y)));
@@ -436,6 +437,11 @@ public class Shen {
     }
 
     @Macro
+    public static Object cond() {
+        return simple_error("condition failure");
+    }
+
+    @Macro
     public static Object cond(List clause, List... clauses) throws Exception {
         return kl_if(clause.getFirst(), clause.get(1), cons(intern("cond"), list(clauses)));
     }
@@ -480,8 +486,9 @@ public class Shen {
         return filter.isEmpty() ? null : filter.getAny();
     }
 
-    static <T> List<T> list(T[] clauses) {
-        return asList(clauses).into(new ArrayList<T>());
+    @SafeVarargs
+    static <T> List<T> list(T... elements) {
+        return asList(elements).into(new ArrayList<T>());
     }
 
     static boolean isTrue(Object test) {
@@ -626,7 +633,7 @@ public class Shen {
         out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
         out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
         out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
-        out.println(readEval("(cond (false 1))"));
+        out.println(readEval("(cond (true 1))"));
         out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
         out.println(readEval("(cond (false 1) ((> 10 3) ()))"));
 
