@@ -88,8 +88,8 @@ public class Shen {
 
     static MethodHandle findSAM(Object lambda) {
         try {
-            return lookup.unreflect(asList(lambda.getClass().getDeclaredMethods())
-                    .filter(m -> !m.isSynthetic()).getFirst()).bindTo(lambda);
+            return lookup.unreflect(some(iterable(lambda.getClass().getDeclaredMethods()),
+                                        m -> !m.isSynthetic())).bindTo(lambda);
         } catch (IllegalAccessException e) {
             throw uncheck(e);
         }
@@ -387,11 +387,11 @@ public class Shen {
 
                 Symbol symbol = (Symbol) hd;
 
-                Iterable<MethodHandle> exact = symbol.fn.filter(f -> hasMatchingSignature(f, targetType, (x, y) -> x.equals(y)));
-                if (!exact.isEmpty()) return apply(exact.getAny(), targetType, args);
+                MethodHandle exact = some(symbol.fn, f -> hasMatchingSignature(f, targetType, (x, y) -> x.equals(y)));
+                if (exact != null) return apply(exact, targetType, args);
 
-                Iterable<MethodHandle> assignable = symbol.fn.filter(f -> hasMatchingSignature(f, targetType, (x, y) -> x.isAssignableFrom(y)));
-                if (!assignable.isEmpty()) return apply(assignable.getAny(), targetType, args);
+                MethodHandle match = some(symbol.fn, f -> hasMatchingSignature(f, targetType, (x, y) -> x.isAssignableFrom(y)));
+                if (match != null) return apply(match, targetType, args);
 
                 err.println(hd + " " + targetType + " " + args);
                 err.println("Did not find matching fn: " + symbol.fn);
@@ -476,6 +476,11 @@ public class Shen {
     @Macro
     public static Object let(Symbol x, Object y, Object z) throws Throwable {
         return lambda(x, z).invoke(eval_kl(y));
+    }
+
+    static <T> T some(Iterable<T> iterable, Predicate<? super T> predicate) {
+        Iterable<T> filter = iterable.filter(predicate);
+        return filter.isEmpty() ? null : filter.getAny();
     }
 
     static boolean isTrue(Object test) {
