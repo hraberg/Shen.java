@@ -20,7 +20,7 @@ import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
 
-@SuppressWarnings("UnusedDeclaration")
+@SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class Shen {
     static final boolean debug = false;
 
@@ -159,7 +159,6 @@ public class Shen {
     }
 
     public static <T> List<T> tl(List<T> list) {
-        //noinspection Convert2Diamond
         return list.isEmpty() ? list : list.subList(1, list.size()).into(new ArrayList<T>());
     }
 
@@ -186,7 +185,6 @@ public class Shen {
     }
 
     public static MethodHandle freeze(Object x) {
-        //noinspection SuspiciousNameCombination
         return lambda(intern("_"), x);
     }
 
@@ -358,7 +356,7 @@ public class Shen {
             List<Object> list = (List) kl;
             if (list.isEmpty()) return list;
             Object hd = eval_kl(hd(list), tail);
-            //noinspection Convert2Diamond,SuspiciousMethodCalls
+            //noinspection SuspiciousMethodCalls
             List<Object> args = macros.contains(hd)
                     ? tl(list)
                     : tl(list).map(k -> eval_kl(k, false)).into(new ArrayList<Object>());
@@ -411,7 +409,8 @@ public class Shen {
 
     static boolean hasMatchingSignature(MethodHandle h, MethodType args, BiPredicate<Class, Class> match) {
         int last = h.type().parameterCount() - 1;
-        if (h.isVarargsCollector() && args.parameterCount() - last >= 0) h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
+        if (h.isVarargsCollector() && args.parameterCount() - last > 0)
+            h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
         if (args.parameterCount() > h.type().parameterCount()) return false;
 
         Class<?>[] classes = h.type().wrap().parameterArray();
@@ -421,11 +420,12 @@ public class Shen {
     }
 
     static Object apply(MethodHandle fn, MethodType targetType, List args) throws Throwable {
-        if (fn.type().parameterCount() > targetType.parameterCount()) {
+        int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
+        if (nonVarargs > targetType.parameterCount()) {
             MethodHandle partial = insertArguments(fn.asType(fn.type()
                     .dropParameterTypes(0, targetType.parameterCount())
                     .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray());
-            return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) : partial;
+            return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
         }
         return insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
     }
@@ -436,22 +436,22 @@ public class Shen {
     }
 
     @Macro
-    public static Object cond(List... clauses) throws Exception {
-        return kl_if (clauses[0].getFirst(), clauses[0].get(1), cons(intern("cond"), tl(asList(clauses))));
+    public static Object cond(List clause, List... clauses) throws Exception {
+        return kl_if(clause.getFirst(), clause.get(1), cons(intern("cond"), list(clauses)));
     }
 
     @Macro
-    public static boolean or(Object p, Object... clauses) throws Exception {
-        return isTrue(kl_if(p, true, clauses.length > 1
-                ? cons(intern("or"), asList(clauses).into(new ArrayList<>()))
-                : clauses[0]));
+    public static boolean or(Object x, Object y, Object... clauses) throws Exception {
+        return isTrue(kl_if(x, true, clauses.length > 0
+                ? cons(intern("or"), (cons(y, list(clauses))))
+                : y));
     }
 
     @Macro
-    public static boolean and(Object p, Object... clauses) throws Exception {
-        return isTrue(kl_if(p, clauses.length > 1
-                ? cons(intern("and"), asList(clauses).into(new ArrayList<>()))
-                : clauses[0],
+    public static boolean and(Object x, Object y, Object... clauses) throws Exception {
+        return isTrue(kl_if(x, clauses.length > 0
+                ? cons(intern("and"), (cons(y, list(clauses))))
+                : y,
                 false));
     }
 
@@ -478,6 +478,10 @@ public class Shen {
     static <T> T some(Iterable<T> iterable, Predicate<? super T> predicate) {
         Iterable<T> filter = iterable.filter(predicate);
         return filter.isEmpty() ? null : filter.getAny();
+    }
+
+    static <T> List<T> list(T[] clauses) {
+        return asList(clauses).into(new ArrayList<T>());
     }
 
     static boolean isTrue(Object test) {
@@ -600,6 +604,7 @@ public class Shen {
         out.println(readEval("(or false)"));
         out.println(readEval("(or false false)"));
         out.println(readEval("(or false true)"));
+        out.println(readEval("(or false false false)"));
         out.println(readEval("((or false) true)"));
         out.println(readEval("((and true) true true)"));
         out.println(readEval("()"));
@@ -621,6 +626,7 @@ public class Shen {
         out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
         out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
         out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
+        out.println(readEval("(cond (false 1))"));
         out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
         out.println(readEval("(cond (false 1) ((> 10 3) ()))"));
 
