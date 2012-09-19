@@ -146,15 +146,6 @@ public class Shen {
         return e.getMessage();
     }
 
-    @Macro
-    public static Object trap_error(Object x, Object f) throws Throwable {
-        try {
-            return eval_kl(x);
-        } catch (Exception e) {
-            return ((MethodHandle) eval_kl(f)).invoke(e);
-        }
-    }
-
     public static <T> T hd(List<T> list) {
         return list.isEmpty() ? null : list.get(0);
     }
@@ -318,11 +309,6 @@ public class Shen {
         return x.var;
     }
 
-    @Macro
-    public static Object quote(Object x) {
-        return x;
-    }
-
     static Object value(String x) {
         return value(intern(x));
     }
@@ -343,7 +329,6 @@ public class Shen {
         }
     }
 
-    @Macro
     public static Object eval_kl(Object kl) {
         return eval_kl(kl, true);
     }
@@ -363,7 +348,7 @@ public class Shen {
                     : tl(list).map(k -> eval_kl(k, false)).into(new ArrayList<Object>());
 
             if (intern("this").resolve().equals(hd)) if (tail) {
-                if (debug) out.println("Recur: " + hd + " " + args);
+                if (debug) err.println("Recur: " + hd + " " + args);
                 return new Recur(args.toArray());
             } else if (debug) err.println("Can only recur from tail position: " + hd);
 
@@ -431,6 +416,21 @@ public class Shen {
         return insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
     }
 
+
+    @Macro
+    public static Object trap_error(Object x, Object f) throws Throwable {
+        try {
+            return eval_kl(x);
+        } catch (Exception e) {
+            return ((MethodHandle) eval_kl(f)).invoke(e);
+        }
+    }
+
+    @Macro
+    public static Object quote(Object x) {
+        return x;
+    }
+
     @Macro
     public static Object kl_if(Object test, Object then, Object _else) throws Exception {
         return isTrue(eval_kl(test)) ? eval_kl(then) : eval_kl(_else);
@@ -449,20 +449,20 @@ public class Shen {
     @Macro
     public static boolean or(Object x, Object y, Object... clauses) throws Exception {
         return isTrue(kl_if(x, true, clauses.length > 0
-                ? cons(intern("or"), (cons(y, list(clauses))))
+                ? cons(intern("or"), cons(y, list(clauses)))
                 : y));
     }
 
     @Macro
     public static boolean and(Object x, Object y, Object... clauses) throws Exception {
         return isTrue(kl_if(x, clauses.length > 0
-                ? cons(intern("and"), (cons(y, list(clauses))))
+                ? cons(intern("and"), cons(y, list(clauses)))
                 : y,
                 false));
     }
 
     @Macro
-    public static MethodHandle lambda(final Symbol x, final Object y) {
+    public static MethodHandle lambda(Symbol x, Object y) {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
         Mapper lambda = (arg) -> {
@@ -481,6 +481,13 @@ public class Shen {
         return lambda(x, z).invoke(eval_kl(y));
     }
 
+    @Macro
+    public static Symbol defun(Symbol name, final List<Symbol> args, Object body) {
+        name.fn.clear();
+        name.fn.add(fn(name, args, body));
+        return name;
+    }
+
     static <T> T some(Iterable<T> iterable, Predicate<? super T> predicate) {
         Iterable<T> filter = iterable.filter(predicate);
         return filter.isEmpty() ? null : filter.getAny();
@@ -494,16 +501,9 @@ public class Shen {
     static boolean isTrue(Object test) {
         return ((Boolean) test);
     }
-
     public interface Fn {
         Object call(Object... args) throws Throwable;
-    }
 
-    @Macro
-    public static Symbol defun(Symbol name, final List<Symbol> args, Object body) {
-        name.fn.clear();
-        name.fn.add(fn(name, args, body));
-        return name;
     }
 
     static MethodHandle fn(Symbol name, List<Symbol> args, Object body) {

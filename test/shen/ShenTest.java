@@ -175,7 +175,7 @@ public class ShenTest {
 
     @Test
     public void eval_kl_freeze_and_thaw() {
-        is(9, "(eval-kl (+ 4 5)");
+        is(9, "(eval-kl '(+ 4 5)");
         is(4, "(eval-kl 4)");
         is(intern("hello"), "(eval-kl hello)");
         is(intern("hello"), "(eval-kl hello)");
