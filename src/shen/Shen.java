@@ -21,7 +21,6 @@ import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
 import static java.util.Iterables.into;
 import static java.util.Objects.deepEquals;
-import static shen.Shen.UncheckedException.uncheck;
 
 @SuppressWarnings("UnusedDeclaration")
 public class Shen {
@@ -91,7 +90,7 @@ public class Shen {
             return lookup.unreflect(some(iterable(lambda.getClass().getDeclaredMethods()),
                                         m -> !m.isSynthetic())).bindTo(lambda);
         } catch (IllegalAccessException e) {
-            throw uncheck(e);
+            throw new IllegalStateException(e);
         }
     }
 
@@ -292,7 +291,7 @@ public class Shen {
             return symbol;
         }
 
-        public Object resolve() throws Exception {
+        public Object resolve() {
             if (!locals.isEmpty() && locals.peek().containsKey(this))
                 return locals.peek().get(this);
             return this;
@@ -349,28 +348,26 @@ public class Shen {
 
     static Object eval_kl(Object kl, boolean tail) {
         if (debug) err.println(kl);
-        try {
-            if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
-            if (EMPTY_LIST.equals(kl)) return kl;
-            if (kl instanceof Symbol) return ((Symbol) kl).resolve();
-            if (kl instanceof List) {
-                @SuppressWarnings("unchecked")
-                List<Object> list = (List) kl;
-                Object hd = eval_kl(hd(list), tail);
+        if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
+        if (EMPTY_LIST.equals(kl)) return kl;
+        if (kl instanceof Symbol) return ((Symbol) kl).resolve();
+        if (kl instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List) kl;
+            Object hd = eval_kl(hd(list), tail);
+            //noinspection Convert2Diamond,SuspiciousMethodCalls
+            List<Object> args = macros.contains(hd)
+                    ? tl(list)
+                    : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
 
-                //noinspection Convert2Diamond,SuspiciousMethodCalls
-                List<Object> args = macros.contains(hd)
-                        ? tl(list)
-                        : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
-
-                if (intern("this").resolve().equals(hd)) {
-                    if (tail) {
-                        if (debug) out.println("Recur: " + hd + " " + args);
-                        return new Recur(args.toArray());
-                    }
-                    if (debug) err.println("Can only recur from tail position: " + hd);
+            if (intern("this").resolve().equals(hd)) {
+                if (tail) {
+                    if (debug) out.println("Recur: " + hd + " " + args);
+                    return new Recur(args.toArray());
                 }
-
+                if (debug) err.println("Can only recur from tail position: " + hd);
+            }
+            try {
                 if (isLambda(hd)) {
                     Object result = hd;
                     for (Object arg : args)
@@ -394,11 +391,12 @@ public class Shen {
                 if (match != null) return apply(match, targetType, args);
 
                 err.println(hd + " " + targetType + " " + args);
-                err.println("Did not find matching fn: " + symbol.fn);
+                err.println("Did not find matching fn in: " + symbol.fn);
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Throwable t) {
+                throw new IllegalArgumentException(kl.toString(), t);
             }
-        } catch (Throwable t) {
-            err.println("Exception: " + t + " " + kl + " (" + kl.getClass() + ")");
-            throw uncheck(t);
         }
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
     }
@@ -418,16 +416,12 @@ public class Shen {
         return true;
     }
 
-    static Object apply(MethodHandle fn, MethodType targetType, List args) {
-        try {
-            return fn.type().parameterCount() > targetType.parameterCount()
-                    ? insertArguments(fn.asType(fn.type()
-                        .dropParameterTypes(0, targetType.parameterCount())
-                        .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray())
-                    : insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
-        } catch (Throwable t) {
-            throw uncheck(t);
-        }
+    static Object apply(MethodHandle fn, MethodType targetType, List args) throws Throwable {
+        return fn.type().parameterCount() > targetType.parameterCount()
+                ? insertArguments(fn.asType(fn.type()
+                    .dropParameterTypes(0, targetType.parameterCount())
+                    .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray())
+                : insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
     }
 
     @Macro
@@ -512,7 +506,7 @@ public class Shen {
             name.fn.add(lookup.unreflect(m));
             return name;
         } catch (IllegalAccessException e) {
-            throw uncheck(e);
+            throw new IllegalStateException(e);
         }
     }
 
@@ -544,7 +538,7 @@ public class Shen {
             //noinspection unchecked,RedundantCast
             return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
         } catch (Exception e) {
-            throw uncheck(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -596,45 +590,6 @@ public class Shen {
         return list;
     }
 
-    public static class UncheckedException extends RuntimeException {
-        public static Set<String> filteredPackages =
-                new HashSet<>(asList("sun.reflect", "org.junit", "java.lang.reflect"));
-
-        Throwable wrapped;
-
-        public static RuntimeException uncheck(Throwable t) {
-            if (t.getCause() != null)
-                return uncheck(t.getCause());
-            if (t instanceof RuntimeException) {
-                t.setStackTrace(filterStackTrace(t.getStackTrace()));
-                return (RuntimeException) t;
-            }
-            return new UncheckedException(t);
-        }
-
-        UncheckedException(Throwable t) {
-            super(t.getMessage(), t.getCause());
-            this.wrapped = t;
-            setStackTrace(filterStackTrace(t.getStackTrace()));
-        }
-
-        static StackTraceElement[] filterStackTrace(StackTraceElement[] stackTrace) {
-            //noinspection ToArrayCallWithZeroLengthArrayArgument,SuspiciousToArrayCall
-            return iterable(stackTrace).filter(e -> isAllowedPackage(e))
-                    .into(new ArrayList<>()).toArray(new StackTraceElement[0]);
-        }
-
-        static boolean isAllowedPackage(StackTraceElement element) {
-            return filteredPackages.noneMatch(p -> element.getClassName().startsWith(p));
-        }
-
-        public String toString() {
-            String s = wrapped.getClass().getName();
-            String message = getLocalizedMessage();
-            return (message != null) ? (s + ": " + message) : s;
-        }
-    }
-
     public static void main(String[] args) throws Throwable {
 //        install();
         out.println(let(intern("x"), 2, eval_kl(intern("x"))));
@@ -682,8 +637,8 @@ public class Shen {
     }
 
     static void install() {
-        asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
-                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types")
-                .forEach(f -> { load(format("shen/klambda/%s.kl", f)); });
+        for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
+                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
+            load(format("shen/klambda/%s.kl", file));
     }
 }
