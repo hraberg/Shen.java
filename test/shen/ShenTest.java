@@ -15,7 +15,6 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static shen.Shen.*;
-import static shen.Shen.UncheckedException.uncheck;
 
 public class ShenTest {
     @Test
@@ -215,7 +214,7 @@ public class ShenTest {
             File file = new File((String) 神("(value *home-directory*)"), (String) 神("(value fileName)"));
             if (file.exists())
                 assertTrue(file.delete());
-        } catch (NullPointerException ignore) {
+        } catch (Exception ignore) {
         }
     }
 
@@ -287,7 +286,7 @@ public class ShenTest {
         try {
             return readEval(shen);
         } catch (Exception e) {
-            throw uncheck(e);
+            throw new RuntimeException(e);
         }
     }
 }
