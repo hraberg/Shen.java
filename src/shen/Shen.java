@@ -18,7 +18,6 @@ import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
-import static java.util.Iterables.into;
 import static java.util.Objects.deepEquals;
 
 @SuppressWarnings("UnusedDeclaration")
@@ -357,7 +356,7 @@ public class Shen {
             //noinspection Convert2Diamond,SuspiciousMethodCalls
             List<Object> args = macros.contains(hd)
                     ? tl(list)
-                    : into(tl(list).map(k -> eval_kl(k, false)), new ArrayList<Object>());
+                    : tl(list).map(k -> eval_kl(k, false)).into(new ArrayList<Object>());
 
             if (intern("this").resolve().equals(hd)) if (tail) {
                 if (debug) out.println("Recur: " + hd + " " + args);
