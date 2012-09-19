@@ -180,7 +180,7 @@ public class ShenTest {
         is(intern("hello"), "(eval-kl hello)");
         is(intern("hello"), "(eval-kl hello)");
         is(MethodHandle.class, "(freeze (+ 2 2)");
-        is(4, "((freeze (+ 2 2))");
+        is(4, "((freeze (+ 2 2)) 0)");
     }
 
     @Test
