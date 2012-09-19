@@ -186,7 +186,12 @@ public class Shen {
     }
 
     public static MethodHandle freeze(Object x) {
-        return findSAM((Factory<Object>) () -> x);
+        //noinspection SuspiciousNameCombination
+        return lambda(intern("_"), x);
+    }
+
+    public static Class type(Object x) {
+        return x.getClass();
     }
 
     public static Object[] absvector(int n) {
@@ -364,12 +369,7 @@ public class Shen {
             } else if (debug) err.println("Can only recur from tail position: " + hd);
 
             try {
-                if (isLambda(hd)) {
-                    Object result = hd;
-                    for (Object arg : args)
-                        result = ((MethodHandle) result).invoke(arg);
-                    return result;
-                }
+                if (isLambda(hd)) return uncurry(hd, args);
 
                 @SuppressWarnings("SuspiciousToArrayCall")
                 final MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
@@ -395,6 +395,12 @@ public class Shen {
             }
         }
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
+    }
+
+    static Object uncurry(Object chain, List<Object> args) throws Throwable {
+        for (Object arg : args)
+            chain = ((MethodHandle) chain).invoke(arg);
+        return chain;
     }
 
     static boolean isLambda(Object hd) {
