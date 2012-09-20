@@ -250,7 +250,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class, args), null, null));
 
             for (int i = 0; i < scope.size(); i++) {
-                cn.visitField(ACC_PUBLIC, scope.get(i).symbol, getDescriptor(Object.class), null, null);
+                cn.visitField(ACC_PUBLIC | ACC_FINAL, scope.get(i).symbol, getDescriptor(Object.class), null, null);
                 ctor.loadThis();
                 ctor.loadArg(i);
                 ctor.putField(getObjectType(cn.name), scope.get(i).symbol, getType(Object.class));
@@ -427,7 +427,8 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
 interface JDK8SafeOpcodes {
     int V1_7 = 51;
-    int ACC_PUBLIC = 1;
+    int ACC_PUBLIC = 0x0001;
+    int ACC_FINAL = 0x0010;
     int H_INVOKEVIRTUAL = 5;
     int H_INVOKESTATIC = 6;
     int IFEQ = 153;
