@@ -118,7 +118,10 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                         if (macros.containsKey(s)) macros.get(s).bindTo(this).invokeWithArguments(tl(list));
                         else indy(s, tl(list));
 
-                    } else if (kl instanceof Handle) handle((Handle) kl, tl(list));
+                    } else {
+                        compile(list.getFirst());
+                        invoke(tl(list));
+                    }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
 
@@ -130,20 +133,21 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             return topOfStack;
         }
 
-        void indy(Symbol s, List<Object> list) {
-            List<Type> argumentTypes = list.map(a -> compile(a)).into(new ArrayList<Type>());
+        void indy(Symbol s, List<Object> args) {
+            List<Type> argumentTypes = args.map(a -> compile(a)).into(new ArrayList<Type>());
 
             MethodType type = asMethodType(getType(Object.class), argumentTypes);
             mv.invokeDynamic(s.symbol,type.toMethodDescriptorString() , bootstrap);
             topOfStack(type.returnType());
         }
 
-        void handle(Handle handle, List<Object> list) {
-            mv.push(handle);
-            mv.push(list.size());
+        void invoke(List<Object> args) {
+            mv.checkCast(getType(MethodHandle.class));
+
+            mv.push(args.size());
             mv.newArray(getType(Object.class));
 
-            List<Type> argumentTypes = list.map(a ->  {
+            List<Type> argumentTypes = args.map(a ->  {
                 mv.dup();
                 mv.push(0);
                 Type realType = compile(a);
@@ -152,14 +156,8 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                 return realType;
             }).into(new ArrayList<Type>());
 
-            mv.push(handle);
-            mv.swap();
-
             mv.invokeVirtual(getType(MethodHandle.class), new Method("invokeWithArguments", desc(Object.class, Object[].class)));
-
-            Type returnType = getReturnType(handle.getDesc());
-            mv.checkCast(returnType);
-            topOfStack = returnType;
+            topOfStack = getType(Object.class);
         }
 
         MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
