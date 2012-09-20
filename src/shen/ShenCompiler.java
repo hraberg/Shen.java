@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import static java.lang.System.currentTimeMillis;
+import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.Lookup;
 import static java.lang.invoke.MethodType.fromMethodDescriptorString;
 import static java.lang.invoke.MethodType.methodType;
@@ -264,12 +265,22 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
             mv.visitLabel(end);
         }
+
+        @Macro
+        public void cond(List... clauses) throws Exception {
+            if (clauses.length == 0) {
+                mv.push("condition failure");
+                mv.invokeStatic(getType(Shen.class), new Method("simple_error", desc(Object.class, String.class)));
+            } else
+               kl_if(hd(clauses).getFirst(), hd(clauses).get(1), cons(intern("cond"), tl(clauses)));
+        }
     }
 
     public static void main(String[] args) throws Throwable {
-        System.out.println(eval("(trap-error my-symbol my-handler)"));
-        System.out.println(eval("(if true \"true\" \"false\")"));
-        System.out.println(eval("(if false \"true\" \"false\")"));
+        out.println(eval("(trap-error my-symbol my-handler)"));
+        out.println(eval("(if true \"true\" \"false\")"));
+        out.println(eval("(if false \"true\" \"false\")"));
+        out.println(readEval("(cond (false 1) (true 2))"));
     }
 }
 
