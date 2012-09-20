@@ -338,12 +338,14 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         out.println(eval("(if true \"true\" \"false\")"));
         out.println(eval("(if false \"true\" \"false\")"));
         out.println(eval("(cond (false 1) (true 2))"));
+        out.println(eval("(cond (false 1) ((or true false) 3))"));
         out.println(eval("(or false)"));
         out.println(((MethodHandle) eval("(or false)")).invokeWithArguments(false, true));
         out.println(eval("((or false) false)"));
         out.println(eval("(or false false)"));
         out.println(eval("(or false true false)"));
         out.println(eval("(and true true)"));
+        out.println(eval("(and true true (or false false))"));
         out.println(eval("(and true false)"));
         out.println(eval("(and true)"));
     }
