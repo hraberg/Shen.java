@@ -86,11 +86,14 @@ public class Shen {
 
     static MethodHandle findSAM(Object lambda) {
         try {
-            return lookup.unreflect(some(iterable(lambda.getClass().getDeclaredMethods()),
-                                        m -> !m.isSynthetic())).bindTo(lambda);
+            return lookup.unreflect(findSAMMethod(lambda.getClass())).bindTo(lambda);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    static Method findSAMMethod(Class<?> lambda) {
+        return some(iterable(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
     }
 
     static class Cons {

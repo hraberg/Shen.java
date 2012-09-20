@@ -30,18 +30,18 @@ import static shen.Shen.*;
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class ShenCompiler implements JDK8SafeOpcodes {
     public static class ShenLoader extends ClassLoader {
-        public Class<?> define(ShenCode code) {
+        public Class<?> define(ClassNode cn) {
             ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
-            code.cn.accept(cw);
+            cn.accept(cw);
             byte[] bytes = cw.toByteArray();
-            return super.defineClass(code.cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
+            return super.defineClass(cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
         }
     }
 
     static ShenLoader loader = new ShenLoader();
 
     public static Object eval(String shen) throws Throwable {
-        return new ShenCode(shen).load().call();
+        return new ShenCode(read(shen).getFirst()).load(Callable.class).newInstance().call();
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
@@ -67,23 +67,21 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                     .forEach(m -> macro(m));
         }
 
-        String shen;
-        ClassNode cn;
+        Object shen;
         GeneratorAdapter mv;
         Type topOfStack;
 
-        public ShenCode(String shen) throws Throwable {
+        public ShenCode(Object shen) throws Throwable {
             this.shen = shen;
-            this.cn = classNode();
         }
 
-        ClassNode classNode() {
+        ClassNode classNode(Class<?> anInterface) {
             ClassNode cn = new ClassNode();
             cn.version = V1_7;
             cn.access = ACC_PUBLIC;
             cn.name = "shen/ShenEval" + currentTimeMillis();
             cn.superName = getInternalName(Object.class);
-            cn.interfaces = asList(getInternalName(Callable.class));
+            cn.interfaces = asList(getInternalName(anInterface));
             return cn;
         }
 
@@ -112,7 +110,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                     @SuppressWarnings("unchecked")
                     List<Object> list = (List) kl;
 
-                    if (list.getFirst() instanceof  Symbol) {
+                    if (list.getFirst() instanceof Symbol) {
                         Symbol s = (Symbol) list.getFirst();
                         if (macros.containsKey(s)) macroExpand(s, tl(list));
                         else indy(s, tl(list));
@@ -189,15 +187,18 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             }
         }
 
-        public Callable load() throws Exception {
-            defaultConstructor();
+        public <T> Class<T> load(Class<T> anInterface) throws Exception {
+            ClassNode cn = classNode(anInterface);
+            defaultConstructor(cn);
 
-            mv = generator(cn.visitMethod(ACC_PUBLIC, "call", desc(Object.class), null, null));
-            compile(read(shen).getFirst());
+            java.lang.reflect.Method sam = findSAMMethod(anInterface);
+            mv = generator(cn.visitMethod(ACC_PUBLIC, sam.getName(), getMethodDescriptor(sam), null, null));
+            compile(shen);
             box();
             mv.returnValue();
 
-            return (Callable) loader.define(this).newInstance();
+            //noinspection unchecked
+            return (Class<T>) loader.define(cn);
         }
 
         void box() {
@@ -216,7 +217,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             }
         }
 
-        void defaultConstructor() {
+        void defaultConstructor(ClassNode cn) {
             GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class), null, null));
             ctor.loadThis();
             ctor.invokeConstructor(getType(Object.class), new Method("<init>", desc(void.class)));
