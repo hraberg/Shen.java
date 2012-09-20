@@ -1,9 +1,6 @@
 package shen;
 
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Handle;
-import org.objectweb.asm.Label;
-import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
 import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.tree.ClassNode;
@@ -31,7 +28,6 @@ import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.getInternalName;
 import static org.objectweb.asm.Type.getType;
 import static shen.Shen.*;
-import static shen.Shen.read;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class ShenCompiler implements JDK8SafeOpcodes {
@@ -73,10 +69,10 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                     .forEach(m -> macro(m));
         }
 
-        ClassNode cn;
-        Class<?> topOfStack;
-        GeneratorAdapter mv;
         String shen;
+        ClassNode cn;
+        GeneratorAdapter mv;
+        Type topOfStack;
 
         public ShenCode(String shen) throws Throwable {
             this.shen = shen;
@@ -126,7 +122,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                             compile(arg);
                         mv.invokeDynamic(s.symbol,
                                 genericMethodType(list.size() - 1).toMethodDescriptorString(), bootstrap);
-                        topOfStack = Object.class;
+                        topOfStack = getType(Object.class);
                     }
 
                 } else
@@ -142,11 +138,13 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         void push(Symbol kl) {
             mv.push(kl.symbol);
             mv.invokeStatic(getType(Shen.class), new Method("intern", desc(Symbol.class, String.class)));
-            topOfStack = Symbol.class;
+            topOfStack = getType(Symbol.class);
         }
 
         void push(Class<?> aClass, Object kl) throws Exception {
-            mv.getClass().getMethod("push", topOfStack =  maybePrimitive(aClass)).invoke(mv, kl);
+            aClass = maybePrimitive(aClass);
+            mv.getClass().getMethod("push", aClass).invoke(mv, kl);
+            topOfStack = getType(aClass);
         }
 
         Class<?> maybePrimitive(Class<?> aClass) throws IllegalAccessException {
@@ -167,8 +165,16 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             return (Callable) loader.define(this).newInstance();
         }
 
-        void box() {
-            mv.box(getType(topOfStack));
+        void box() throws Exception {
+            Type maybePrimitive = topOfStack;
+            mv.box(maybePrimitive);
+            topOfStack = getGetBoxedType(maybePrimitive);
+        }
+
+        Type getGetBoxedType(Type type) throws Exception {
+            java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
+            getBoxedType.setAccessible(true);
+            return (Type) getBoxedType.invoke(null, type);
         }
 
         void defaultConstructor() {
