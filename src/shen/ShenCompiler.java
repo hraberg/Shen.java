@@ -6,14 +6,18 @@ import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.lang.invoke.*;
+import java.lang.invoke.CallSite;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
+import java.lang.invoke.MutableCallSite;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.functions.Mapper;
 
-import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.Lookup;
 import static java.lang.invoke.MethodHandles.insertArguments;
@@ -67,19 +71,23 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                     .forEach(m -> macro(m));
         }
 
+        static int id = 1;
+
         Object shen;
+        List<Symbol> scope;
         GeneratorAdapter mv;
         Type topOfStack;
 
-        public ShenCode(Object shen) throws Throwable {
+        public ShenCode(Object shen, Symbol... scope) throws Throwable {
             this.shen = shen;
+            this.scope = list(scope);
         }
 
         ClassNode classNode(Class<?> anInterface) {
             ClassNode cn = new ClassNode();
             cn.version = V1_7;
             cn.access = ACC_PUBLIC;
-            cn.name = "shen/ShenEval" + currentTimeMillis();
+            cn.name = "shen/ShenEval" + id++;
             cn.superName = getInternalName(Object.class);
             cn.interfaces = asList(getInternalName(anInterface));
             return cn;
@@ -105,7 +113,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             try {
                 Class literalClass = some(literals, c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
-                else if (kl instanceof Symbol) push((Symbol) kl);
+                else if (kl instanceof Symbol) symbol((Symbol) kl);
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
                     List<Object> list = (List) kl;
@@ -128,6 +136,16 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                 throw new RuntimeException(throwable);
             }
             return topOfStack;
+        }
+
+        void symbol(Symbol s) {
+            int local = scope.indexOf(s);
+            if (local == -1)
+                push(s);
+            else {
+                mv.loadArg(local);
+                topOfStack(Object.class);
+            }
         }
 
         void macroExpand(Symbol s, List<Object> args) throws Throwable {
@@ -191,10 +209,10 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             ClassNode cn = classNode(anInterface);
             defaultConstructor(cn);
 
-            java.lang.reflect.Method sam = findSAMMethod(anInterface);
+            java.lang.reflect.Method sam = findSAM(anInterface);
             mv = generator(cn.visitMethod(ACC_PUBLIC, sam.getName(), getMethodDescriptor(sam), null, null));
             compile(shen);
-            box();
+            if (!sam.getReturnType().isPrimitive()) box();
             mv.returnValue();
 
             //noinspection unchecked
@@ -295,6 +313,30 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                 kl_if(x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
         }
 
+        @Macro
+        public void lambda(Symbol x, Object y) throws Throwable {
+            Class<Mapper> lambda = new ShenCode(y, x).load(Mapper.class);
+            java.lang.reflect.Method sam = findSAM(lambda);
+
+            mv.push(new Handle(H_INVOKEVIRTUAL, getInternalName(lambda), sam.getName(), getMethodDescriptor(sam)));
+            newInstance(lambda.getConstructor());
+            bindTo();
+
+            topOfStack(MethodHandle.class);
+        }
+
+        @Macro
+        public void let(Symbol x, Object y, Object z) throws Throwable {
+            lambda(x, z);
+            apply(asList(y));
+        }
+
+        void newInstance(Constructor<?> ctor) {
+            mv.newInstance(getType(ctor.getDeclaringClass()));
+            mv.dup();
+            mv.invokeConstructor(getType(ctor.getDeclaringClass()), new Method("<init>", getConstructorDescriptor(ctor)));
+        }
+
         Handle staticMH(Class aClass, String name, String desc) {
             return new Handle(H_INVOKESTATIC, getInternalName(aClass), name, desc);
         }
@@ -349,12 +391,16 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         out.println(eval("(and true true (or false false))"));
         out.println(eval("(and true false)"));
         out.println(eval("(and true)"));
+        out.println(eval("(lambda x x)"));
+        out.println(eval("((lambda x x) 2)"));
+        out.println(eval("(let x 10 x)"));
     }
 }
 
 interface JDK8SafeOpcodes {
     int V1_7 = 51;
     int ACC_PUBLIC = 1;
+    int H_INVOKEVIRTUAL = 5;
     int H_INVOKESTATIC = 6;
     int IFEQ = 153;
 }
