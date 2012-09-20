@@ -11,10 +11,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
 import java.lang.reflect.Constructor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.functions.Mapper;
 
@@ -24,8 +21,7 @@ import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodType.fromMethodDescriptorString;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
-import static java.util.Arrays.asList;
-import static java.util.Arrays.iterable;
+import static java.util.Arrays.*;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
@@ -75,12 +71,20 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
         Object shen;
         List<Symbol> scope;
+        List<Symbol> args;
         GeneratorAdapter mv;
         Type topOfStack;
+        ClassNode cn;
+        Label recur;
 
-        public ShenCode(Object shen, Symbol... scope) throws Throwable {
+        public ShenCode(Object shen, List<Symbol> scope, Symbol... args) throws Throwable {
             this.shen = shen;
-            this.scope = list(scope);
+            this.scope = scope;
+            this.args = list(args);
+        }
+
+        public ShenCode(Object shen, Symbol... args) throws Throwable {
+            this(shen, new ArrayList<>(), args);
         }
 
         ClassNode classNode(Class<?> anInterface) {
@@ -110,6 +114,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         }
 
         Type compile(final Object kl) {
+            //noinspection CaughtExceptionImmediatelyRethrown
             try {
                 Class literalClass = some(literals, c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -129,23 +134,24 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
-
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | Error e) {
                 throw e;
-            } catch (Throwable throwable) {
-                throw new RuntimeException(throwable);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
             }
             return topOfStack;
         }
 
         void symbol(Symbol s) {
-            int local = scope.indexOf(s);
-            if (local == -1)
-                push(s);
-            else {
-                mv.loadArg(local);
+            if (args.contains(s)) {
+                mv.loadArg(args.indexOf(s));
                 topOfStack(Object.class);
-            }
+            } else if (scope.contains(s)) {
+                mv.loadThis();
+                mv.getField(getObjectType(cn.name), s.symbol, getType(Object.class));
+                topOfStack(Object.class);
+            } else
+                push(s);
         }
 
         void macroExpand(Symbol s, List<Object> args) throws Throwable {
@@ -161,16 +167,18 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         }
 
         void apply(List<Object> args) {
+            mv.checkCast(getType(MethodHandle.class));
+
             mv.push(args.size());
             mv.newArray(getType(Object.class));
 
-            args.forEach(a ->  {
+            for (int i = 0; i < args.size(); i++) {
                 mv.dup();
-                mv.push(0);
-                compile(a);
+                mv.push(i);
+                compile(args.get(i));
                 box();
                 mv.arrayStore(getType(Object.class));
-            });
+            }
 
             mv.invokeStatic(getType(ShenCode.class), new Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
             topOfStack = getType(Object.class);
@@ -206,11 +214,13 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         }
 
         public <T> Class<T> load(Class<T> anInterface) throws Exception {
-            ClassNode cn = classNode(anInterface);
-            defaultConstructor(cn);
+            cn = classNode(anInterface);
+            constructor();
 
             java.lang.reflect.Method sam = findSAM(anInterface);
             mv = generator(cn.visitMethod(ACC_PUBLIC, sam.getName(), getMethodDescriptor(sam), null, null));
+            recur = mv.newLabel();
+            mv.visitLabel(recur);
             compile(shen);
             if (!sam.getReturnType().isPrimitive()) box();
             mv.returnValue();
@@ -235,8 +245,17 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             }
         }
 
-        void defaultConstructor(ClassNode cn) {
-            GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class), null, null));
+        void constructor() {
+            Class[] args = fillArray(Object.class, this.scope.size());
+            GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class, args), null, null));
+
+            for (int i = 0; i < scope.size(); i++) {
+                cn.visitField(ACC_PUBLIC, scope.get(i).symbol, getDescriptor(Object.class), null, null);
+                ctor.loadThis();
+                ctor.loadArg(i);
+                ctor.putField(getObjectType(cn.name), scope.get(i).symbol, getType(Object.class));
+            }
+
             ctor.loadThis();
             ctor.invokeConstructor(getType(Object.class), new Method("<init>", desc(void.class)));
             ctor.returnValue();
@@ -315,11 +334,17 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
         @Macro
         public void lambda(Symbol x, Object y) throws Throwable {
-            Class<Mapper> lambda = new ShenCode(y, x).load(Mapper.class);
+            List<Symbol> scope = args.into(new ArrayList<>(this.scope));
+            Class<Mapper> lambda = new ShenCode(y, scope, x).load(Mapper.class);
             java.lang.reflect.Method sam = findSAM(lambda);
 
             mv.push(new Handle(H_INVOKEVIRTUAL, getInternalName(lambda), sam.getName(), getMethodDescriptor(sam)));
-            newInstance(lambda.getConstructor());
+
+            Constructor<Mapper> ctor = lambda.getConstructor(fillArray(Object.class, scope.size()));
+            mv.newInstance(getType(ctor.getDeclaringClass()));
+            mv.dup();
+            scope.forEach(s -> {compile(s);});
+            mv.invokeConstructor(getType(ctor.getDeclaringClass()), new Method("<init>", getConstructorDescriptor(ctor)));
             bindTo();
 
             topOfStack(MethodHandle.class);
@@ -331,10 +356,10 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             apply(asList(y));
         }
 
-        void newInstance(Constructor<?> ctor) {
-            mv.newInstance(getType(ctor.getDeclaringClass()));
-            mv.dup();
-            mv.invokeConstructor(getType(ctor.getDeclaringClass()), new Method("<init>", getConstructorDescriptor(ctor)));
+        Class[] fillArray(Class value, int elements) {
+            Class[] args = new Class[elements];
+            fill(args, value);
+            return args;
         }
 
         Handle staticMH(Class aClass, String name, String desc) {
@@ -394,6 +419,9 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         out.println(eval("(lambda x x)"));
         out.println(eval("((lambda x x) 2)"));
         out.println(eval("(let x 10 x)"));
+        out.println(eval("(let x 10 (let y 5 x))"));
+        out.println(eval("((let x 42 (lambda y x)) 0)"));
+        out.println(eval("((lambda x ((lambda y x) 42)) 0)"));
     }
 }
 
