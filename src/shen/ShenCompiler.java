@@ -48,7 +48,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         return new MutableCallSite(type);
     }
 
-    static Handle bootstrap = new Handle(H_INVOKESTATIC, getInternalName(Shen.class), "bootstrap",
+    static Handle bootstrap = new Handle(H_INVOKESTATIC, getInternalName(ShenCompiler.class), "bootstrap",
             desc(CallSite.class, Lookup.class, String.class, MethodType.class));
 
     static String desc(Class<?> returnType, Class<?>... argumentTypes ) {
