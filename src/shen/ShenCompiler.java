@@ -122,7 +122,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
                             compile(arg);
                         mv.invokeDynamic(s.symbol,
                                 genericMethodType(list.size() - 1).toMethodDescriptorString(), bootstrap);
-                        topOfStack = getType(Object.class);
+                        topOfStack(Object.class);
                     }
 
                 } else
@@ -138,12 +138,16 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         void push(Symbol kl) {
             mv.push(kl.symbol);
             mv.invokeStatic(getType(Shen.class), new Method("intern", desc(Symbol.class, String.class)));
-            topOfStack = getType(Symbol.class);
+            topOfStack(Symbol.class);
         }
 
         void push(Class<?> aClass, Object kl) throws Exception {
             aClass = maybePrimitive(aClass);
             mv.getClass().getMethod("push", aClass).invoke(mv, kl);
+            topOfStack(aClass);
+        }
+
+        void topOfStack(Class<?> aClass) {
             topOfStack = getType(aClass);
         }
 
