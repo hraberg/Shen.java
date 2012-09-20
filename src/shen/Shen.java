@@ -363,10 +363,7 @@ public class Shen {
             try {
                 if (isLambda(hd)) return uncurry(hd, args);
 
-                @SuppressWarnings("SuspiciousToArrayCall")
-                final MethodType targetType = methodType(Object.class, args.map(o -> o.getClass())
-                            .into(new ArrayList<>())
-                            .toArray(new Class[args.size()]));
+                final MethodType targetType = targetType(args);
 
                 if (hd instanceof MethodHandle) return apply((MethodHandle) hd, targetType, args);
 
@@ -387,6 +384,13 @@ public class Shen {
             }
         }
         throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
+    }
+
+    static MethodType targetType(List<Object> args) {
+        //noinspection SuspiciousToArrayCall
+        return methodType(Object.class, args.map(o -> o.getClass())
+                    .into(new ArrayList<>())
+                    .toArray(new Class[args.size()]));
     }
 
     static Object uncurry(Object chain, List<Object> args) throws Throwable {
@@ -411,6 +415,14 @@ public class Shen {
         for (int i = 0; i < args.parameterCount(); i++)
             if (!match.eval(classes[i], args.parameterType(i))) return false;
         return true;
+    }
+
+    static Object apply(MethodHandle fn, Object...  args) throws Throwable {
+        return apply(fn, asList(args));
+    }
+
+    static Object apply(MethodHandle fn, List<Object> args) throws Throwable {
+        return apply(fn, targetType(args), args);
     }
 
     static Object apply(MethodHandle fn, MethodType targetType, List args) throws Throwable {

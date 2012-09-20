@@ -119,7 +119,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
                     } else {
                         compile(list.getFirst());
-                        invoke(tl(list));
+                        apply(tl(list));
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
@@ -144,20 +144,19 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             topOfStack(type.returnType());
         }
 
-        void invoke(List<Object> args) {
+        void apply(List<Object> args) {
             mv.push(args.size());
             mv.newArray(getType(Object.class));
 
-            List<Type> argumentTypes = args.map(a ->  {
+            args.forEach(a ->  {
                 mv.dup();
                 mv.push(0);
-                Type realType = compile(a);
+                compile(a);
                 box();
                 mv.arrayStore(getType(Object.class));
-                return realType;
-            }).into(new ArrayList<Type>());
+            });
 
-            mv.invokeVirtual(getType(MethodHandle.class), new Method("invokeWithArguments", desc(Object.class, Object[].class)));
+            mv.invokeStatic(getType(ShenCode.class), new Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
             topOfStack = getType(Object.class);
         }
 
@@ -239,10 +238,14 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             mv.catchException(start, end, getType(Exception.class));
             int e = mv.newLocal(getType(Exception.class));
             mv.storeLocal(e);
+
             compile(f);
             mv.checkCast(getType(MethodHandle.class));
+
             mv.loadLocal(e);
-            mv.invokeVirtual(getType(MethodHandle.class), new Method("invoke", desc(Object.class, Object.class)));
+            bindTo();
+            mv.push((String) null);
+            mv.invokeVirtual(getType(MethodHandle.class), new Method("apply", desc(Object.class, Object[].class)));
 
             mv.visitLabel(after);
         }
@@ -299,10 +302,18 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             mv.push(handle);
             compile(arg);
             box();
+            bindTo();
+        }
+
+        void bindTo() {
             mv.invokeStatic(getType(ShenCode.class), new Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
         }
 
         // RT
+        public static Object apply(MethodHandle fn, Object...  args) throws Throwable {
+            return Shen.apply(fn, asList(args));
+        }
+
         public static MethodHandle bindTo(MethodHandle fn, Object arg) {
             return fn.isVarargsCollector() ?
                     insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
