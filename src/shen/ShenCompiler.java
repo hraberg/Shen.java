@@ -160,22 +160,23 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         }
 
         public Callable load() throws Exception {
+            defaultConstructor();
+
             mv = generator(cn.visitMethod(ACC_PUBLIC, "call", desc(Object.class), null, null));
             compile(read(shen).getFirst());
-
             box();
             mv.returnValue();
-            defaultConstructor();
+
             return (Callable) loader.define(this).newInstance();
         }
 
         void box() throws Exception {
             Type maybePrimitive = topOfStack;
             mv.box(maybePrimitive);
-            topOfStack = getGetBoxedType(maybePrimitive);
+            topOfStack = boxedType(maybePrimitive);
         }
 
-        Type getGetBoxedType(Type type) throws Exception {
+        Type boxedType(Type type) throws Exception {
             java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
             getBoxedType.setAccessible(true);
             return (Type) getBoxedType.invoke(null, type);
