@@ -417,10 +417,6 @@ public class Shen {
         return true;
     }
 
-    static Object apply(MethodHandle fn, Object...  args) throws Throwable {
-        return apply(fn, asList(args));
-    }
-
     static Object apply(MethodHandle fn, List<Object> args) throws Throwable {
         return apply(fn, targetType(args), args);
     }
