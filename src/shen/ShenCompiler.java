@@ -6,10 +6,7 @@ import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.lang.invoke.CallSite;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodType;
-import java.lang.invoke.MutableCallSite;
+import java.lang.invoke.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,6 +16,7 @@ import java.util.concurrent.Callable;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.Lookup;
+import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodType.fromMethodDescriptorString;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
@@ -116,7 +114,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
                     if (list.getFirst() instanceof  Symbol) {
                         Symbol s = (Symbol) list.getFirst();
-                        if (macros.containsKey(s)) macros.get(s).bindTo(this).invokeWithArguments(tl(list));
+                        if (macros.containsKey(s)) macroExpand(s, tl(list));
                         else indy(s, tl(list));
 
                     } else {
@@ -134,17 +132,19 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             return topOfStack;
         }
 
+        void macroExpand(Symbol s, List<Object> args) throws Throwable {
+            bindTo(macros.get(s), this).invokeWithArguments(args);
+        }
+
         void indy(Symbol s, List<Object> args) {
             List<Type> argumentTypes = args.map(a -> compile(a)).into(new ArrayList<Type>());
 
             MethodType type = asMethodType(getType(Object.class), argumentTypes);
-            mv.invokeDynamic(s.symbol,type.toMethodDescriptorString() , bootstrap);
+            mv.invokeDynamic(s.symbol, type.toMethodDescriptorString(), bootstrap);
             topOfStack(type.returnType());
         }
 
         void invoke(List<Object> args) {
-            mv.checkCast(getType(MethodHandle.class));
-
             mv.push(args.size());
             mv.newArray(getType(Object.class));
 
@@ -269,10 +269,56 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         @Macro
         public void cond(List... clauses) throws Exception {
             if (clauses.length == 0) {
-                mv.push("condition failure");
-                mv.invokeStatic(getType(Shen.class), new Method("simple_error", desc(Object.class, String.class)));
-            } else
-               kl_if(hd(clauses).getFirst(), hd(clauses).get(1), cons(intern("cond"), tl(clauses)));
+                mv.throwException(getType(IllegalArgumentException.class), "condition failure");
+            } else {
+                kl_if(hd(clauses).getFirst(), hd(clauses).get(1), cons(intern("cond"), list(tl(clauses))));
+            }
+        }
+
+        @Macro
+        public void or(Object x, Object... clauses) throws Exception {
+            if (clauses.length == 0)
+                bindTo(staticMH(ShenCode.class, "or", desc(boolean.class, boolean.class, boolean[].class)), x);
+            else
+                kl_if(x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+        }
+
+        @Macro
+        public void and(Object x, Object... clauses) throws Exception {
+            if (clauses.length == 0)
+                bindTo(staticMH(ShenCode.class, "and", desc(boolean.class, boolean.class, boolean[].class)), x);
+            else
+                kl_if(x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+        }
+
+        Handle staticMH(Class aClass, String name, String desc) {
+            return new Handle(H_INVOKESTATIC, getInternalName(aClass), name, desc);
+        }
+
+        void bindTo(Handle handle, Object arg) {
+            mv.push(handle);
+            compile(arg);
+            box();
+            mv.invokeStatic(getType(ShenCode.class), new Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
+        }
+
+        // RT
+        public static MethodHandle bindTo(MethodHandle fn, Object arg) {
+            return fn.isVarargsCollector() ?
+                    insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
+                    insertArguments(fn, 0, arg);
+        }
+
+        public static boolean or(boolean x, boolean... clauses) throws Exception {
+            if (x) return true;
+            for (boolean b : clauses) if (b) return true;
+            return false;
+        }
+
+        public static boolean and(boolean x, boolean... clauses) throws Exception {
+            if (!x) return false;
+            for (boolean b : clauses) if (!b) return false;
+            return true;
         }
     }
 
@@ -280,7 +326,15 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         out.println(eval("(trap-error my-symbol my-handler)"));
         out.println(eval("(if true \"true\" \"false\")"));
         out.println(eval("(if false \"true\" \"false\")"));
-        out.println(readEval("(cond (false 1) (true 2))"));
+        out.println(eval("(cond (false 1) (true 2))"));
+        out.println(eval("(or false)"));
+        out.println(((MethodHandle) eval("(or false)")).invokeWithArguments(false, true));
+        out.println(eval("((or false) false)"));
+        out.println(eval("(or false false)"));
+        out.println(eval("(or false true false)"));
+        out.println(eval("(and true true)"));
+        out.println(eval("(and true false)"));
+        out.println(eval("(and true)"));
     }
 }
 
