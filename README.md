@@ -47,6 +47,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 * Varargs method handles, but I want to generate more exact methods, but to do that, I need to generate interfaces dynamically - but I'm holding off bytecode generation until Shen "works".
 * There's a very simplistic idea of having more than one MethodHandle registered per function, but it just tries them instead of picking the best one. I guess this will evolve into guards and callsites in the invokedynamic world.
 * JDK < 8. Should be easy to backport by removing use of lambdas and `java.util.functions`.
+* The tests currently intermittently fail with class cast for numeric operations.
 
 
 ## References
