@@ -9,7 +9,8 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
-import java.util.functions.*;
+import java.util.function.*;
+import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.lang.System.*;
@@ -19,7 +20,7 @@ import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
-import static java.util.functions.Predicates.isEqual;
+import static java.util.function.Predicates.isEqual;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class Shen {
@@ -44,9 +45,9 @@ public class Shen {
         set("*stoutput*", out);
         set("*home-directory*", System.getProperty("user.dir"));
 
-        iterable(Shen.class.getDeclaredMethods())
-                .filter(m -> isPublic(m.getModifiers()))
-                .forEach(m -> { defun(m); });
+        stream(Shen.class.getDeclaredMethods())
+              .filter(m -> isPublic(m.getModifiers()))
+              .forEach(Shen::defun);
 
         op("=", (BiPredicate<Object, Object>)
                 (left, right) -> left instanceof Number && right instanceof Number
@@ -55,12 +56,12 @@ public class Shen {
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
-        op("/", (BiMapper<Integer, Integer, Number>)
+        op("/", (BiFunction<Integer, Integer, Number>)
                 (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (LongBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right);
         op("*", (LongBinaryOperator) (left, right) -> left * right);
-        op("/", (BiMapper<Long, Long, Number>)
+        op("/", (BiFunction<Long, Long, Number>)
                 (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (DoubleBinaryOperator) (left, right) -> left + right);
         op("-", (DoubleBinaryOperator) (left, right) -> left - right);
@@ -93,7 +94,7 @@ public class Shen {
     }
 
     static Method findSAM(Class<?> lambda) {
-        return some(iterable(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
+        return some(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
     }
 
     static class Cons {
@@ -154,7 +155,7 @@ public class Shen {
     }
 
     public static <T> List<T> tl(List<T> list) {
-        return list.isEmpty() ? list : list.subList(1, list.size()).into(new ArrayList<T>());
+        return list.isEmpty() ? list : list.subList(1, list.size()).stream().into(new ArrayList<T>());
     }
 
     public static Object hd(Cons cons) {
@@ -325,7 +326,7 @@ public class Shen {
     }
 
     public static MethodHandle function(Symbol x) {
-        return x.fn.getFirst();
+        return x.fn.stream().findFirst().get();
     }
 
     static MethodHandle function(String x) {
@@ -346,17 +347,21 @@ public class Shen {
 
     static Object eval_kl(Object kl, boolean tail) {
         if (debug) err.println(kl);
-        if (literals.anyMatch((c -> c.isInstance(kl)))) return kl;
+        if (literals.stream().anyMatch((c -> c.isInstance(kl)))) return kl;
         if (kl instanceof Symbol) return ((Symbol) kl).resolve();
         if (kl instanceof List) {
             @SuppressWarnings("unchecked")
             List<Object> list = (List) kl;
             if (list.isEmpty()) return list;
             Object hd = eval_kl(hd(list), tail);
-            //noinspection SuspiciousMethodCalls
+            //noinspection SuspiciousMethodCalls,Convert2Lambda
             List<Object> args = macros.contains(hd)
                     ? tl(list)
-                    : tl(list).map(k -> eval_kl(k, false)).into(new ArrayList<Object>());
+                    : tl(list).stream().map(new Function<Object, Object>() {
+                public Object apply(Object o) {
+                    return eval_kl(o, false);
+                }
+            }).into(new ArrayList<Object>());
 
             if (intern("this").resolve().equals(hd)) if (tail) {
                 if (debug) err.println("Recur: " + hd + " " + args);
@@ -372,10 +377,10 @@ public class Shen {
 
                 Symbol symbol = (Symbol) hd;
 
-                MethodHandle exact = some(symbol.fn, isEqual(targetType));
+                MethodHandle exact = some(symbol.fn.stream(), isEqual(targetType));
                 if (exact != null) return apply(exact, targetType, args);
 
-                MethodHandle match = some(symbol.fn, f -> hasMatchingSignature(f, targetType, (x, y) -> x.isAssignableFrom(y)));
+                MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, targetType, Class::isAssignableFrom));
                 if (match != null) return apply(match, targetType, args);
 
                 err.println(hd + " " + targetType + " " + args);
@@ -391,7 +396,7 @@ public class Shen {
 
     static MethodType targetType(List<Object> args) {
         //noinspection SuspiciousToArrayCall
-        return methodType(Object.class, args.map(o -> o.getClass())
+        return methodType(Object.class, args.stream().map(Object::getClass)
                     .into(new ArrayList<>())
                     .toArray(new Class[args.size()]));
     }
@@ -416,7 +421,7 @@ public class Shen {
 
         Class<?>[] classes = h.type().wrap().parameterArray();
         for (int i = 0; i < args.parameterCount(); i++)
-            if (!match.eval(classes[i], args.parameterType(i))) return false;
+            if (!match.test(classes[i], args.parameterType(i))) return false;
         return true;
     }
 
@@ -458,7 +463,7 @@ public class Shen {
     @Macro
     public static Object cond(List... clauses) throws Exception {
         if (clauses.length == 0) simple_error("condition failure");
-        return isTrue(eval_kl(hd(clauses).getFirst()))
+        return isTrue(eval_kl(hd(clauses).get(0)))
                 ? eval_kl(hd(clauses).get(1))
                 : cond(tl(clauses));
     }
@@ -481,7 +486,7 @@ public class Shen {
     public static MethodHandle lambda(Symbol x, Object y) {
         Map<Symbol, Object> scope = new HashMap<>();
         if (!locals.isEmpty()) scope.putAll(locals.peek());
-        Mapper lambda = (arg) -> {
+        Function lambda = (arg) -> {
             locals.push(new HashMap<>(scope)).put(x, arg);
             try {
                 return eval_kl(y);
@@ -504,14 +509,13 @@ public class Shen {
         return name;
     }
 
-    static <T> T some(Iterable<T> iterable, Predicate<? super T> predicate) {
-        Iterable<T> filter = iterable.filter(predicate);
-        return filter.isEmpty() ? null : filter.getAny();
+    static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
+        return stream.filter(predicate).findAny().orElse((T) null);
     }
 
     @SafeVarargs
     static <T> List<T> list(T... elements) {
-        return asList(elements).into(new ArrayList<T>());
+        return asList(elements).stream().into(new ArrayList<T>());
     }
 
     static boolean isTrue(Object test) {
@@ -523,9 +527,9 @@ public class Shen {
     }
 
     static MethodHandle fn(Symbol name, List<Symbol> args, Object body) {
-        if (args.isEmpty()) return findSAM((Factory) () -> fnBody(name, args, body));
-        if (args.size() == 1) return findSAM((Mapper) x -> fnBody(name, args, body, x));
-        if (args.size() == 2) return findSAM((BiMapper) (x, y) -> fnBody(name, args, body, x, y));
+        if (args.isEmpty()) return findSAM((Supplier) () -> fnBody(name, args, body));
+        if (args.size() == 1) return findSAM((Function) x -> fnBody(name, args, body, x));
+        if (args.size() == 2) return findSAM((BiFunction) (x, y) -> fnBody(name, args, body, x, y));
         return findSAM((Fn) xs -> fnBody(name, args, body, xs)).asCollector(Object[].class, args.size());
     }
 
@@ -566,14 +570,14 @@ public class Shen {
         try {
             out.println("LOADING " + file);
             //noinspection unchecked,RedundantCast
-            return read(new File(file)).reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
+            return read(new File(file)).stream().reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     static Object readEval(String shen) throws Exception {
-        return eval_kl(read(shen).getFirst());
+        return eval_kl(read(shen).get(0));
     }
 
     static List read(String s) throws Exception {

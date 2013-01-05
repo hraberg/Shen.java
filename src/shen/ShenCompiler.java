@@ -13,7 +13,7 @@ import java.lang.invoke.MutableCallSite;
 import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.functions.Mapper;
+import java.util.function.Function;
 
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.Lookup;
@@ -41,7 +41,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
     static ShenLoader loader = new ShenLoader();
 
     public static Object eval(String shen) throws Throwable {
-        return new ShenCode(read(shen).getFirst()).load(Callable.class).newInstance().call();
+        return new ShenCode(read(shen).get(0)).load(Callable.class).newInstance().call();
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
@@ -59,12 +59,12 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         static Map<Symbol, MethodHandle> macros = new HashMap<>();
         static List<Class> literals =
                 asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class)
-                        .into(new ArrayList<Class>());
+                        .stream().into(new ArrayList<Class>());
 
         static {
-            iterable(ShenCode.class.getDeclaredMethods())
+            stream(ShenCode.class.getDeclaredMethods())
                     .filter(m -> isPublic(m.getModifiers()) && m.isAnnotationPresent(Macro.class))
-                    .forEach(m -> macro(m));
+                    .forEach(ShenCompiler.ShenCode::macro);
         }
 
         static int id = 1;
@@ -116,20 +116,21 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         Type compile(final Object kl) {
             //noinspection CaughtExceptionImmediatelyRethrown
             try {
-                Class literalClass = some(literals, c -> c.isInstance(kl));
+                Class literalClass = some(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
                 else if (kl instanceof Symbol) symbol((Symbol) kl);
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
                     List<Object> list = (List) kl;
 
-                    if (list.getFirst() instanceof Symbol) {
-                        Symbol s = (Symbol) list.getFirst();
+                    Object first = list.get(0);
+                    if (first instanceof Symbol) {
+                        Symbol s = (Symbol) first;
                         if (macros.containsKey(s)) macroExpand(s, tl(list));
                         else indy(s, tl(list));
 
                     } else {
-                        compile(list.getFirst());
+                        compile(first);
                         apply(tl(list));
                     }
                 } else
@@ -159,7 +160,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         }
 
         void indy(Symbol s, List<Object> args) {
-            List<Type> argumentTypes = args.map(a -> compile(a)).into(new ArrayList<Type>());
+            List<Type> argumentTypes = args.stream().map(this::compile).into(new ArrayList<Type>());
 
             MethodType type = asMethodType(getType(Object.class), argumentTypes);
             mv.invokeDynamic(s.symbol, type.toMethodDescriptorString(), bootstrap);
@@ -312,7 +313,7 @@ public class ShenCompiler implements JDK8SafeOpcodes {
             if (clauses.length == 0) {
                 mv.throwException(getType(IllegalArgumentException.class), "condition failure");
             } else {
-                kl_if(hd(clauses).getFirst(), hd(clauses).get(1), cons(intern("cond"), list(tl(clauses))));
+                kl_if(hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
             }
         }
 
@@ -334,16 +335,16 @@ public class ShenCompiler implements JDK8SafeOpcodes {
 
         @Macro
         public void lambda(Symbol x, Object y) throws Throwable {
-            List<Symbol> scope = args.into(new ArrayList<>(this.scope));
-            Class<Mapper> lambda = new ShenCode(y, scope, x).load(Mapper.class);
+            List<Symbol> scope = args.stream().into(new ArrayList<>(this.scope));
+            Class<Function> lambda = new ShenCode(y, scope, x).load(Function.class);
             java.lang.reflect.Method sam = findSAM(lambda);
 
             mv.push(new Handle(H_INVOKEVIRTUAL, getInternalName(lambda), sam.getName(), getMethodDescriptor(sam)));
 
-            Constructor<Mapper> ctor = lambda.getConstructor(fillArray(Object.class, scope.size()));
+            Constructor<Function> ctor = lambda.getConstructor(fillArray(Object.class, scope.size()));
             mv.newInstance(getType(ctor.getDeclaringClass()));
             mv.dup();
-            scope.forEach(s -> {compile(s);});
+            scope.forEach(this::compile);
             mv.invokeConstructor(getType(ctor.getDeclaringClass()), new Method("<init>", getConstructorDescriptor(ctor)));
             bindTo();
 
