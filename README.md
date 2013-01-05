@@ -15,10 +15,10 @@ Shen is a portable functional programming language by [Mark Tarver](http://www.l
 
 ## This Java Port
 
-Is a work in progress - it really doesn't work yet. The main Shen JVM port is done by Joel Shellman and will be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
+Is a work in progress - it really doesn't work yet. The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
 
 It's loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure. The implementation is all in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java).
-Currently an interpreter using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive.
+Started as an interpreter using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive.
 This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff.
 
 The idea is to compile this down to bytecode eventually. Note that I don't vouch for any of the implementation details regarding this - I'm learning as we go.
@@ -37,6 +37,8 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 ### What doesn't work?
 
+*Regarding the interpreter, which I don't plan to finish*
+
 * Shen - it cannot bootstrap Shen yet, dies loading [`declarations.kl`](https://github.com/hraberg/Shen.java/blob/master/shen/klambda/declarations.kl), with various errors.
 * This means no REPL (one could do a KL only REPL).
 * Compilation - it's currently an interpreter, but doesn't intend to stay like one.
@@ -54,3 +56,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 [Asm 4.0](http://asm.ow2.org/index.html) (Bruneton, 2007-12) "A Java bytecode engineering library"
 
 [JDK 8 with Lambda support](http://jdk8.java.net/lambda/)
+
+[Nashorn](https://blogs.oracle.com/nashorn/entry/open_for_business) "ECMAScript 5.1 that runs on top of JVM."
+
+[Optimizing JavaScript and Dynamic Languages on the JVM](http://www.slideshare.net/lagergren/optimizing-javascript-and-dynamic-languages-on-the-jvm) Marcus Lagergren, 2012
