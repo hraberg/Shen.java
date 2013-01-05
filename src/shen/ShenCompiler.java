@@ -28,7 +28,7 @@ import static org.objectweb.asm.Type.*;
 import static shen.Shen.*;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
-public class ShenCompiler implements JDK8SafeOpcodes {
+public class ShenCompiler implements Opcodes {
     public static class ShenLoader extends ClassLoader {
         public Class<?> define(ClassNode cn) {
             ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
@@ -424,13 +424,4 @@ public class ShenCompiler implements JDK8SafeOpcodes {
         out.println(eval("((let x 42 (lambda y x)) 0)"));
         out.println(eval("((lambda x ((lambda y x) 42)) 0)"));
     }
-}
-
-interface JDK8SafeOpcodes {
-    int V1_7 = 51;
-    int ACC_PUBLIC = 0x0001;
-    int ACC_FINAL = 0x0010;
-    int H_INVOKEVIRTUAL = 5;
-    int H_INVOKESTATIC = 6;
-    int IFEQ = 153;
 }
