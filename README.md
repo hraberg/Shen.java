@@ -60,4 +60,5 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 [Nashorn](https://blogs.oracle.com/nashorn/entry/open_for_business) "ECMAScript 5.1 that runs on top of JVM."
 
-[Optimizing JavaScript and Dynamic Languages on the JVM](http://www.slideshare.net/lagergren/optimizing-javascript-and-dynamic-languages-on-the-jvm) Marcus Lagergren, 2012
+[Optimizing JavaScript and Dynamic Languages on the JVM](http://www.oracle.com/javaone/lad-en/program/schedule/sessions/con5390-enok-1885659.pdf) Marcus Lagergren and Staffan Friberg
+, 2012
