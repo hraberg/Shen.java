@@ -69,6 +69,8 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 [Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) Miguel Garcia, 2012 - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible.
 
+[JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) Rémi Forax, 2011
+
 [Patterns and Performance of InvokeDynamic in JRuby](http://bit.ly/jjug-indy-jruby-en) Hiroshi Nakamura, 2012
 
 [InvokeDynamic: Your API for HotSpot](http://www.slideshare.net/boundaryinc/invoke-dynamic-your-api-to-hotspot) Tony Arcieri, 2012
