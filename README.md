@@ -68,3 +68,5 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 [InvokeDynamic: Your API for HotSpot](http://www.slideshare.net/boundaryinc/invoke-dynamic-your-api-to-hotspot) Tony Arcieri, 2012
 
 [Invokedynamic them all](https://speakerdeck.com/forax/invokedynamic-them-all) Rémi Forax, 2012
+
+[Scheme in one class](https://blogs.oracle.com/jrose/entry/scheme_in_one_class) John Rose, 2010
