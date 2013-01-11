@@ -52,6 +52,8 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 ## References
 
+[The Book of Shen](http://www.shenlanguage.org/tbos.html) (Tarver, 2012)
+
 [Dynalink](https://github.com/szegedi/dynalink) (Szegedi, 2010-12) "Dynamic Linker Framework for Languages on the JVM"
 
 [Asm 4.0](http://asm.ow2.org/index.html) (Bruneton, 2007-12) "A Java bytecode engineering library"
@@ -60,17 +62,17 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 [Nashorn](https://blogs.oracle.com/nashorn/entry/open_for_business) "ECMAScript 5.1 that runs on top of JVM."
 
-[Optimizing JavaScript and Dynamic Languages on the JVM](http://www.oracle.com/javaone/lad-en/program/schedule/sessions/con5390-enok-1885659.pdf) Marcus Lagergren and Staffan Friberg
-, 2012
+[Optimizing JavaScript and Dynamic Languages on the JVM](http://www.oracle.com/javaone/lad-en/program/schedule/sessions/con5390-enok-1885659.pdf) (Lagergren and Friberg
+, 2012)
 
-[Invokedynamic them all](https://speakerdeck.com/forax/invokedynamic-them-all) Rémi Forax, 2012
+[Invokedynamic them all](https://speakerdeck.com/forax/invokedynamic-them-all) (Forax, 2012)
 
-[Scheme in one class](https://blogs.oracle.com/jrose/entry/scheme_in_one_class) John Rose, 2010 - Parts of this looks pretty similar actually! Slightly more advanced/complex. Haven't been updated from the older java.dyn package. "semi-compiled" to MHs, no ASM used.
+[Scheme in one class](https://blogs.oracle.com/jrose/entry/scheme_in_one_class) (Rose, 2010) - Parts of this looks pretty similar actually! Slightly more advanced/complex. Haven't been updated from the older java.dyn package. "semi-compiled" to MHs, no ASM used.
 
-[Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) Miguel Garcia, 2012 - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible.
+[Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) (Garcia, 2012) - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible.
 
-[JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) Rémi Forax, 2011
+[JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) (Forax, 2011)
 
-[Patterns and Performance of InvokeDynamic in JRuby](http://bit.ly/jjug-indy-jruby-en) Hiroshi Nakamura, 2012
+[Patterns and Performance of InvokeDynamic in JRuby](http://bit.ly/jjug-indy-jruby-en) (Nakamura, 2012)
 
-[InvokeDynamic: Your API for HotSpot](http://www.slideshare.net/boundaryinc/invoke-dynamic-your-api-to-hotspot) Tony Arcieri, 2012
+[InvokeDynamic: Your API for HotSpot](http://www.slideshare.net/boundaryinc/invoke-dynamic-your-api-to-hotspot) (Arcieri, 2012)
