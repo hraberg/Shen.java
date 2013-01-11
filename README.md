@@ -68,7 +68,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 [Scheme in one class](https://blogs.oracle.com/jrose/entry/scheme_in_one_class) (Rose, 2010) - Parts of this looks pretty similar actually! Slightly more advanced/complex, has Java interop but no lambdas. Haven't been updated from the older java.dyn package. "semi-compiled" to MHs, no ASM used.
 
-[Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) (Garcia, 2012) - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible. Not sure you can actually create a fn though (see above), still to be explored.
+[Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) (Garcia, 2012) - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible. Not sure you can actually create a fn definition though (see above), still to be explored.
 
 [JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) (Forax, 2011)
 
