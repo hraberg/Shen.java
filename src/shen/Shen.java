@@ -283,7 +283,7 @@ public class Shen {
         return s1 + s2;
     }
 
-    static class Symbol {
+    public static class Symbol {
         public final String symbol;
         public Set<MethodHandle> fn = new HashSet<>();
         public Object var;
@@ -419,7 +419,7 @@ public class Shen {
             h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
         if (args.parameterCount() > h.type().parameterCount()) return false;
 
-        Class<?>[] classes = h.type().wrap().parameterArray();
+        Class<?>[] classes = h.type().parameterArray();
         for (int i = 0; i < args.parameterCount(); i++)
             if (!match.test(classes[i], args.parameterType(i))) return false;
         return true;

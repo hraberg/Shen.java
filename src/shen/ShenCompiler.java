@@ -8,12 +8,13 @@ import org.objectweb.asm.tree.MethodNode;
 
 import java.lang.invoke.*;
 import java.util.ArrayList;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 import static java.lang.System.out;
-import static java.lang.invoke.MethodHandles.Lookup;
-import static java.lang.invoke.MethodHandles.insertArguments;
+import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodType.fromMethodDescriptorString;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
@@ -22,6 +23,7 @@ import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
 import static shen.Shen.*;
+import static shen.Shen.lookup;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class ShenCompiler implements Opcodes {
@@ -41,14 +43,37 @@ public class ShenCompiler implements Opcodes {
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
-        return new MutableCallSite(type);
+        System.out.println("BOOTSTRAP: " + name + type);
+        Symbol symbol = intern(name);
+        System.out.println(symbol.fn);
+        MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, type, Class::isAssignableFrom));
+        if (match == null) {
+            match = some(symbol.fn.stream(), f -> {
+                try {
+                    f.asType(type);
+                    return true;
+                } catch (WrongMethodTypeException _) {
+                    return false;
+                }
+            });
+        }
+        System.out.println(match);
+        return new MutableCallSite(explicitCastArguments(match, type));
     }
 
-    static Handle bootstrap = new Handle(H_INVOKESTATIC, getInternalName(ShenCompiler.class), "bootstrap",
+    static Handle bootstrap = staticMH(getInternalName(ShenCompiler.class), "bootstrap",
             desc(CallSite.class, Lookup.class, String.class, MethodType.class));
 
     static String desc(Class<?> returnType, Class<?>... argumentTypes ) {
         return methodType(returnType, argumentTypes).toMethodDescriptorString();
+    }
+
+    static Handle staticMH(Class aClass, String name, String desc) {
+        return staticMH(getInternalName(aClass), name, desc);
+    }
+
+    static Handle staticMH(String className, String name, String desc) {
+        return new Handle(H_INVOKESTATIC, className, name, desc);
     }
 
     public static class ShenCode {
@@ -59,7 +84,7 @@ public class ShenCompiler implements Opcodes {
         static {
             stream(ShenCode.class.getDeclaredMethods())
                     .filter(m -> isPublic(m.getModifiers()) && m.isAnnotationPresent(Macro.class))
-                    .forEach(ShenCompiler.ShenCode::macro);
+                    .forEach(ShenCode::macro);
         }
 
         static int id = 1;
@@ -110,7 +135,6 @@ public class ShenCompiler implements Opcodes {
         }
 
         Type compile(final Object kl) {
-            //noinspection CaughtExceptionImmediatelyRethrown
             try {
                 Class literalClass = some(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -341,7 +365,7 @@ public class ShenCompiler implements Opcodes {
             Class[] argumentTypes = fillArray(Object.class, scope.size());
             fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, Object.class, argumentTypes);
 
-            insertArgs(new Handle(H_INVOKESTATIC, cn.name, name, desc(Object.class, argumentTypes)), 0, scope.subList(0, scope.size() - args.length));
+            insertArgs(staticMH(cn.name, name, desc(Object.class, argumentTypes)), 0, scope.subList(0, scope.size() - args.length));
         }
 
         @Macro
@@ -359,15 +383,6 @@ public class ShenCompiler implements Opcodes {
             Class[] args = new Class[elements];
             fill(args, value);
             return args;
-        }
-
-        Handle samMH(Class<?> aClass) {
-            java.lang.reflect.Method sam = findSAM(aClass);
-            return new Handle(H_INVOKEINTERFACE, getInternalName(aClass), sam.getName(), getMethodDescriptor(sam));
-        }
-
-        Handle staticMH(Class aClass, String name, String desc) {
-            return new Handle(H_INVOKESTATIC, getInternalName(aClass), name, desc);
         }
 
         void bindTo(Handle handle, Object arg) {
@@ -440,5 +455,13 @@ public class ShenCompiler implements Opcodes {
         out.println(eval("(let x 10 (let y 5 x))"));
         out.println(eval("((let x 42 (lambda y x)) 0)"));
         out.println(eval("((lambda x ((lambda y x) 42)) 0)"));
+        out.println(eval("(get-time unix)"));
+        out.println(eval("(value *language*)"));
+        out.println(eval("(+ 1 1)"));
+        out.println(eval("(+ 1.2 1.1)"));
+        out.println(eval("(+ 1.2 1)"));
+        out.println(eval("(+ 1 1.3)"));
+        out.println(eval("(cons x y)"));
+        out.println(eval("(hd (cons x y))"));
     }
 }
