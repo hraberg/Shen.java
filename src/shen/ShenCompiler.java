@@ -343,17 +343,16 @@ public class ShenCompiler implements Opcodes {
         public void lambda(Symbol x, Object y) throws Throwable {
             List<Symbol> scope = locals.keySet().stream().into(args.stream().into(new ArrayList<>(this.scope)));
             Class<Function> lambda = new ShenCode(y, scope, x).load(Function.class);
-            java.lang.reflect.Method sam = findSAM(lambda);
 
-            mv.push(new Handle(H_INVOKEVIRTUAL, getInternalName(lambda), sam.getName(), getMethodDescriptor(sam)));
+            mv.push(samMH(Function.class));
 
             Constructor<Function> ctor = lambda.getConstructor(fillArray(Object.class, scope.size()));
             mv.newInstance(getType(ctor.getDeclaringClass()));
             mv.dup();
             scope.forEach(this::compile);
-            mv.invokeConstructor(getType(ctor.getDeclaringClass()), new Method("<init>", getConstructorDescriptor(ctor)));
-            bindTo();
+            mv.invokeConstructor(getType(lambda), new Method("<init>", getConstructorDescriptor(ctor)));
 
+            bindTo();
             topOfStack(MethodHandle.class);
         }
 
@@ -372,6 +371,11 @@ public class ShenCompiler implements Opcodes {
             Class[] args = new Class[elements];
             fill(args, value);
             return args;
+        }
+
+        Handle samMH(Class<?> aClass) {
+            java.lang.reflect.Method sam = findSAM(aClass);
+            return new Handle(H_INVOKEINTERFACE, getInternalName(aClass), sam.getName(), getMethodDescriptor(sam));
         }
 
         Handle staticMH(Class aClass, String name, String desc) {
