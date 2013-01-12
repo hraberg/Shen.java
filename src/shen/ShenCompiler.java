@@ -12,7 +12,6 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.BiPredicate;
 
-import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodType.fromMethodDescriptorString;
 import static java.lang.invoke.MethodType.methodType;
@@ -78,7 +77,6 @@ public class ShenCompiler implements Opcodes {
         }
         System.out.println("selected: " + match);
         return new MutableCallSite(match);
-//        return new MutableCallSite(explicitCastArguments(match, type));
     }
 
     static MethodHandle insertArguments;
@@ -317,8 +315,6 @@ public class ShenCompiler implements Opcodes {
         }
 
         boolean isPrimitive(Type type) {
-//            return type.getOpcode(IALOAD) != ALOAD;
-
             return type.getSort() != OBJECT;
         }
 
@@ -529,54 +525,5 @@ public class ShenCompiler implements Opcodes {
             for (boolean b : clauses) if (!b) return false;
             return true;
         }
-    }
-
-    public static void main(String[] args) throws Throwable {
-        out.println(eval("(trap-error my-symbol my-handler)"));
-        out.println(eval("(trap-error (simple-error \"!\") (lambda x x))"));
-        out.println(eval("(if true \"true\" \"false\")"));
-        out.println(eval("(if false \"true\" \"false\")"));
-        out.println(eval("(cond (false 1) (true 2))"));
-        out.println(eval("(cond (false 1) ((or true false) 3))"));
-        out.println(eval("(or false)"));
-        out.println(((MethodHandle) eval("(or false)")).invokeWithArguments(false, true));
-        out.println(eval("((or false) false)"));
-        out.println(eval("(or false false)"));
-        out.println(eval("(or false true false)"));
-        out.println(eval("(and true true)"));
-        out.println(eval("(and true true (or false false))"));
-        out.println(eval("(and true false)"));
-        out.println(eval("(and true)"));
-        out.println(eval("(lambda x x)"));
-        out.println(eval("((lambda x x) 2)"));
-        out.println(eval("(let x \"str\" x)"));
-        out.println(eval("(let x 10 x)"));
-        out.println(eval("(let x 10 (let y 5 x))"));
-        out.println(eval("((let x 42 (lambda y x)) 0)"));
-        out.println(eval("((lambda x ((lambda y x) 42)) 0)"));
-        out.println(eval("(get-time unix)"));
-        out.println(eval("(value *language*)"));
-        out.println(eval("(+ 1 1)"));
-        out.println(eval("(+ 1.2 1.1)"));
-        out.println(eval("(+ 1.2 1)"));
-        out.println(eval("(+ 1 1.3)"));
-        out.println(eval("(cons x y)"));
-        out.println(eval("(cons x)"));
-        out.println(eval("((cons x) z)"));
-        out.println(eval("(cons x y)"));
-        // TODO: For this to really work the runtime type needs to be checked, either in an Object fn or at callsite.
-//        out.println(eval("(hd (cons x y))"));
-        out.println(eval("(absvector? (absvector 10))"));
-        out.println(eval("(trap-error (/ 1 0) (lambda x x))"));
-        out.println(eval("(defun fun (x y) (+ x y))"));
-        out.println(eval("(fun 1 2)"));
-        out.println(eval("(set x y)"));
-        out.println(eval("(value x)"));
-        out.println(eval("(set x z)"));
-        out.println(eval("(value x)"));
-        out.println(eval("()"));
-        out.println(eval("(cond (true ()) (false 2))"));
-        out.println(eval("(if (<= 3 3) x y)"));
-        out.println(eval("(eval-kl (cons + (cons 1 (cons 2 ()))))"));
     }
 }

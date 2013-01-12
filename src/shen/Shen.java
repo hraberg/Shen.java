@@ -337,14 +337,6 @@ public class Shen {
         return function(intern(x));
     }
 
-    public static class Recur {
-        Object[] args;
-
-        public Recur(Object[] args) {
-            this.args = args;
-        }
-    }
-
     public static Object eval_kl(Object kl) {
         try {
             return ShenCompiler.eval(kl);
@@ -360,10 +352,6 @@ public class Shen {
     @SafeVarargs
     static <T> List<T> list(T... elements) {
         return asList(elements).stream().into(new ArrayList<T>());
-    }
-
-    static boolean isTrue(Object test) {
-        return ((Boolean) test);
     }
 
     static String unscramble(String s) {
@@ -437,48 +425,11 @@ public class Shen {
 
     public static void main(String[] args) throws Throwable {
 //        install();
-        out.println(eval_kl(intern("x")));
-        out.println(readEval("(or false)"));
-        out.println(readEval("(or false false)"));
-        out.println(readEval("(or false true)"));
-        out.println(readEval("(or false false false)"));
-        out.println(readEval("((or false) true)"));
-        out.println(readEval("((and true) true true)"));
-        out.println(readEval("()"));
-        out.println(readEval("(cons 2 3)"));
+//        repl();
+    }
 
-        out.println(readEval("(absvector? (absvector 10))"));
-        out.println(readEval("(absvector 10)"));
-        out.println(readEval("(absvector? ())"));
-        out.println(readEval("(+ 1 2)"));
-        out.println(readEval("((+ 6.5) 2.0)"));
-        out.println(readEval("(+ 1.0 2.0)"));
-        out.println(readEval("(* 5 2)"));
-        out.println(readEval("(* 5)"));
-        out.println(readEval("(let x 42 x)"));
-        out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
-        out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
-        out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
-        out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
-        out.println(readEval("(cond (true 1))"));
-        out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
-        out.println(readEval("(cond (false 1) ((> 10 3) ()))"));
-
-        out.println(readEval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
-        out.println(readEval("(fib 10)"));
-
-        out.println(readEval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
-        out.println(readEval("(factorial 10 1)"));
-        out.println(readEval("(factorial 12)"));
-        out.println(readEval("((factorial 19) 1)"));
-
-        out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
-        out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
-        out.println(str(eval_kl(asList(intern("my-fun"), 3))));
-        out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
-        out.println(eval_kl(asList(intern("my-fun2"), 3, 5)));
-        out.println(eval_kl(asList(intern("defun"), intern("my-fun3"), asList(), "Hello")));
-        out.println(str(eval_kl(asList(intern("my-fun3")))));
+    static Object repl() throws Exception {
+        return readEval("(shen-shen)");
     }
 
     static void install() {
