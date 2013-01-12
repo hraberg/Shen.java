@@ -88,6 +88,10 @@ public class ShenCompiler implements Opcodes {
         return methodType(returnType, argumentTypes).toMethodDescriptorString();
     }
 
+    static String desc(Type returnType, List<Type> argumentTypes) {
+        return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
+    }
+
     static Handle staticMH(Class aClass, String name, String desc) {
         return staticMH(getInternalName(aClass), name, desc);
     }
@@ -111,6 +115,7 @@ public class ShenCompiler implements Opcodes {
 
         Object shen;
         List<Symbol> args;
+        List<Type> argTypes;
         Map<Symbol, Integer> locals;
         GeneratorAdapter mv;
         Type topOfStack;
@@ -125,7 +130,7 @@ public class ShenCompiler implements Opcodes {
             this.cn = cn;
             this.shen = shen;
             this.args = list(args);
-            this.locals = new HashMap<>();
+            this.locals = new LinkedHashMap<>();
         }
 
         ClassNode classNode(Class<?> anInterface) {
@@ -197,8 +202,9 @@ public class ShenCompiler implements Opcodes {
                 mv.loadLocal(local);
                 topOfStack = mv.getLocalType(local);
             } else if (args.contains(s)) {
-                mv.loadArg(args.indexOf(s));
-                topOfStack(Object.class);
+                int arg = args.indexOf(s);
+                mv.loadArg(arg);
+                topOfStack = argTypes.get(arg);
             } else
                 push(s);
         }
@@ -241,8 +247,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
-            return fromMethodDescriptorString(getMethodDescriptor(returnType,
-                    argumentTypes.toArray(new Type[argumentTypes.size()])), loader);
+            return fromMethodDescriptorString(desc(returnType, argumentTypes), loader);
         }
 
         void push(Symbol kl) {
@@ -273,18 +278,24 @@ public class ShenCompiler implements Opcodes {
             cn = classNode(anInterface);
             constructor();
             java.lang.reflect.Method sam = findSAM(anInterface);
-            compileMethod(ACC_PUBLIC, sam.getName(), sam.getReturnType(), sam.getParameterTypes());
+            List<Type> types = stream(sam.getParameterTypes()).map(Type::getType).into(new ArrayList<Type>());
+            compileMethod(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
             //noinspection unchecked
             return (Class<T>) loader.define(cn);
         }
 
-        void compileMethod(int modifier, String name, Class<?> returnType, Class<?>... argumentTypes) {
+        void compileMethod(int modifier, String name, Type returnType, List<Type> argumentTypes) {
+            this.argTypes = argumentTypes;
             mv = generator(cn.visitMethod(modifier, name, desc(returnType, argumentTypes), null, null));
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(shen);
-            if (!returnType.isPrimitive()) box();
+            if (isPrimitive(returnType)) box();
             mv.returnValue();
+        }
+
+        boolean isPrimitive(Type returnType) {
+            return returnType.getOpcode(IALOAD) != ALOAD;
         }
 
         void box() {
@@ -391,21 +402,23 @@ public class ShenCompiler implements Opcodes {
         }
 
         void fn(String name, Object shen, Symbol... args) throws Throwable {
-            List<Symbol> scope = locals.keySet().stream().into(new ArrayList<>(this.args));
+            List<Type> types = locals.values().stream().map(mv::getLocalType).into(new ArrayList<Type>());
+            types.addAll(this.argTypes);
+            for (Symbol arg : args) types.add(getType(Object.class));
+
+            List<Symbol> scope = new ArrayList<>(locals.keySet());
+            scope.addAll(this.args);
             scope.addAll(asList(args));
 
             ShenCode fn = new ShenCode(cn, shen, scope.toArray(new Symbol[scope.size()]));
+            fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
 
-            Class[] argumentTypes = fillArray(Object.class, scope.size());
-            fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, Object.class, argumentTypes);
-
-            insertArgs(staticMH(cn.name, name, desc(Object.class, argumentTypes)), 0, scope.subList(0, scope.size() - args.length));
+            insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope.subList(0, scope.size() - args.length));
         }
 
         @Macro
         public void let(Symbol x, Object y, Object z) throws Throwable {
             compile(y);
-            box();
             int let = mv.newLocal(topOfStack);
             mv.storeLocal(let);
             locals.put(x, let);
