@@ -12,6 +12,8 @@ Shen is a portable functional programming language by [Mark Tarver](http://www.l
 * an integrated fully functional Prolog,
 * and an inbuilt compiler-compiler.
 
+See also: [shen.clj](https://github.com/hraberg/shen.clj)
+
 
 ## This Java Port
 
