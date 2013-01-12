@@ -56,11 +56,13 @@ public class Shen {
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
+        op("/", (IntBinaryOperator) (left, right) -> left / right);
         op("/", (BiFunction<Integer, Integer, Number>)
                 (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (LongBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right);
         op("*", (LongBinaryOperator) (left, right) -> left * right);
+        op("/", (LongBinaryOperator) (left, right) -> left / right);
         op("/", (BiFunction<Long, Long, Number>)
                 (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (DoubleBinaryOperator) (left, right) -> left + right);
@@ -563,7 +565,11 @@ public class Shen {
     static String unscramble(String s) {
         return s.replaceAll("_", "-").replaceAll("-p$", "?")
                 .replaceAll("-ex$", "!").replaceAll("-?gt-?", "->")
-                .replaceAll("-?lt-?", "<-").replaceAll("^kl-", "");
+                .replaceAll("-?lt-?", "<-").replaceAll("-slash-", "/").replaceAll("^kl-", "");
+    }
+
+    static String scramble(String s) {
+        return s.replaceAll("/", "-slash-");
     }
 
     static Object load(String file) {

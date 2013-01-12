@@ -43,6 +43,7 @@ public class ShenCompiler implements Opcodes {
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
+        name = unscramble(name);
         System.out.println("BOOTSTRAP: " + name + type);
         Symbol symbol = intern(name);
         System.out.println("candidates: " + symbol.fn);
@@ -200,7 +201,7 @@ public class ShenCompiler implements Opcodes {
             List<Type> argumentTypes = args.stream().map(this::compile).into(new ArrayList<Type>());
 
             MethodType type = asMethodType(getType(Object.class), argumentTypes);
-            mv.invokeDynamic(s.symbol, type.toMethodDescriptorString(), bootstrap);
+            mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), bootstrap);
             topOfStack(type.returnType());
         }
 
@@ -318,8 +319,8 @@ public class ShenCompiler implements Opcodes {
 
             mv.loadLocal(e);
             bindTo();
-            mv.push((String) null);
-            mv.invokeVirtual(getType(MethodHandle.class), new Method("apply", desc(Object.class, Object[].class)));
+
+            mv.invokeVirtual(getType(MethodHandle.class), new Method("invoke", desc(Object.class)));
 
             mv.visitLabel(after);
         }
@@ -452,6 +453,7 @@ public class ShenCompiler implements Opcodes {
 
     public static void main(String[] args) throws Throwable {
         out.println(eval("(trap-error my-symbol my-handler)"));
+        out.println(eval("(trap-error (simple-error \"!\") (lambda x x))"));
         out.println(eval("(if true \"true\" \"false\")"));
         out.println(eval("(if false \"true\" \"false\")"));
         out.println(eval("(cond (false 1) (true 2))"));
@@ -484,5 +486,6 @@ public class ShenCompiler implements Opcodes {
         out.println(eval("(cons x y)"));
         out.println(eval("(hd (cons x y))"));
         out.println(eval("(absvector? (absvector 10))"));
+        out.println(eval("(trap-error (/ 1 0) (lambda x x))"));
     }
 }
