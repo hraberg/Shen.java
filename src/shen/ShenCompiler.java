@@ -72,6 +72,7 @@ public class ShenCompiler implements Opcodes {
         Object shen;
         List<Symbol> scope;
         List<Symbol> args;
+        Map<Symbol, Integer> locals;
         GeneratorAdapter mv;
         Type topOfStack;
         ClassNode cn;
@@ -81,6 +82,7 @@ public class ShenCompiler implements Opcodes {
             this.shen = shen;
             this.scope = scope;
             this.args = list(args);
+            this.locals = new HashMap<>();
         }
 
         public ShenCode(Object shen, Symbol... args) throws Throwable {
@@ -144,7 +146,11 @@ public class ShenCompiler implements Opcodes {
         }
 
         void symbol(Symbol s) {
-            if (args.contains(s)) {
+            if (locals.containsKey(s)) {
+                int local = locals.get(s);
+                mv.loadLocal(local);
+                topOfStack = mv.getLocalType(local);
+            } else if (args.contains(s)) {
                 mv.loadArg(args.indexOf(s));
                 topOfStack(Object.class);
             } else if (scope.contains(s)) {
@@ -335,7 +341,7 @@ public class ShenCompiler implements Opcodes {
 
         @Macro
         public void lambda(Symbol x, Object y) throws Throwable {
-            List<Symbol> scope = args.stream().into(new ArrayList<>(this.scope));
+            List<Symbol> scope = locals.keySet().stream().into(args.stream().into(new ArrayList<>(this.scope)));
             Class<Function> lambda = new ShenCode(y, scope, x).load(Function.class);
             java.lang.reflect.Method sam = findSAM(lambda);
 
@@ -353,8 +359,13 @@ public class ShenCompiler implements Opcodes {
 
         @Macro
         public void let(Symbol x, Object y, Object z) throws Throwable {
-            lambda(x, z);
-            apply(asList(y));
+            compile(y);
+            box();
+            int let = mv.newLocal(topOfStack);
+            mv.storeLocal(let);
+            locals.put(x, let);
+            compile(z);
+            locals.remove(x);
         }
 
         Class[] fillArray(Class value, int elements) {
@@ -419,6 +430,7 @@ public class ShenCompiler implements Opcodes {
         out.println(eval("(and true)"));
         out.println(eval("(lambda x x)"));
         out.println(eval("((lambda x x) 2)"));
+        out.println(eval("(let x \"str\" x)"));
         out.println(eval("(let x 10 x)"));
         out.println(eval("(let x 10 (let y 5 x))"));
         out.println(eval("((let x 42 (lambda y x)) 0)"));
