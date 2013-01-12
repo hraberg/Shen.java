@@ -311,18 +311,14 @@ public class ShenCompiler implements Opcodes {
             mv.visitLabel(end);
 
             mv.catchException(start, end, getType(Exception.class));
-            int e = mv.newLocal(getType(Exception.class));
-            mv.storeLocal(e);
-
             compile(f);
             mv.checkCast(getType(MethodHandle.class));
-
-            mv.loadLocal(e);
+            mv.swap();
             bindTo();
 
             mv.invokeVirtual(getType(MethodHandle.class), new Method("invoke", desc(Object.class)));
-
             mv.visitLabel(after);
+            topOfStack(Object.class);
         }
 
         @Macro
