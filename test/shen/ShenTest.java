@@ -152,11 +152,11 @@ public class ShenTest {
 
     @Test
     public void cons_p() {
-        is(true, "(cons? '(2 1 1 \"foo\")");
-        is(true, "(cons? (cons 3 '(2 1 1 \"foo\"))");
+        is(true, "(cons? (cons 2 (cons 1 (cons 1 (cons \"foo\" ())))))");
+        is(true, "(cons? (cons 3 (cons 2 (cons 1 (cons 1 (cons \"foo\" ()))))))");
         is(false, "(cons? 53)");
-        is(2, "(hd '(2 1 1)");
-        is(1, "(hd (tl '(2 1 1))");
+        is(2, "(hd (cons 2 (cons 1 (cons 1 ()))))");
+        is(1, "(hd (tl (cons 2 (cons 1 (cons 1 ())))))");
     }
 
     @Test
@@ -175,7 +175,7 @@ public class ShenTest {
 
     @Test
     public void eval_kl_freeze_and_thaw() {
-        is(9, "(eval-kl '(+ 4 5)");
+        is(9, "(eval-kl (cons + (cons 4 (cons 5 ()))))");
         is(4, "(eval-kl 4)");
         is(intern("hello"), "(eval-kl hello)");
         is(intern("hello"), "(eval-kl hello)");
@@ -250,8 +250,8 @@ public class ShenTest {
     public void lists() {
         is(-1, "(trap-error (hd 5) (lambda E -1))");
         is(-1, "(trap-error (tl 5) (lambda E -1))");
-        is(1, "(hd '(1 2 3)");
-        is(asList(2, 3), "(tl '(1 2 3)");
+        is(1, "(hd (cons 1 (cons 2 (cons 3 ()))))");
+        is(asList(2, 3), "(tl (cons 1 (cons 2 (cons 3 ()))))");
         is(new Cons(5, 10), "(cons 5 10)");
     }
 

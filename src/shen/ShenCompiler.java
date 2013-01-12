@@ -10,6 +10,7 @@ import java.lang.invoke.*;
 import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.function.BiPredicate;
 
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.*;
@@ -50,28 +51,33 @@ public class ShenCompiler implements Opcodes {
         Symbol symbol = intern(name);
         System.out.println("candidates: " + symbol.fn);
         MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, type, Class::isAssignableFrom));
-        if (match == null) {
-            match = some(symbol.fn.stream(), f -> {
-                try {
-                    f.asType(type);
-                    return true;
-                } catch (WrongMethodTypeException _) {
-                    return false;
-                }
-            });
-        }
-        if (match == null) match = symbol.fn.stream().findAny().get();
-        if (match.type().parameterCount() > type.parameterCount()) {
-            try {
-                System.out.println("partial: " + type.parameterCount() + " out of " + match.type().parameterCount());
-                match = insertArguments(insertArguments, 0, match, 0).asCollector(Object[].class, type.parameterCount());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+        try {
+            if (match == null) {
+                match = some(symbol.fn.stream(), f -> {
+                    try {
+                        f.asType(type);
+                        return true;
+                    } catch (WrongMethodTypeException _) {
+                        return false;
+                    }
+                });
             }
+            if (match == null) match = symbol.fn.stream().findAny().get();
+            if (match.type().parameterCount() > type.parameterCount()) {
+                try {
+                    System.out.println("partial: " + type.parameterCount() + " out of " + match.type().parameterCount());
+                    match = insertArguments(insertArguments, 0, match, 0).asCollector(Object[].class, type.parameterCount());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            match = match.asType(type);
+        } catch (Throwable t) {
+            System.out.println("Saving and Compiling an Exception " + t);
+            match = dropArguments(throwException(type.returnType(), Throwable.class).bindTo(t), 0, type.parameterList());
         }
-        MethodHandle adapted = match.asType(type);
-        System.out.println("selected: " + adapted);
-        return new MutableCallSite(adapted);
+        System.out.println("selected: " + match);
+        return new MutableCallSite(match);
 //        return new MutableCallSite(explicitCastArguments(match, type));
     }
 
@@ -93,6 +99,18 @@ public class ShenCompiler implements Opcodes {
 
     static String desc(Type returnType, List<Type> argumentTypes) {
         return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
+    }
+
+    static boolean hasMatchingSignature(MethodHandle h, MethodType args, BiPredicate<Class, Class> match) {
+        int last = h.type().parameterCount() - 1;
+        if (h.isVarargsCollector() && args.parameterCount() - last > 0)
+            h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
+        if (args.parameterCount() > h.type().parameterCount()) return false;
+
+        Class<?>[] classes = h.type().parameterArray();
+        for (int i = 0; i < args.parameterCount(); i++)
+            if (!match.test(classes[i], args.parameterType(i))) return false;
+        return true;
     }
 
     static Handle staticMH(Class aClass, String name, String desc) {
@@ -227,6 +245,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         void apply(List<Object> args) {
+            box();
             mv.checkCast(getType(MethodHandle.class));
 
             loadArgArray(args);
@@ -475,6 +494,16 @@ public class ShenCompiler implements Opcodes {
                 return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
             }
             return insertArguments(fn.asType(targetType), 0, args).invokeExact();
+        }
+
+        static Object uncurry(Object chain, Object... args) throws Throwable {
+            for (Object arg : args)
+                chain = ((MethodHandle) chain).invoke(arg);
+            return chain;
+        }
+
+        static boolean isLambda(MethodHandle fn) {
+            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {

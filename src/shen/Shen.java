@@ -5,7 +5,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
@@ -13,14 +12,14 @@ import java.util.function.*;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
-import static java.lang.System.*;
-import static java.lang.invoke.MethodHandles.insertArguments;
+import static java.lang.System.in;
+import static java.lang.System.out;
+import static java.lang.invoke.MethodHandles.constant;
+import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.lookup;
-import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
-import static java.util.function.Predicates.isEqual;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
 public class Shen {
@@ -28,14 +27,9 @@ public class Shen {
 
     static MethodHandles.Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
-    static Stack<Map<Symbol, Object>> locals = new Stack<>();
 
     @Retention(RetentionPolicy.RUNTIME)
     public @interface Macro {}
-
-    static Set<Symbol> macros = new HashSet<>();
-    static List<Class<? extends Serializable>> literals =
-            asList(Number.class, String.class, Boolean.class);
 
     static {
         set("*language*", "Java");
@@ -86,6 +80,16 @@ public class Shen {
 
     static void op(String name, Object op) {
         intern(name).fn.add(findSAM(op));
+    }
+
+    static Symbol defun(Method m) {
+       try {
+            Symbol name = intern(unscramble(m.getName()));
+            name.fn.add(lookup.unreflect(m));
+           return name;
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     static MethodHandle findSAM(Object lambda) {
@@ -194,7 +198,8 @@ public class Shen {
     }
 
     public static MethodHandle freeze(Object x) {
-        return lambda(intern("_"), x);
+        MethodHandle constant = constant(x.getClass(), x);
+        return dropArguments(constant, 0, Object.class);
     }
 
     public static Class type(Object x) {
@@ -228,16 +233,16 @@ public class Shen {
         return x instanceof String;
     }
 
-    public static String n_GT_string(int n) {
+    public static String n_GTstring(int n) {
         if (n < 0) throw new IllegalArgumentException();
         return Character.toString((char) n);
     }
 
-    public static String byte_GT_string(byte n) {
-        return n_GT_string(n);
+    public static String byte_GTstring(byte n) {
+        return n_GTstring(n);
     }
 
-    public static int string_GT_n(String s) {
+    public static int string_GTn(String s) {
         return (int) s.charAt(0);
     }
 
@@ -300,12 +305,6 @@ public class Shen {
         public String toString() {
             return symbol;
         }
-
-        public Object resolve() {
-            if (!locals.isEmpty() && locals.peek().containsKey(this))
-                return locals.peek().get(this);
-            return this;
-        }
     }
 
     public static Symbol intern(String string) {
@@ -352,168 +351,6 @@ public class Shen {
         } catch (Throwable t) {
             throw new IllegalArgumentException(kl.toString(), t);
         }
-//        return eval_kl(kl, true);
-    }
-
-    static Object eval_kl(Object kl, boolean tail) {
-        if (debug) err.println(kl);
-        if (literals.stream().anyMatch((c -> c.isInstance(kl)))) return kl;
-        if (kl instanceof Symbol) return ((Symbol) kl).resolve();
-        if (kl instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<Object> list = (List) kl;
-            if (list.isEmpty()) return list;
-            Object hd = eval_kl(hd(list), tail);
-            //noinspection SuspiciousMethodCalls,Convert2Lambda
-            List<Object> args = macros.contains(hd)
-                    ? tl(list)
-                    : tl(list).stream().map(new Function<Object, Object>() {
-                public Object apply(Object o) {
-                    return eval_kl(o, false);
-                }
-            }).into(new ArrayList<Object>());
-
-            if (intern("this").resolve().equals(hd)) if (tail) {
-                if (debug) err.println("Recur: " + hd + " " + args);
-                return new Recur(args.toArray());
-            } else if (debug) err.println("Can only recur from tail position: " + hd);
-
-            try {
-                if (isLambda(hd)) return uncurry(hd, args.toArray());
-
-                final MethodType targetType = targetType(args);
-
-                if (hd instanceof MethodHandle) return apply((MethodHandle) hd, targetType, args);
-
-                Symbol symbol = (Symbol) hd;
-
-                MethodHandle exact = some(symbol.fn.stream(), isEqual(targetType));
-                if (exact != null) return apply(exact, targetType, args);
-
-                MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, targetType, Class::isAssignableFrom));
-                if (match != null) return apply(match, targetType, args);
-
-                err.println(hd + " " + targetType + " " + args);
-                err.println("Did not find matching fn in: " + symbol.fn);
-            } catch (RuntimeException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw new IllegalArgumentException(kl.toString(), t);
-            }
-        }
-        throw new IllegalArgumentException("Cannot eval: " + kl + " (" + kl.getClass() + ")");
-    }
-
-    static MethodType targetType(List<Object> args) {
-        return methodType(Object.class, args.stream().map(Object::getClass).into(new ArrayList<Class<?>>()));
-    }
-
-    static Object uncurry(Object chain, Object... args) throws Throwable {
-        for (Object arg : args)
-            chain = ((MethodHandle) chain).invoke(arg);
-        return chain;
-    }
-
-    static boolean isLambda(Object hd) {
-        if (!(hd instanceof MethodHandle)) return false;
-        MethodHandle fn = (MethodHandle) hd;
-        return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
-    }
-
-    static boolean hasMatchingSignature(MethodHandle h, MethodType args, BiPredicate<Class, Class> match) {
-        int last = h.type().parameterCount() - 1;
-        if (h.isVarargsCollector() && args.parameterCount() - last > 0)
-            h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
-        if (args.parameterCount() > h.type().parameterCount()) return false;
-
-        Class<?>[] classes = h.type().parameterArray();
-        for (int i = 0; i < args.parameterCount(); i++)
-            if (!match.test(classes[i], args.parameterType(i))) return false;
-        return true;
-    }
-
-    static Object apply(MethodHandle fn, List<Object> args) throws Throwable {
-        return apply(fn, targetType(args), args);
-    }
-
-    static Object apply(MethodHandle fn, MethodType targetType, List args) throws Throwable {
-        int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
-        if (nonVarargs > targetType.parameterCount()) {
-            MethodHandle partial = insertArguments(fn.asType(fn.type()
-                    .dropParameterTypes(0, targetType.parameterCount())
-                    .insertParameterTypes(0, targetType.parameterArray())), 0, args.toArray());
-            return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
-        }
-        return insertArguments(fn.asType(targetType), 0, args.toArray()).invokeExact();
-    }
-
-
-    @Macro
-    public static Object trap_error(Object x, Object f) throws Throwable {
-        try {
-            return eval_kl(x);
-        } catch (Exception e) {
-            return ((MethodHandle) eval_kl(f)).invoke(e);
-        }
-    }
-
-    @Macro
-    public static Object quote(Object x) {
-        return x;
-    }
-
-    @Macro
-    public static Object kl_if(Object test, Object then, Object _else) throws Exception {
-        return isTrue(eval_kl(test)) ? eval_kl(then) : eval_kl(_else);
-    }
-
-    @Macro
-    public static Object cond(List... clauses) throws Exception {
-        if (clauses.length == 0) simple_error("condition failure");
-        return isTrue(eval_kl(hd(clauses).get(0)))
-                ? eval_kl(hd(clauses).get(1))
-                : cond(tl(clauses));
-    }
-
-    @Macro
-    public static boolean or(Object x, Object y, Object... clauses) throws Exception {
-        return isTrue(eval_kl(x)) || (clauses.length > 0
-                ? or(y, hd(clauses), tl(clauses))
-                : isTrue(eval_kl(y)));
-    }
-
-    @Macro
-    public static boolean and(Object x, Object y, Object... clauses) throws Exception {
-        return isTrue(eval_kl(x)) && (clauses.length > 0
-                ? and(y, hd(clauses), tl(clauses))
-                : isTrue(eval_kl(y)));
-    }
-
-    @Macro
-    public static MethodHandle lambda(Symbol x, Object y) {
-        Map<Symbol, Object> scope = new HashMap<>();
-        if (!locals.isEmpty()) scope.putAll(locals.peek());
-        Function lambda = (arg) -> {
-            locals.push(new HashMap<>(scope)).put(x, arg);
-            try {
-                return eval_kl(y);
-            } finally {
-                locals.pop();
-            }
-        };
-        return findSAM(lambda);
-    }
-
-    @Macro
-    public static Object let(Symbol x, Object y, Object z) throws Throwable {
-        return lambda(x, z).invoke(eval_kl(y));
-    }
-
-    @Macro
-    public static Symbol defun(Symbol name, final List<Symbol> args, Object body) {
-        name.fn.clear();
-        name.fn.add(fn(name, args, body));
-        return name;
     }
 
     static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
@@ -528,44 +365,6 @@ public class Shen {
     static boolean isTrue(Object test) {
         return ((Boolean) test);
     }
-    public interface Fn {
-        Object call(Object... args) throws Throwable;
-
-    }
-
-    static MethodHandle fn(Symbol name, List<Symbol> args, Object body) {
-        if (args.isEmpty()) return findSAM((Supplier) () -> fnBody(name, args, body));
-        if (args.size() == 1) return findSAM((Function) x -> fnBody(name, args, body, x));
-        if (args.size() == 2) return findSAM((BiFunction) (x, y) -> fnBody(name, args, body, x, y));
-        return findSAM((Fn) xs -> fnBody(name, args, body, xs)).asCollector(Object[].class, args.size());
-    }
-
-    static Symbol defun(Method m) {
-        try {
-            Symbol name = intern(unscramble(m.getName()));
-            if (m.isAnnotationPresent(Macro.class)) macros.add(name);
-            name.fn.add(lookup.unreflect(m));
-            return name;
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    static Object fnBody(Symbol name, List<Symbol> args, Object body, Object... values) {
-        locals.push(new HashMap<>()).put(intern("this"), name);
-        try {
-            while (true) {
-                for (int i = 0; i < args.size(); i++)
-                    locals.peek().put(args.get(i), values[i]);
-                Object result = eval_kl(body);
-                if (result instanceof Recur)
-                    values = ((Recur) result).args;
-                else return result;
-            }
-        } finally {
-            locals.pop();
-        }
-    }
 
     static String unscramble(String s) {
         return s.replaceAll("_", "-").replaceAll("P$", "?")
@@ -574,7 +373,7 @@ public class Shen {
     }
 
     static String scramble(String s) {
-        return s.replaceAll(">", "GT")
+        return s.replaceAll("-", "_").replaceAll(">", "GT")
                 .replaceAll("<", "LT").replaceAll("/", "SLASH");
     }
 
@@ -638,7 +437,6 @@ public class Shen {
 
     public static void main(String[] args) throws Throwable {
 //        install();
-        out.println(let(intern("x"), 2, eval_kl(intern("x"))));
         out.println(eval_kl(intern("x")));
         out.println(readEval("(or false)"));
         out.println(readEval("(or false false)"));
@@ -648,20 +446,15 @@ public class Shen {
         out.println(readEval("((and true) true true)"));
         out.println(readEval("()"));
         out.println(readEval("(cons 2 3)"));
-/*
-        out.println(readEval("(cons? (cons 2 '(3)))"));
-        out.println(readEval("(cons 2 '(3))"));
-*/
+
         out.println(readEval("(absvector? (absvector 10))"));
         out.println(readEval("(absvector 10)"));
         out.println(readEval("(absvector? ())"));
-//        out.println(readEval("'(1 2 3)"));
         out.println(readEval("(+ 1 2)"));
         out.println(readEval("((+ 6.5) 2.0)"));
         out.println(readEval("(+ 1.0 2.0)"));
         out.println(readEval("(* 5 2)"));
         out.println(readEval("(* 5)"));
-//        out.println(readEval("(tl '(1 2 3))"));
         out.println(readEval("(let x 42 x)"));
         out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
         out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
@@ -679,9 +472,6 @@ public class Shen {
         out.println(readEval("(factorial 12)"));
         out.println(readEval("((factorial 19) 1)"));
 
-//        out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
-//        out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
-//        out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
         out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
         out.println(str(eval_kl(asList(intern("my-fun"), 3))));
