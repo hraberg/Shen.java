@@ -330,18 +330,19 @@ public class ShenCompiler implements Opcodes {
 
         @Macro
         public void lambda(Symbol x, Object y) throws Throwable {
+            fn("lambda$" + id++, y, x);
+        }
+
+        void fn(String name, Object shen, Symbol... args) throws Throwable {
             List<Symbol> scope = locals.keySet().stream().into(new ArrayList<>(this.args));
-            scope.add(x);
+            scope.addAll(asList(args));
 
-            ShenCode lambda = new ShenCode(cn, y, scope.toArray(new Symbol[scope.size()]));
+            ShenCode fn = new ShenCode(cn, shen, scope.toArray(new Symbol[scope.size()]));
 
-            String name = "lambda$" + id++;
             Class[] argumentTypes = fillArray(Object.class, scope.size());
-            lambda.compileMethod(ACC_PUBLIC | ACC_STATIC, name, Object.class, argumentTypes);
+            fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, Object.class, argumentTypes);
 
-            insertArgs(new Handle(H_INVOKESTATIC, cn.name, name, desc(Object.class, argumentTypes)), 0, scope.subList(0, scope.size() - 1));
-
-            topOfStack(MethodHandle.class);
+            insertArgs(new Handle(H_INVOKESTATIC, cn.name, name, desc(Object.class, argumentTypes)), 0, scope.subList(0, scope.size() - args.length));
         }
 
         @Macro
@@ -379,6 +380,7 @@ public class ShenCompiler implements Opcodes {
 
         void bindTo() {
             mv.invokeStatic(getType(ShenCode.class), new Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
+            topOfStack(MethodHandle.class);
         }
 
         void insertArgs(Handle handle, int pos, List<?> args) {
@@ -390,6 +392,7 @@ public class ShenCompiler implements Opcodes {
 
         void insertArgs() {
             mv.invokeStatic(getType(MethodHandles.class), new Method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
+            topOfStack(MethodHandle.class);
         }
 
         // RT
