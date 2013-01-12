@@ -6,14 +6,10 @@ import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.lang.invoke.CallSite;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodType;
-import java.lang.invoke.MutableCallSite;
-import java.lang.reflect.Constructor;
+import java.lang.invoke.*;
+import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.function.Function;
 
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.Lookup;
@@ -70,7 +66,6 @@ public class ShenCompiler implements Opcodes {
         static int id = 1;
 
         Object shen;
-        List<Symbol> scope;
         List<Symbol> args;
         Map<Symbol, Integer> locals;
         GeneratorAdapter mv;
@@ -78,15 +73,15 @@ public class ShenCompiler implements Opcodes {
         ClassNode cn;
         Label recur;
 
-        public ShenCode(Object shen, List<Symbol> scope, Symbol... args) throws Throwable {
-            this.shen = shen;
-            this.scope = scope;
-            this.args = list(args);
-            this.locals = new HashMap<>();
+        public ShenCode(Object shen, Symbol... args) throws Throwable {
+            this(null, shen, args);
         }
 
-        public ShenCode(Object shen, Symbol... args) throws Throwable {
-            this(shen, new ArrayList<>(), args);
+        public ShenCode(ClassNode cn, Object shen, Symbol... args) throws Throwable {
+            this.cn = cn;
+            this.shen = shen;
+            this.args = list(args);
+            this.locals = new HashMap<>();
         }
 
         ClassNode classNode(Class<?> anInterface) {
@@ -153,10 +148,6 @@ public class ShenCompiler implements Opcodes {
             } else if (args.contains(s)) {
                 mv.loadArg(args.indexOf(s));
                 topOfStack(Object.class);
-            } else if (scope.contains(s)) {
-                mv.loadThis();
-                mv.getField(getObjectType(cn.name), s.symbol, getType(Object.class));
-                topOfStack(Object.class);
             } else
                 push(s);
         }
@@ -176,6 +167,13 @@ public class ShenCompiler implements Opcodes {
         void apply(List<Object> args) {
             mv.checkCast(getType(MethodHandle.class));
 
+            loadArgArray(args);
+
+            mv.invokeStatic(getType(ShenCode.class), new Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
+            topOfStack = getType(Object.class);
+        }
+
+        void loadArgArray(List<?> args) {
             mv.push(args.size());
             mv.newArray(getType(Object.class));
 
@@ -186,9 +184,7 @@ public class ShenCompiler implements Opcodes {
                 box();
                 mv.arrayStore(getType(Object.class));
             }
-
-            mv.invokeStatic(getType(ShenCode.class), new Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
-            topOfStack = getType(Object.class);
+            topOfStack = getType(Object[].class);
         }
 
         MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
@@ -223,17 +219,19 @@ public class ShenCompiler implements Opcodes {
         public <T> Class<T> load(Class<T> anInterface) throws Exception {
             cn = classNode(anInterface);
             constructor();
-
             java.lang.reflect.Method sam = findSAM(anInterface);
-            mv = generator(cn.visitMethod(ACC_PUBLIC, sam.getName(), getMethodDescriptor(sam), null, null));
+            compileMethod(ACC_PUBLIC, sam.getName(), sam.getReturnType(), sam.getParameterTypes());
+            //noinspection unchecked
+            return (Class<T>) loader.define(cn);
+        }
+
+        void compileMethod(int modifier, String name, Class<?> returnType, Class<?>... argumentTypes) {
+            mv = generator(cn.visitMethod(modifier, name, desc(returnType, argumentTypes), null, null));
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(shen);
-            if (!sam.getReturnType().isPrimitive()) box();
+            if (!returnType.isPrimitive()) box();
             mv.returnValue();
-
-            //noinspection unchecked
-            return (Class<T>) loader.define(cn);
         }
 
         void box() {
@@ -253,16 +251,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         void constructor() {
-            Class[] args = fillArray(Object.class, this.scope.size());
-            GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class, args), null, null));
-
-            for (int i = 0; i < scope.size(); i++) {
-                cn.visitField(ACC_PUBLIC | ACC_FINAL, scope.get(i).symbol, getDescriptor(Object.class), null, null);
-                ctor.loadThis();
-                ctor.loadArg(i);
-                ctor.putField(getObjectType(cn.name), scope.get(i).symbol, getType(Object.class));
-            }
-
+            GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class), null, null));
             ctor.loadThis();
             ctor.invokeConstructor(getType(Object.class), new Method("<init>", desc(void.class)));
             ctor.returnValue();
@@ -341,18 +330,17 @@ public class ShenCompiler implements Opcodes {
 
         @Macro
         public void lambda(Symbol x, Object y) throws Throwable {
-            List<Symbol> scope = locals.keySet().stream().into(args.stream().into(new ArrayList<>(this.scope)));
-            Class<Function> lambda = new ShenCode(y, scope, x).load(Function.class);
+            List<Symbol> scope = locals.keySet().stream().into(new ArrayList<>(this.args));
+            scope.add(x);
 
-            mv.push(samMH(Function.class));
+            ShenCode lambda = new ShenCode(cn, y, scope.toArray(new Symbol[scope.size()]));
 
-            Constructor<Function> ctor = lambda.getConstructor(fillArray(Object.class, scope.size()));
-            mv.newInstance(getType(ctor.getDeclaringClass()));
-            mv.dup();
-            scope.forEach(this::compile);
-            mv.invokeConstructor(getType(lambda), new Method("<init>", getConstructorDescriptor(ctor)));
+            String name = "lambda$" + id++;
+            Class[] argumentTypes = fillArray(Object.class, scope.size());
+            lambda.compileMethod(ACC_PUBLIC | ACC_STATIC, name, Object.class, argumentTypes);
 
-            bindTo();
+            insertArgs(new Handle(H_INVOKESTATIC, cn.name, name, desc(Object.class, argumentTypes)), 0, scope.subList(0, scope.size() - 1));
+
             topOfStack(MethodHandle.class);
         }
 
@@ -391,6 +379,17 @@ public class ShenCompiler implements Opcodes {
 
         void bindTo() {
             mv.invokeStatic(getType(ShenCode.class), new Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
+        }
+
+        void insertArgs(Handle handle, int pos, List<?> args) {
+            mv.push(handle);
+            mv.push(pos);
+            loadArgArray(args);
+            insertArgs();
+        }
+
+        void insertArgs() {
+            mv.invokeStatic(getType(MethodHandles.class), new Method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
         }
 
         // RT
