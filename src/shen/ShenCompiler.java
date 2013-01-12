@@ -45,7 +45,7 @@ public class ShenCompiler implements Opcodes {
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
         System.out.println("BOOTSTRAP: " + name + type);
         Symbol symbol = intern(name);
-        System.out.println(symbol.fn);
+        System.out.println("candidates: " + symbol.fn);
         MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, type, Class::isAssignableFrom));
         if (match == null) {
             match = some(symbol.fn.stream(), f -> {
@@ -57,8 +57,25 @@ public class ShenCompiler implements Opcodes {
                 }
             });
         }
-        System.out.println(match);
+        if (match.type().parameterCount() > type.parameterCount()) {
+            try {
+                System.out.println("Partial " + type.parameterCount() + " out of " + match.type().parameterCount());
+                match = insertArguments(insertArguments, 0, match, 0).asCollector(Object[].class, type.parameterCount());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        System.out.println("selected: " + match);
         return new MutableCallSite(explicitCastArguments(match, type));
+    }
+
+    static MethodHandle insertArguments;
+    static {
+        try {
+            insertArguments = lookup.findStatic(MethodHandles.class, "insertArguments", methodType(MethodHandle.class, new Class[]{MethodHandle.class, int.class, Object[].class}));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     static Handle bootstrap = staticMH(getInternalName(ShenCompiler.class), "bootstrap",
@@ -462,6 +479,10 @@ public class ShenCompiler implements Opcodes {
         out.println(eval("(+ 1.2 1)"));
         out.println(eval("(+ 1 1.3)"));
         out.println(eval("(cons x y)"));
+        out.println(eval("(cons x)"));
+        out.println(eval("((cons x) z)"));
+        out.println(eval("(cons x y)"));
         out.println(eval("(hd (cons x y))"));
+        out.println(eval("(absvector? (absvector 10))"));
     }
 }
