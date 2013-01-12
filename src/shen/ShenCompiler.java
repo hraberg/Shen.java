@@ -60,16 +60,19 @@ public class ShenCompiler implements Opcodes {
                 }
             });
         }
+        if (match == null) match = symbol.fn.stream().findAny().get();
         if (match.type().parameterCount() > type.parameterCount()) {
             try {
-                System.out.println("Partial " + type.parameterCount() + " out of " + match.type().parameterCount());
+                System.out.println("partial: " + type.parameterCount() + " out of " + match.type().parameterCount());
                 match = insertArguments(insertArguments, 0, match, 0).asCollector(Object[].class, type.parameterCount());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
-        System.out.println("selected: " + match);
-        return new MutableCallSite(explicitCastArguments(match, type));
+        MethodHandle adapted = match.asType(type);
+        System.out.println("selected: " + adapted);
+        return new MutableCallSite(adapted);
+//        return new MutableCallSite(explicitCastArguments(match, type));
     }
 
     static MethodHandle insertArguments;
@@ -290,12 +293,14 @@ public class ShenCompiler implements Opcodes {
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(shen);
-            if (isPrimitive(returnType)) box();
+            if (!isPrimitive(returnType)) box();
             mv.returnValue();
         }
 
-        boolean isPrimitive(Type returnType) {
-            return returnType.getOpcode(IALOAD) != ALOAD;
+        boolean isPrimitive(Type type) {
+//            return type.getOpcode(IALOAD) != ALOAD;
+
+            return type.getSort() != OBJECT;
         }
 
         void box() {
@@ -350,26 +355,26 @@ public class ShenCompiler implements Opcodes {
             Label end = mv.newLabel();
 
             compile(test);
-            if (!topOfStack.equals(getType(boolean.class)))
-                mv.unbox(getType(Boolean.class));
+            if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
             mv.visitJumpInsn(IFEQ, elseStart);
 
             compile(then);
+            box();
             mv.goTo(end);
 
             mv.visitLabel(elseStart);
             compile(_else);
+            box();
 
             mv.visitLabel(end);
         }
 
         @Macro
         public void cond(List... clauses) throws Exception {
-            if (clauses.length == 0) {
+            if (clauses.length == 0)
                 mv.throwException(getType(IllegalArgumentException.class), "condition failure");
-            } else {
+            else
                 kl_if(hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
-            }
         }
 
         @Macro
@@ -458,7 +463,18 @@ public class ShenCompiler implements Opcodes {
 
         // RT
         public static Object apply(MethodHandle fn, Object...  args) throws Throwable {
-            return Shen.apply(fn, asList(args));
+            if (isLambda(fn)) return uncurry(fn, args);
+
+            MethodType targetType = methodType(Object.class, stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
+
+            int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
+            if (nonVarargs > args.length) {
+                MethodHandle partial = insertArguments(fn.asType(fn.type()
+                        .dropParameterTypes(0, targetType.parameterCount())
+                        .insertParameterTypes(0, targetType.parameterArray())), 0, args);
+                return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
+            }
+            return insertArguments(fn.asType(targetType), 0, args).invokeExact();
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
@@ -530,6 +546,8 @@ public class ShenCompiler implements Opcodes {
         out.println(eval("(set x z)"));
         out.println(eval("(value x)"));
         out.println(eval("()"));
+        out.println(eval("(cond (true ()) (false 2))"));
+        out.println(eval("(if (<= 3 3) x y)"));
         out.println(eval("(eval-kl (cons + (cons 1 (cons 2 ()))))"));
     }
 }

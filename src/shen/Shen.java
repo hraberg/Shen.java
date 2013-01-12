@@ -69,6 +69,7 @@ public class Shen {
         op("-", (DoubleBinaryOperator) (left, right) -> left - right);
         op("*", (DoubleBinaryOperator) (left, right) -> left * right);
         op("/", (DoubleBinaryOperator) (left, right) -> left / right);
+
         op("<", (BiPredicate<Integer, Integer>) (left, right) -> left < right);
         op("<=", (BiPredicate<Integer, Integer>) (left, right) -> left <= right);
         op(">", (BiPredicate<Integer, Integer>) (left, right) -> left > right);
@@ -138,11 +139,11 @@ public class Shen {
         return y;
     }
 
-    public static boolean cons_p(Object x) {
+    public static boolean consP(Object x) {
         return x instanceof Cons || x instanceof List && !((List) x).isEmpty();
     }
 
-    public static Object fail_ex() {
+    public static Object failEX() {
         throw new AssertionError();
     }
 
@@ -179,7 +180,7 @@ public class Shen {
     }
 
     public static String str(Object x) {
-        if (cons_p(x)) throw new IllegalArgumentException();
+        if (consP(x)) throw new IllegalArgumentException();
         if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
         return String.valueOf(x);
     }
@@ -206,37 +207,37 @@ public class Shen {
         return objects;
     }
 
-    public static boolean absvector_p(Object x) {
+    public static boolean absvectorP(Object x) {
         return x != null && x.getClass() == Object[].class;
     }
 
-    public static Object lt_address(Object[] vector, int n) {
+    public static Object LT_address(Object[] vector, int n) {
         return vector[n];
     }
 
-    public static Object[] address_gt(Object[] vector, int n, Object value) {
+    public static Object[] address_GT(Object[] vector, int n, Object value) {
         vector[n] = value;
         return vector;
     }
 
-    public static boolean number_p(Object x) {
+    public static boolean numberP(Object x) {
         return x instanceof Number;
     }
 
-    public static boolean string_p(Object x) {
+    public static boolean stringP(Object x) {
         return x instanceof String;
     }
 
-    public static String n_gt_string(int n) {
+    public static String n_GT_string(int n) {
         if (n < 0) throw new IllegalArgumentException();
         return Character.toString((char) n);
     }
 
-    public static String byte_gt_string(byte n) {
-        return n_gt_string(n);
+    public static String byte_GT_string(byte n) {
+        return n_GT_string(n);
     }
 
-    public static int string_gt_n(String s) {
+    public static int string_GT_n(String s) {
         return (int) s.charAt(0);
     }
 
@@ -378,7 +379,7 @@ public class Shen {
             } else if (debug) err.println("Can only recur from tail position: " + hd);
 
             try {
-                if (isLambda(hd)) return uncurry(hd, args);
+                if (isLambda(hd)) return uncurry(hd, args.toArray());
 
                 final MethodType targetType = targetType(args);
 
@@ -404,13 +405,10 @@ public class Shen {
     }
 
     static MethodType targetType(List<Object> args) {
-        //noinspection SuspiciousToArrayCall
-        return methodType(Object.class, args.stream().map(Object::getClass)
-                    .into(new ArrayList<>())
-                    .toArray(new Class[args.size()]));
+        return methodType(Object.class, args.stream().map(Object::getClass).into(new ArrayList<Class<?>>()));
     }
 
-    static Object uncurry(Object chain, List<Object> args) throws Throwable {
+    static Object uncurry(Object chain, Object... args) throws Throwable {
         for (Object arg : args)
             chain = ((MethodHandle) chain).invoke(arg);
         return chain;
@@ -570,13 +568,14 @@ public class Shen {
     }
 
     static String unscramble(String s) {
-        return s.replaceAll("_", "-").replaceAll("-p$", "?")
-                .replaceAll("-ex$", "!").replaceAll("-?gt-?", "->")
-                .replaceAll("-?lt-?", "<-").replaceAll("-slash-", "/").replaceAll("^kl-", "");
+        return s.replaceAll("_", "-").replaceAll("P$", "?")
+                .replaceAll("EX$", "!").replaceAll("GT", ">")
+                .replaceAll("LT", "<").replaceAll("SLASH", "/").replaceAll("^kl-", "");
     }
 
     static String scramble(String s) {
-        return s.replaceAll("/", "-slash-");
+        return s.replaceAll(">", "GT")
+                .replaceAll("<", "LT").replaceAll("/", "SLASH");
     }
 
     static Object load(String file) {
@@ -649,18 +648,20 @@ public class Shen {
         out.println(readEval("((and true) true true)"));
         out.println(readEval("()"));
         out.println(readEval("(cons 2 3)"));
+/*
         out.println(readEval("(cons? (cons 2 '(3)))"));
         out.println(readEval("(cons 2 '(3))"));
+*/
         out.println(readEval("(absvector? (absvector 10))"));
         out.println(readEval("(absvector 10)"));
         out.println(readEval("(absvector? ())"));
-        out.println(readEval("'(1 2 3)"));
+//        out.println(readEval("'(1 2 3)"));
         out.println(readEval("(+ 1 2)"));
         out.println(readEval("((+ 6.5) 2.0)"));
         out.println(readEval("(+ 1.0 2.0)"));
         out.println(readEval("(* 5 2)"));
         out.println(readEval("(* 5)"));
-        out.println(readEval("(tl '(1 2 3))"));
+//        out.println(readEval("(tl '(1 2 3))"));
         out.println(readEval("(let x 42 x)"));
         out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
         out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
@@ -676,11 +677,11 @@ public class Shen {
         out.println(readEval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
         out.println(readEval("(factorial 10 1)"));
         out.println(readEval("(factorial 12)"));
-        out.println(readEval("((factorial 12) 1)"));
+        out.println(readEval("((factorial 19) 1)"));
 
-        out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
-        out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
-        out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
+//        out.println(eval_kl(asList(intern("quote"), asList(1, 2, 3))));
+//        out.println(eval_kl(asList(intern("hd"), asList(intern("quote"), asList(1, 2, 3)))));
+//        out.println(eval_kl(asList(intern("let"), intern("x"), 2, asList(intern("tl"), asList(intern("quote"), asList(1, 2, intern("x")))))));
         out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
         out.println(str(eval_kl(asList(intern("my-fun"), 3))));
