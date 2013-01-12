@@ -53,9 +53,8 @@ public class ShenCompiler implements Opcodes {
 
     public static class ShenCode {
         static Map<Symbol, MethodHandle> macros = new HashMap<>();
-        static List<Class> literals =
-                asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class)
-                        .stream().into(new ArrayList<Class>());
+        static List<Class<?>> literals =
+                asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
 
         static {
             stream(ShenCode.class.getDeclaredMethods())
