@@ -33,7 +33,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 * The K Lambda parser.
 * Partial application.
-* Compilation of small KL snippets, `defun` is missing.
+* Compilation of small KL snippets, `defun` is missing. `eval-kl` still uses the interpreter, so it doesn't work.
 * Most primitives were working with the interpreter - I use [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/ShenTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/). They'll be reused by the compiler.
 
 
@@ -42,6 +42,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 This is bound to change as we go:
 
 * Full KL compilation.
+* Remove the interpreter and all fluff.
 * Ability to load the `kl`.
 * The REPL
 * The Shen test suite.
