@@ -8,9 +8,7 @@ import org.objectweb.asm.tree.MethodNode;
 
 import java.lang.invoke.*;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 
 import static java.lang.System.out;
@@ -39,7 +37,11 @@ public class ShenCompiler implements Opcodes {
     static ShenLoader loader = new ShenLoader();
 
     public static Object eval(String shen) throws Throwable {
-        return new ShenCode(read(shen).get(0)).load(Callable.class).newInstance().call();
+        return eval(read(shen).get(0));
+    }
+
+    public static Object eval(Object code) throws Throwable {
+        return new ShenCode(code).load(Callable.class).newInstance().call();
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
@@ -160,16 +162,19 @@ public class ShenCompiler implements Opcodes {
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
                     List<Object> list = (List) kl;
+                    if (list.isEmpty())
+                        emptyList();
+                    else {
+                        Object first = list.get(0);
+                        if (first instanceof Symbol) {
+                            Symbol s = (Symbol) first;
+                            if (macros.containsKey(s)) macroExpand(s, tl(list));
+                            else indy(s, tl(list));
 
-                    Object first = list.get(0);
-                    if (first instanceof Symbol) {
-                        Symbol s = (Symbol) first;
-                        if (macros.containsKey(s)) macroExpand(s, tl(list));
-                        else indy(s, tl(list));
-
-                    } else {
-                        compile(first);
-                        apply(tl(list));
+                        } else {
+                            compile(first);
+                            apply(tl(list));
+                        }
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
@@ -179,6 +184,11 @@ public class ShenCompiler implements Opcodes {
                 throw new RuntimeException(t);
             }
             return topOfStack;
+        }
+
+        void emptyList() {
+            mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
+            topOfStack(List.class);
         }
 
         void symbol(Symbol s) {
@@ -200,7 +210,9 @@ public class ShenCompiler implements Opcodes {
         void indy(Symbol s, List<Object> args) {
             List<Type> argumentTypes = args.stream().map(this::compile).into(new ArrayList<Type>());
 
-            MethodType type = asMethodType(getType(Object.class), argumentTypes);
+            MethodType type = asMethodType(s.fn.size() == 1
+                    ? getType(s.fn.stream().findAny().get().type().returnType())
+                    : getType(Object.class), argumentTypes);
             mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), bootstrap);
             topOfStack(type.returnType());
         }
@@ -370,6 +382,14 @@ public class ShenCompiler implements Opcodes {
             fn("lambda$" + id++, y, x);
         }
 
+        @Macro
+        public void defun(Symbol name, final List<Symbol> args, Object body) throws Throwable {
+            push(name);
+            fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
+            mv.invokeStatic(getType(ShenCode.class), new Method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
+            topOfStack(Symbol.class);
+        }
+
         void fn(String name, Object shen, Symbol... args) throws Throwable {
             List<Symbol> scope = locals.keySet().stream().into(new ArrayList<>(this.args));
             scope.addAll(asList(args));
@@ -428,6 +448,12 @@ public class ShenCompiler implements Opcodes {
             return Shen.apply(fn, asList(args));
         }
 
+        public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
+            name.fn.clear();
+            name.fn.add(fn);
+            return name;
+        }
+
         public static MethodHandle bindTo(MethodHandle fn, Object arg) {
             return fn.isVarargsCollector() ?
                     insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
@@ -480,8 +506,17 @@ public class ShenCompiler implements Opcodes {
         out.println(eval("(cons x)"));
         out.println(eval("((cons x) z)"));
         out.println(eval("(cons x y)"));
-        out.println(eval("(hd (cons x y))"));
+        // TODO: For this to really work the runtime type needs to be checked, either in an Object fn or at callsite.
+//        out.println(eval("(hd (cons x y))"));
         out.println(eval("(absvector? (absvector 10))"));
         out.println(eval("(trap-error (/ 1 0) (lambda x x))"));
+        out.println(eval("(defun fun (x y) (+ x y))"));
+        out.println(eval("(fun 1 2)"));
+        out.println(eval("(set x y)"));
+        out.println(eval("(value x)"));
+        out.println(eval("(set x z)"));
+        out.println(eval("(value x)"));
+        out.println(eval("()"));
+        out.println(eval("(eval-kl (cons + (cons 1 (cons 2 ()))))"));
     }
 }

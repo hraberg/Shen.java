@@ -132,6 +132,8 @@ public class Shen {
     }
 
     static List<Object> cons(Object x, List<Object> y) {
+        if (y == Collections.EMPTY_LIST)
+            y = new ArrayList<>();
         y.add(0, x);
         return y;
     }
@@ -344,7 +346,12 @@ public class Shen {
     }
 
     public static Object eval_kl(Object kl) {
-        return eval_kl(kl, true);
+        try {
+            return ShenCompiler.eval(kl);
+        } catch (Throwable t) {
+            throw new IllegalArgumentException(kl.toString(), t);
+        }
+//        return eval_kl(kl, true);
     }
 
     static Object eval_kl(Object kl, boolean tail) {
