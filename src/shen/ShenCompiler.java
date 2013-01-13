@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodType.*;
+import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
@@ -57,7 +58,11 @@ public class ShenCompiler implements Opcodes {
 
         MethodHandle match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
         debug("selected: " + match);
-        site.setTarget(match.asType(type));
+
+        SwitchPoint switchPoint = new SwitchPoint();
+        symbol.usages.add(switchPoint);
+        match = switchPoint.guardWithTest(match.asType(type), site.getTarget());
+        site.setTarget(match);
         return match.invokeWithArguments(args);
     }
 
@@ -158,6 +163,8 @@ public class ShenCompiler implements Opcodes {
     public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
         name.fn.clear();
         name.fn.add(fn);
+        invalidateAll(name.usages.toArray(new SwitchPoint[name.usages.size()]));
+        name.usages.clear();
         return name;
     }
 

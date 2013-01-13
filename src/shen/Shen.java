@@ -2,6 +2,7 @@ package shen;
 
 import java.io.*;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.SwitchPoint;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
@@ -274,6 +275,7 @@ public class Shen {
     public static class Symbol {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
+        public List<SwitchPoint> usages = new ArrayList<>();
         public Object var;
 
         public Symbol(String symbol) {

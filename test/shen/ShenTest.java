@@ -310,8 +310,7 @@ public class ShenTest {
         is(3, "(fun2)");
         is(intern("fun"), "(defun fun (x y) (- x y))");
         is(-1, "(fun 1 2)");
-        // TODO: Need to figure out how use SwitchPoint to invalidate this callsite.
-        // is(-1, "(fun2)");
+        is(-1, "(fun2)");
     }
 
     void is(Object expected, String actual) {
