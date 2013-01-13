@@ -275,6 +275,18 @@ public class ShenTest {
 //        is(true, "(---5 5.0)");
     }
 
+    @Test
+    public void partials() {
+        is(MethodHandle.class, "(cons 1)");
+        is(asList(1), "((cons 1) ())");
+        is(asList(1, 2), "((cons 1) 2)");
+    }
+
+    @Test
+    public void uncurry() {
+        is(asList(1, 2), "((lambda x (lambda y (cons x (cons y ())))) 1 2)");
+    }
+
     void is(Object expected, String actual) {
         if (expected instanceof Class)
             assertThat(神(actual), instanceOf((Class<?>) expected));
