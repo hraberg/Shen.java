@@ -26,6 +26,7 @@ import static shen.Shen.*;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond"})
 public class ShenCompiler implements Opcodes {
+
     public static class ShenLoader extends ClassLoader {
         public Class<?> define(ClassNode cn) {
             ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
@@ -70,13 +71,13 @@ public class ShenCompiler implements Opcodes {
         return insertArguments(link, 0, site, name).asCollector(Object[].class, arity);
     }
 
-    public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
+    public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) {
         MutableCallSite site = new MutableCallSite(type);
         site.setTarget(linker(site, name, type.parameterCount()).asType(type));
         return site;
     }
 
-    public static CallSite symbolBootstrap(Lookup lookup, String name, MethodType type) {
+    public static CallSite symbolBSM(Lookup lookup, String name, MethodType type) {
         return new ConstantCallSite(constant(Symbol.class, intern(unscramble(name))));
     }
 
@@ -100,10 +101,9 @@ public class ShenCompiler implements Opcodes {
         }
     }
 
-    static Handle bootstrap = staticMH(getInternalName(ShenCompiler.class), "bootstrap",
-            desc(CallSite.class, Lookup.class, String.class, MethodType.class));
-    static Handle symbolBootstrap = staticMH(getInternalName(ShenCompiler.class), "symbolBootstrap",
-            desc(CallSite.class, Lookup.class, String.class, MethodType.class));
+    static String bootstrapDesc = desc(CallSite.class, Lookup.class, String.class, MethodType.class);
+    static Handle invokeBSM = staticMH(ShenCompiler.class, "invokeBSM", bootstrapDesc);
+    static Handle symbolBSM = staticMH(ShenCompiler.class, "symbolBSM", bootstrapDesc);
 
     static String desc(Class<?> returnType, Class<?>... argumentTypes ) {
         return methodType(returnType, argumentTypes).toMethodDescriptorString();
@@ -359,7 +359,7 @@ public class ShenCompiler implements Opcodes {
             MethodType type = asMethodType(s.fn.size() == 1
                     ? getType(s.fn.stream().findAny().get().type().returnType())
                     : getType(Object.class), argumentTypes);
-            mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), bootstrap);
+            mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), invokeBSM);
             topOfStack(type.returnType());
         }
 
@@ -527,7 +527,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         void push(Symbol kl) {
-            mv.invokeDynamic(scramble(kl.symbol), methodType(Symbol.class).toMethodDescriptorString(), symbolBootstrap);
+            mv.invokeDynamic(scramble(kl.symbol), methodType(Symbol.class).toMethodDescriptorString(), symbolBSM);
             topOfStack(Symbol.class);
         }
 
