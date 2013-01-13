@@ -175,8 +175,7 @@ public class Shen {
     }
 
     public static MethodHandle freeze(Object x) {
-        MethodHandle constant = constant(x.getClass(), x);
-        return dropArguments(constant, 0, Object.class);
+        return dropArguments(constant(x.getClass(), x), 0, Object.class);
     }
 
     public static Class type(Object x) {

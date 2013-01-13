@@ -36,16 +36,16 @@ public class ShenCompiler implements Opcodes {
 
     static ShenLoader loader = new ShenLoader();
 
-    public static Object fallback(MutableCallSite site, String name, Object... args) throws Throwable {
+    public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
         MethodType type = site.type();
         name = unscramble(name);
-        debug("BOOTSTRAP: " + name + type + " " + Arrays.toString(args));
+        debug("LINKING: " + name + type + " " + Arrays.toString(args));
         Symbol symbol = intern(name);
         debug("candidates: " + symbol.fn);
 
         int arity = symbol.fn.get(0).type().parameterCount();
         if (arity > args.length) {
-            MethodHandle partial = newFallback(new MutableCallSite(genericMethodType(arity)), name, arity);
+            MethodHandle partial = linker(new MutableCallSite(genericMethodType(arity)), name, arity);
             partial = insertArguments(partial, 0, args);
             debug("partial: " + partial);
             return partial;
@@ -61,13 +61,13 @@ public class ShenCompiler implements Opcodes {
         return match.invokeWithArguments(args);
     }
 
-    static MethodHandle newFallback(MutableCallSite site, String name, int arity) {
-        return insertArguments(fallback, 0, site, name).asCollector(Object[].class, arity);
+    static MethodHandle linker(MutableCallSite site, String name, int arity) {
+        return insertArguments(link, 0, site, name).asCollector(Object[].class, arity);
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
         MutableCallSite site = new MutableCallSite(type);
-        site.setTarget(newFallback(site, name, type.parameterCount()).asType(type));
+        site.setTarget(linker(site, name, type.parameterCount()).asType(type));
         return site;
     }
 
@@ -77,12 +77,12 @@ public class ShenCompiler implements Opcodes {
     }
 
     static MethodHandle insertArguments;
-    static MethodHandle fallback;
+    static MethodHandle link;
     static {
         try {
             insertArguments = lookup().findStatic(MethodHandles.class, "insertArguments",
                     methodType(MethodHandle.class, new Class[]{MethodHandle.class, int.class, Object[].class}));
-            fallback = lookup().findStatic(ShenCompiler.class, "fallback",
+            link = lookup().findStatic(ShenCompiler.class, "link",
                     methodType(Object.class, new Class[]{MutableCallSite.class, String.class, Object[].class}));
         } catch (Exception e) {
             throw new RuntimeException(e);
