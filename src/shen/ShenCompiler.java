@@ -6,24 +6,26 @@ import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.*;
-import java.util.ArrayList;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodType.fromMethodDescriptorString;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isPublic;
-import static java.util.Arrays.*;
+import static java.util.Arrays.asList;
+import static java.util.Arrays.stream;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
 import static shen.Shen.*;
-import static shen.Shen.lookup;
 
-@SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
+@SuppressWarnings({"UnusedDeclaration", "Convert2Diamond"})
 public class ShenCompiler implements Opcodes {
     public static class ShenLoader extends ClassLoader {
         public Class<?> define(ClassNode cn) {
@@ -36,19 +38,11 @@ public class ShenCompiler implements Opcodes {
 
     static ShenLoader loader = new ShenLoader();
 
-    public static Object eval(String shen) throws Throwable {
-        return eval(read(shen).get(0));
-    }
-
-    public static Object eval(Object code) throws Throwable {
-        return new ShenCode(code).load(Callable.class).newInstance().call();
-    }
-
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
         name = unscramble(name);
-        System.out.println("BOOTSTRAP: " + name + type);
+        debug("BOOTSTRAP: " + name + type);
         Symbol symbol = intern(name);
-        System.out.println("candidates: " + symbol.fn);
+        debug("candidates: " + symbol.fn);
         MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, type, Class::isAssignableFrom));
         try {
             if (match == null) {
@@ -64,7 +58,7 @@ public class ShenCompiler implements Opcodes {
             if (match == null) match = symbol.fn.stream().findAny().get();
             if (match.type().parameterCount() > type.parameterCount()) {
                 try {
-                    System.out.println("partial: " + type.parameterCount() + " out of " + match.type().parameterCount());
+                    debug("partial: " + type.parameterCount() + " out of " + match.type().parameterCount());
                     match = insertArguments(insertArguments, 0, match, 0).asCollector(Object[].class, type.parameterCount());
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -72,17 +66,23 @@ public class ShenCompiler implements Opcodes {
             }
             match = match.asType(type);
         } catch (Throwable t) {
-            System.out.println("Saving and Compiling an Exception " + t);
+            debug("BSM exception: " + t);
             match = dropArguments(throwException(type.returnType(), Throwable.class).bindTo(t), 0, type.parameterList());
         }
-        System.out.println("selected: " + match);
+        debug("selected: " + match);
         return new MutableCallSite(match);
+    }
+
+    static void debug(String msg, Object... xs) {
+        if (true == value("*debug*"))
+            System.err.println(String.format(msg, xs));
     }
 
     static MethodHandle insertArguments;
     static {
         try {
-            insertArguments = lookup.findStatic(MethodHandles.class, "insertArguments", methodType(MethodHandle.class, new Class[]{MethodHandle.class, int.class, Object[].class}));
+            insertArguments = lookup().findStatic(MethodHandles.class, "insertArguments",
+                    methodType(MethodHandle.class, new Class[]{MethodHandle.class, int.class, Object[].class}));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -118,6 +118,91 @@ public class ShenCompiler implements Opcodes {
     static Handle staticMH(String className, String name, String desc) {
         return new Handle(H_INVOKESTATIC, className, name, desc);
     }
+
+    static Object uncurry(Object chain, Object... args) throws Throwable {
+        for (Object arg : args)
+            chain = ((MethodHandle) chain).invoke(arg);
+        return chain;
+    }
+
+    static boolean isLambda(MethodHandle fn) {
+        return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
+    }
+
+    public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
+        name.fn.clear();
+        name.fn.add(fn);
+        return name;
+    }
+
+    public static Object apply(MethodHandle fn, Object...  args) throws Throwable {
+        if (isLambda(fn)) return uncurry(fn, args);
+
+        MethodType targetType = methodType(Object.class, stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
+
+        int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
+        if (nonVarargs > args.length) {
+            MethodHandle partial = insertArguments(fn.asType(fn.type()
+                    .dropParameterTypes(0, targetType.parameterCount())
+                    .insertParameterTypes(0, targetType.parameterArray())), 0, args);
+            return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
+        }
+        return insertArguments(fn.asType(targetType), 0, args).invokeExact();
+    }
+
+    public static MethodHandle bindTo(MethodHandle fn, Object arg) {
+        return fn.isVarargsCollector() ?
+                insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
+                insertArguments(fn, 0, arg);
+    }
+
+    public static boolean or(boolean x, boolean... clauses) throws Exception {
+        if (x) return true;
+        for (boolean b : clauses) if (b) return true;
+        return false;
+    }
+
+    public static boolean and(boolean x, boolean... clauses) throws Exception {
+        if (!x) return false;
+        for (boolean b : clauses) if (!b) return false;
+        return true;
+    }
+
+    static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
+        return stream.filter(predicate).findAny().orElse((T) null);
+    }
+
+    @SafeVarargs
+    static <T> List<T> list(T... elements) {
+        return asList(elements).stream().into(new ArrayList<T>());
+    }
+
+    static String unscramble(String s) {
+        return s.replaceAll("_", "-").replaceAll("EQ", "=").replaceAll("P$", "?")
+                .replaceAll("EX$", "!").replaceAll("GT", ">")
+                .replaceAll("LT", "<").replaceAll("SLASH", "/").replaceAll("^kl-", "");
+    }
+
+    static String scramble(String s) {
+        return s.replaceAll("-", "_").replaceAll("=", "EQ").replaceAll(">", "GT")
+                .replaceAll("<", "LT").replaceAll("/", "SLASH");
+    }
+
+
+    static MethodHandle findSAM(Object lambda) {
+        try {
+            return lookup().unreflect(findSAM(lambda.getClass())).bindTo(lambda);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    static java.lang.reflect.Method findSAM(Class<?> lambda) {
+        return some(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Macro {}
 
     public static class ShenCode {
         static Map<Symbol, MethodHandle> macros = new HashMap<>();
@@ -172,13 +257,13 @@ public class ShenCompiler implements Opcodes {
 
         static void macro(java.lang.reflect.Method m)  {
             try {
-                macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
+                macros.put(intern(unscramble(m.getName())), lookup().unreflect(m));
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        Type compile(final Object kl) {
+        Type compile(Object kl) {
             try {
                 Class literalClass = some(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -210,26 +295,8 @@ public class ShenCompiler implements Opcodes {
             return topOfStack;
         }
 
-        void emptyList() {
-            mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
-            topOfStack(List.class);
-        }
-
-        void symbol(Symbol s) {
-            if (locals.containsKey(s)) {
-                int local = locals.get(s);
-                mv.loadLocal(local);
-                topOfStack = mv.getLocalType(local);
-            } else if (args.contains(s)) {
-                int arg = args.indexOf(s);
-                mv.loadArg(arg);
-                topOfStack = argTypes.get(arg);
-            } else
-                push(s);
-        }
-
         void macroExpand(Symbol s, List<Object> args) throws Throwable {
-            bindTo(macros.get(s), this).invokeWithArguments(args);
+            ShenCompiler.bindTo(macros.get(s), this).invokeWithArguments(args);
         }
 
         void indy(Symbol s, List<Object> args) {
@@ -248,8 +315,131 @@ public class ShenCompiler implements Opcodes {
 
             loadArgArray(args);
 
-            mv.invokeStatic(getType(ShenCode.class), new Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
+            mv.invokeStatic(getType(ShenCompiler.class), new Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
             topOfStack = getType(Object.class);
+        }
+
+        @Macro
+        public void trap_error(Object x, Object f) throws Throwable {
+            Label start = mv.newLabel();
+            Label end = mv.newLabel();
+            Label after = mv.newLabel();
+
+            mv.visitLabel(start);
+            compile(x);
+            box();
+            mv.goTo(after);
+            mv.visitLabel(end);
+
+            mv.catchException(start, end, getType(Exception.class));
+            compile(f);
+            mv.checkCast(getType(MethodHandle.class));
+            mv.swap();
+            bindTo();
+
+            mv.invokeVirtual(getType(MethodHandle.class), new Method("invoke", desc(Object.class)));
+            mv.visitLabel(after);
+            topOfStack(Object.class);
+        }
+
+        @Macro
+        public void kl_if(Object test, Object then, Object _else) throws Exception {
+            Label elseStart = mv.newLabel();
+            Label end = mv.newLabel();
+
+            compile(test);
+            if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
+            mv.visitJumpInsn(IFEQ, elseStart);
+
+            compile(then);
+            box();
+            mv.goTo(end);
+
+            mv.visitLabel(elseStart);
+            compile(_else);
+            box();
+
+            mv.visitLabel(end);
+        }
+
+        @Macro
+        public void cond(List... clauses) throws Exception {
+            if (clauses.length == 0)
+                mv.throwException(getType(IllegalArgumentException.class), "condition failure");
+            else
+                kl_if(hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
+        }
+
+        @Macro
+        public void or(Object x, Object... clauses) throws Exception {
+            if (clauses.length == 0)
+                bindTo(staticMH(ShenCompiler.class, "or", desc(boolean.class, boolean.class, boolean[].class)), x);
+            else
+                kl_if(x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+        }
+
+        @Macro
+        public void and(Object x, Object... clauses) throws Exception {
+            if (clauses.length == 0)
+                bindTo(staticMH(ShenCompiler.class, "and", desc(boolean.class, boolean.class, boolean[].class)), x);
+            else
+                kl_if(x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+        }
+
+        @Macro
+        public void lambda(Symbol x, Object y) throws Throwable {
+            fn("lambda$" + id++, y, x);
+        }
+
+        @Macro
+        public void defun(Symbol name, final List<Symbol> args, Object body) throws Throwable {
+            push(name);
+            fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
+            mv.invokeStatic(getType(ShenCompiler.class), new Method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
+            topOfStack(Symbol.class);
+        }
+
+        void fn(String name, Object shen, Symbol... args) throws Throwable {
+            List<Type> types = locals.values().stream().map(mv::getLocalType).into(new ArrayList<Type>());
+            types.addAll(this.argTypes);
+            for (Symbol arg : args) types.add(getType(Object.class));
+
+            List<Symbol> scope = new ArrayList<>(locals.keySet());
+            scope.addAll(this.args);
+            scope.addAll(asList(args));
+
+            ShenCode fn = new ShenCode(cn, shen, scope.toArray(new Symbol[scope.size()]));
+            fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
+
+            insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope.subList(0, scope.size() - args.length));
+        }
+
+        @Macro
+        public void let(Symbol x, Object y, Object z) throws Throwable {
+            compile(y);
+            int let = mv.newLocal(topOfStack);
+            mv.storeLocal(let);
+            locals.put(x, let);
+            compile(z);
+            locals.remove(x);
+        }
+
+        void emptyList() {
+            mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
+            topOfStack(List.class);
+        }
+
+        void symbol(Symbol s) {
+            if (locals.containsKey(s)) {
+                int local = locals.get(s);
+                mv.loadLocal(local);
+                topOfStack = mv.getLocalType(local);
+            } else if (args.contains(s)) {
+                int arg = args.indexOf(s);
+                mv.loadArg(arg);
+                topOfStack = argTypes.get(arg);
+            } else
+                push(s);
         }
 
         void loadArgArray(List<?> args) {
@@ -341,116 +531,6 @@ public class ShenCompiler implements Opcodes {
             ctor.returnValue();
         }
 
-        @Macro
-        public void trap_error(Object x, Object f) throws Throwable {
-            Label start = mv.newLabel();
-            Label end = mv.newLabel();
-            Label after = mv.newLabel();
-
-            mv.visitLabel(start);
-            compile(x);
-            box();
-            mv.goTo(after);
-            mv.visitLabel(end);
-
-            mv.catchException(start, end, getType(Exception.class));
-            compile(f);
-            mv.checkCast(getType(MethodHandle.class));
-            mv.swap();
-            bindTo();
-
-            mv.invokeVirtual(getType(MethodHandle.class), new Method("invoke", desc(Object.class)));
-            mv.visitLabel(after);
-            topOfStack(Object.class);
-        }
-
-        @Macro
-        public void kl_if(Object test, Object then, Object _else) throws Exception {
-            Label elseStart = mv.newLabel();
-            Label end = mv.newLabel();
-
-            compile(test);
-            if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
-            mv.visitJumpInsn(IFEQ, elseStart);
-
-            compile(then);
-            box();
-            mv.goTo(end);
-
-            mv.visitLabel(elseStart);
-            compile(_else);
-            box();
-
-            mv.visitLabel(end);
-        }
-
-        @Macro
-        public void cond(List... clauses) throws Exception {
-            if (clauses.length == 0)
-                mv.throwException(getType(IllegalArgumentException.class), "condition failure");
-            else
-                kl_if(hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
-        }
-
-        @Macro
-        public void or(Object x, Object... clauses) throws Exception {
-            if (clauses.length == 0)
-                bindTo(staticMH(ShenCode.class, "or", desc(boolean.class, boolean.class, boolean[].class)), x);
-            else
-                kl_if(x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
-        }
-
-        @Macro
-        public void and(Object x, Object... clauses) throws Exception {
-            if (clauses.length == 0)
-                bindTo(staticMH(ShenCode.class, "and", desc(boolean.class, boolean.class, boolean[].class)), x);
-            else
-                kl_if(x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
-        }
-
-        @Macro
-        public void lambda(Symbol x, Object y) throws Throwable {
-            fn("lambda$" + id++, y, x);
-        }
-
-        @Macro
-        public void defun(Symbol name, final List<Symbol> args, Object body) throws Throwable {
-            push(name);
-            fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
-            mv.invokeStatic(getType(ShenCode.class), new Method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
-            topOfStack(Symbol.class);
-        }
-
-        void fn(String name, Object shen, Symbol... args) throws Throwable {
-            List<Type> types = locals.values().stream().map(mv::getLocalType).into(new ArrayList<Type>());
-            types.addAll(this.argTypes);
-            for (Symbol arg : args) types.add(getType(Object.class));
-
-            List<Symbol> scope = new ArrayList<>(locals.keySet());
-            scope.addAll(this.args);
-            scope.addAll(asList(args));
-
-            ShenCode fn = new ShenCode(cn, shen, scope.toArray(new Symbol[scope.size()]));
-            fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
-
-            insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope.subList(0, scope.size() - args.length));
-        }
-
-        @Macro
-        public void let(Symbol x, Object y, Object z) throws Throwable {
-            compile(y);
-            int let = mv.newLocal(topOfStack);
-            mv.storeLocal(let);
-            locals.put(x, let);
-            compile(z);
-            locals.remove(x);
-        }
-
-        Class[] fillArray(Class value, int elements) {
-            Class[] args = new Class[elements];
-            fill(args, value);
-            return args;
-        }
 
         void bindTo(Handle handle, Object arg) {
             mv.push(handle);
@@ -460,7 +540,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         void bindTo() {
-            mv.invokeStatic(getType(ShenCode.class), new Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
+            mv.invokeStatic(getType(ShenCompiler.class), new Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
             topOfStack(MethodHandle.class);
         }
 
@@ -474,56 +554,6 @@ public class ShenCompiler implements Opcodes {
         void insertArgs() {
             mv.invokeStatic(getType(MethodHandles.class), new Method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
             topOfStack(MethodHandle.class);
-        }
-
-        // RT
-        public static Object apply(MethodHandle fn, Object...  args) throws Throwable {
-            if (isLambda(fn)) return uncurry(fn, args);
-
-            MethodType targetType = methodType(Object.class, stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
-
-            int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
-            if (nonVarargs > args.length) {
-                MethodHandle partial = insertArguments(fn.asType(fn.type()
-                        .dropParameterTypes(0, targetType.parameterCount())
-                        .insertParameterTypes(0, targetType.parameterArray())), 0, args);
-                return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
-            }
-            return insertArguments(fn.asType(targetType), 0, args).invokeExact();
-        }
-
-        static Object uncurry(Object chain, Object... args) throws Throwable {
-            for (Object arg : args)
-                chain = ((MethodHandle) chain).invoke(arg);
-            return chain;
-        }
-
-        static boolean isLambda(MethodHandle fn) {
-            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
-        }
-
-        public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
-            name.fn.clear();
-            name.fn.add(fn);
-            return name;
-        }
-
-        public static MethodHandle bindTo(MethodHandle fn, Object arg) {
-            return fn.isVarargsCollector() ?
-                    insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
-                    insertArguments(fn, 0, arg);
-        }
-
-        public static boolean or(boolean x, boolean... clauses) throws Exception {
-            if (x) return true;
-            for (boolean b : clauses) if (b) return true;
-            return false;
-        }
-
-        public static boolean and(boolean x, boolean... clauses) throws Exception {
-            if (!x) return false;
-            for (boolean b : clauses) if (!b) return false;
-            return true;
         }
     }
 }

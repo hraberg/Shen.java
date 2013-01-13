@@ -8,7 +8,6 @@ import java.util.LinkedList;
 import static java.lang.System.out;
 import static java.util.Arrays.asList;
 import static shen.Shen.*;
-import static shen.ShenCompiler.eval;
 
 // These are the main methods from the interpreter and compiler, no structure or niceness.
 // Tests lots of random stuff, written while developing, most this should be covered in ShenTest.
@@ -17,39 +16,39 @@ public class SmokeTests {
     @Test
     public void interpreter() throws Exception {
         out.println(eval_kl(intern("x")));
-        out.println(readEval("(or false)"));
-        out.println(readEval("(or false false)"));
-        out.println(readEval("(or false true)"));
-        out.println(readEval("(or false false false)"));
-        out.println(readEval("((or false) true)"));
-        out.println(readEval("((and true) true true)"));
-        out.println(readEval("()"));
-        out.println(readEval("(cons 2 3)"));
+        out.println(eval("(or false)"));
+        out.println(eval("(or false false)"));
+        out.println(eval("(or false true)"));
+        out.println(eval("(or false false false)"));
+        out.println(eval("((or false) true)"));
+        out.println(eval("((and true) true true)"));
+        out.println(eval("()"));
+        out.println(eval("(cons 2 3)"));
 
-        out.println(readEval("(absvector? (absvector 10))"));
-        out.println(readEval("(absvector 10)"));
-        out.println(readEval("(absvector? ())"));
-        out.println(readEval("(+ 1 2)"));
-        out.println(readEval("((+ 6.5) 2.0)"));
-        out.println(readEval("(+ 1.0 2.0)"));
-        out.println(readEval("(* 5 2)"));
-        out.println(readEval("(* 5)"));
-        out.println(readEval("(let x 42 x)"));
-        out.println(readEval("(let x 42 (let y 2 (cons x y)))"));
-        out.println(readEval("((lambda x (lambda y (cons x y))) 2 3)"));
-        out.println(readEval("((lambda x (lambda y (cons x y))) 2)"));
-        out.println(readEval("((let x 3 (lambda y (cons x y))) 2)"));
-        out.println(readEval("(cond (true 1))"));
-        out.println(readEval("(cond (false 1) ((> 10 3) 3))"));
-        out.println(readEval("(cond (false 1) ((> 10 3) ()))"));
+        out.println(eval("(absvector? (absvector 10))"));
+        out.println(eval("(absvector 10)"));
+        out.println(eval("(absvector? ())"));
+        out.println(eval("(+ 1 2)"));
+        out.println(eval("((+ 6.5) 2.0)"));
+        out.println(eval("(+ 1.0 2.0)"));
+        out.println(eval("(* 5 2)"));
+        out.println(eval("(* 5)"));
+        out.println(eval("(let x 42 x)"));
+        out.println(eval("(let x 42 (let y 2 (cons x y)))"));
+        out.println(eval("((lambda x (lambda y (cons x y))) 2 3)"));
+        out.println(eval("((lambda x (lambda y (cons x y))) 2)"));
+        out.println(eval("((let x 3 (lambda y (cons x y))) 2)"));
+        out.println(eval("(cond (true 1))"));
+        out.println(eval("(cond (false 1) ((> 10 3) 3))"));
+        out.println(eval("(cond (false 1) ((> 10 3) ()))"));
 
-        out.println(readEval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
-        out.println(readEval("(fib 10)"));
+        out.println(eval("(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))"));
+        out.println(eval("(fib 10)"));
 
-        out.println(readEval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
-        out.println(readEval("(factorial 10 1)"));
-        out.println(readEval("(factorial 12)"));
-        out.println(readEval("((factorial 19) 1)"));
+        out.println(eval("(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))"));
+        out.println(eval("(factorial 10 1)"));
+        out.println(eval("(factorial 12)"));
+        out.println(eval("((factorial 19) 1)"));
 
         out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));

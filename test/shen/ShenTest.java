@@ -284,7 +284,7 @@ public class ShenTest {
 
     Object 神(String shen) {
         try {
-            return readEval(shen);
+            return eval(shen);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

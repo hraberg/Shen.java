@@ -1,35 +1,30 @@
 package shen;
 
 import java.io.*;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.function.*;
-import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.lang.System.in;
 import static java.lang.System.out;
-import static java.lang.invoke.MethodHandles.constant;
-import static java.lang.invoke.MethodHandles.dropArguments;
-import static java.lang.invoke.MethodHandles.lookup;
+import static java.lang.invoke.MethodHandles.*;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
+import static shen.Shen.KLReader.read;
+import static shen.ShenCompiler.*;
 
-@SuppressWarnings({"UnusedDeclaration", "Convert2Diamond", "SuspiciousNameCombination"})
+@SuppressWarnings({"UnusedDeclaration", "Convert2Diamond"})
 public class Shen {
-    static final boolean debug = false;
-
-    static MethodHandles.Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
 
-    @Retention(RetentionPolicy.RUNTIME)
-    public @interface Macro {}
+    interface IIPredicate { boolean test(int a, int b);}
+    interface LLPredicate { boolean test(long a, long b);}
+    interface DDPredicate { boolean test(double a, double b);}
 
     static {
         set("*language*", "Java");
@@ -37,11 +32,10 @@ public class Shen {
         set("*porters*", "Håkan Råberg");
         set("*stinput*", in);
         set("*stoutput*", out);
+        set("*debug*", false);
         set("*home-directory*", System.getProperty("user.dir"));
 
-        stream(Shen.class.getDeclaredMethods())
-              .filter(m -> isPublic(m.getModifiers()))
-              .forEach(Shen::defun);
+        stream(Shen.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(Shen::defun);
 
         op("=", (BiPredicate<Object, Object>)
                 (left, right) -> left instanceof Number && right instanceof Number
@@ -50,32 +44,30 @@ public class Shen {
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
-        op("/", (IntBinaryOperator) (left, right) -> left / right);
-        op("/", (BiFunction<Integer, Integer, Number>)
-                (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (LongBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right);
         op("*", (LongBinaryOperator) (left, right) -> left * right);
-        op("/", (LongBinaryOperator) (left, right) -> left / right);
-        op("/", (BiFunction<Long, Long, Number>)
-                (left, right) -> left % right == 0 ? left / right : left / (double) right);
         op("+", (DoubleBinaryOperator) (left, right) -> left + right);
         op("-", (DoubleBinaryOperator) (left, right) -> left - right);
         op("*", (DoubleBinaryOperator) (left, right) -> left * right);
-        op("/", (DoubleBinaryOperator) (left, right) -> left / right);
+        op("/", (DoubleBinaryOperator) (left, right) -> {
+            if (right == 0) throw new ArithmeticException("Division by zero");
+            return left / right;
+        });
 
-        op("<", (BiPredicate<Integer, Integer>) (left, right) -> left < right);
-        op("<=", (BiPredicate<Integer, Integer>) (left, right) -> left <= right);
-        op(">", (BiPredicate<Integer, Integer>) (left, right) -> left > right);
-        op(">=", (BiPredicate<Integer, Integer>) (left, right) -> left >= right);
-        op("<", (BiPredicate<Long, Long>) (left, right) -> left < right);
-        op("<=", (BiPredicate<Long, Long>) (left, right) -> left <= right);
-        op(">", (BiPredicate<Long, Long>) (left, right) -> left > right);
-        op(">=", (BiPredicate<Long, Long>) (left, right) -> left >= right);
-        op("<", (BiPredicate<Double, Double>) (left, right) -> left < right);
-        op("<=", (BiPredicate<Double, Double>) (left, right) -> left <= right);
-        op(">", (BiPredicate<Double, Double>) (left, right) -> left > right);
-        op(">=", (BiPredicate<Double, Double>) (left, right) -> left >= right);
+
+        op("<", (IIPredicate) (left, right) -> left < right);
+        op("<=", (IIPredicate) (left, right) -> left <= right);
+        op(">", (IIPredicate) (left, right) -> left > right);
+        op(">=", (IIPredicate) (left, right) -> left >= right);
+        op("<", (LLPredicate) (left, right) -> left < right);
+        op("<=", (LLPredicate) (left, right) -> left <= right);
+        op(">", (LLPredicate) (left, right) -> left > right);
+        op(">=", (LLPredicate) (left, right) -> left >= right);
+        op("<", (DDPredicate) (left, right) -> left < right);
+        op("<=", (DDPredicate) (left, right) -> left <= right);
+        op(">", (DDPredicate) (left, right) -> left > right);
+        op(">=", (DDPredicate) (left, right) -> left >= right);
     }
 
     static void op(String name, Object op) {
@@ -85,23 +77,11 @@ public class Shen {
     static Symbol defun(Method m) {
        try {
             Symbol name = intern(unscramble(m.getName()));
-            name.fn.add(lookup.unreflect(m));
-           return name;
+            name.fn.add(lookup().unreflect(m));
+            return name;
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    static MethodHandle findSAM(Object lambda) {
-        try {
-            return lookup.unreflect(findSAM(lambda.getClass())).bindTo(lambda);
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    static Method findSAM(Class<?> lambda) {
-        return some(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
     }
 
     static class Cons {
@@ -339,30 +319,10 @@ public class Shen {
 
     public static Object eval_kl(Object kl) {
         try {
-            return ShenCompiler.eval(kl);
+            return new ShenCode(kl).load(Callable.class).newInstance().call();
         } catch (Throwable t) {
             throw new IllegalArgumentException(kl.toString(), t);
         }
-    }
-
-    static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
-        return stream.filter(predicate).findAny().orElse((T) null);
-    }
-
-    @SafeVarargs
-    static <T> List<T> list(T... elements) {
-        return asList(elements).stream().into(new ArrayList<T>());
-    }
-
-    static String unscramble(String s) {
-        return s.replaceAll("_", "-").replaceAll("P$", "?")
-                .replaceAll("EX$", "!").replaceAll("GT", ">")
-                .replaceAll("LT", "<").replaceAll("SLASH", "/").replaceAll("^kl-", "");
-    }
-
-    static String scramble(String s) {
-        return s.replaceAll("-", "_").replaceAll(">", "GT")
-                .replaceAll("<", "LT").replaceAll("/", "SLASH");
     }
 
     static Object load(String file) {
@@ -375,66 +335,67 @@ public class Shen {
         }
     }
 
-    static Object readEval(String shen) throws Exception {
+    static Object eval(String shen) throws Exception {
         return eval_kl(read(shen).get(0));
     }
 
-    static List read(String s) throws Exception {
-        return parse(new StringReader(s));
-    }
-
-    static List read(File f) throws Exception {
-        try (FileReader reader = new FileReader(f)) {
-            return parse(reader);
-        }
-    }
-
-    static List parse(Reader reader) throws Exception {
-        return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
-    }
-
-    static Object tokenize(Scanner sc) throws Exception {
-        if (find(sc, "\\(")) return tokenizeAll(sc);
-        if (find(sc, "\"")) return nextString(sc);
-        if (find(sc, "\\s")) return tokenize(sc);
-        if (find(sc, "'")) return asList(intern("quote"), tokenize(sc));
-        if (find(sc, "\\)")) return null;
-        if (sc.hasNextBoolean()) return sc.nextBoolean();
-        if (sc.hasNextInt()) return sc.nextInt();
-        if (sc.hasNextLong()) return sc.nextLong();
-        if (sc.hasNextDouble()) return sc.nextDouble();
-        if (sc.hasNext()) return intern(sc.next());
-        return null;
-    }
-
-    static boolean find(Scanner sc, String pattern) {
-        return sc.findWithinHorizon(pattern, 1) != null;
-    }
-
-    static Object nextString(Scanner sc) throws IOException {
-        String s = sc.findWithinHorizon("(?s).*?\"", 0);
-        return s.substring(0, s.length() - 1);
-    }
-
-    static List tokenizeAll(Scanner sc) throws Exception {
-        List<Object> list = new LinkedList<>();
-        Object x;
-        while ((x = tokenize(sc)) != null) list.add(x);
-        return list;
-    }
-
-    public static void main(String[] args) throws Throwable {
-//        install();
-//        repl();
-    }
-
     static Object repl() throws Exception {
-        return readEval("(shen-shen)");
+        return eval("(shen-shen)");
     }
 
     static void install() {
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
             load(format("shen/klambda/%s.kl", file));
+    }
+
+    public static class KLReader {
+        static List read(String s) throws Exception {
+            return parse(new StringReader(s));
+        }
+
+        static List read(File f) throws Exception {
+            try (FileReader reader = new FileReader(f)) {
+                return parse(reader);
+            }
+        }
+
+        static List parse(Reader reader) throws Exception {
+            return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
+        }
+
+        static Object tokenize(Scanner sc) throws Exception {
+            if (find(sc, "\\(")) return tokenizeAll(sc);
+            if (find(sc, "\"")) return nextString(sc);
+            if (find(sc, "\\s")) return tokenize(sc);
+            if (find(sc, "\\)")) return null;
+            if (sc.hasNextBoolean()) return sc.nextBoolean();
+            if (sc.hasNextInt()) return sc.nextInt();
+            if (sc.hasNextLong()) return sc.nextLong();
+            if (sc.hasNextDouble()) return sc.nextDouble();
+            if (sc.hasNext()) return intern(sc.next());
+            return null;
+        }
+
+        static boolean find(Scanner sc, String pattern) {
+            return sc.findWithinHorizon(pattern, 1) != null;
+        }
+
+        static Object nextString(Scanner sc) throws IOException {
+            String s = sc.findWithinHorizon("(?s).*?\"", 0);
+            return s.substring(0, s.length() - 1);
+        }
+
+        static List tokenizeAll(Scanner sc) throws Exception {
+            List<Object> list = new LinkedList<>();
+            Object x;
+            while ((x = tokenize(sc)) != null) list.add(x);
+            return list;
+        }
+    }
+
+    public static void main(String[] args) throws Throwable {
+//        install();
+//        repl();
     }
 }
