@@ -33,6 +33,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 
 * The K Lambda parser.
 * Partial application.
+* Recur.
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/ShenTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 
 
