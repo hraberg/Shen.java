@@ -345,7 +345,7 @@ public class ShenCompiler implements Opcodes {
                     debug("recur: "  + s);
                     recur();
                     return;
-                } else debug("cannot only recur from tail position: "  + s);
+                } else debug("can only recur from tail position: "  + s);
             }
             MethodType type = asMethodType(s.fn.size() == 1
                     ? getType(s.fn.stream().findAny().get().type().returnType())
@@ -450,6 +450,7 @@ public class ShenCompiler implements Opcodes {
         @Macro
         public void defun(Symbol name, final List<Symbol> args, Object body) throws Throwable {
             push(name);
+            debug("compiling: " + name + args + " in " + getObjectType(cn.name).getClassName());
             fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
             mv.invokeStatic(getType(ShenCompiler.class), new Method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
             topOfStack(Symbol.class);

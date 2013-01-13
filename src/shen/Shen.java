@@ -38,8 +38,7 @@ public class Shen {
 
         stream(Shen.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(Shen::defun);
 
-        op("=", (BiPredicate<Object, Object>)
-                (left, right) -> left instanceof Number && right instanceof Number
+        op("=", (BiPredicate<Object, Object>) (left, right) -> left instanceof Number && right instanceof Number
                         ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
                         : deepEquals(left, right));
         op("+", (IntBinaryOperator) (left, right) -> left + right);
@@ -395,7 +394,7 @@ public class Shen {
     }
 
     public static void main(String[] args) throws Throwable {
-//        install();
-//        repl();
+        install();
+        repl();
     }
 }
