@@ -244,6 +244,7 @@ public class ShenCompiler implements Opcodes {
         static int id = 1;
 
         Object shen;
+        Symbol name;
         List<Symbol> args;
         List<Type> argTypes;
         Map<Symbol, Integer> locals;
@@ -328,11 +329,30 @@ public class ShenCompiler implements Opcodes {
         void indy(Symbol s, List<Object> args) {
             List<Type> argumentTypes = args.stream().map(this::compile).into(new ArrayList<Type>());
 
+            if (isSelfCall(s, args) && isTailPosition()) {
+                debug("recur: "  + s);
+                recur();
+                return;
+            }
             MethodType type = asMethodType(s.fn.size() == 1
                     ? getType(s.fn.stream().findAny().get().type().returnType())
                     : getType(Object.class), argumentTypes);
             mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), bootstrap);
             topOfStack(type.returnType());
+        }
+
+        boolean isTailPosition() {
+            return false;
+        }
+
+        void recur() {
+            for (int i = this.args.size() - 1; i >= 0; i--)
+                mv.storeArg(i);
+            mv.goTo(recur);
+        }
+
+        boolean isSelfCall(Symbol s, List<Object> args) {
+            return s.equals(name) && args.size() == this.args.size();
         }
 
         void apply(List<Object> args) {
@@ -522,6 +542,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         void compileMethod(int modifier, String name, Type returnType, List<Type> argumentTypes) {
+            this.name = intern(unscramble(name));
             this.argTypes = argumentTypes;
             mv = generator(cn.visitMethod(modifier, name, desc(returnType, argumentTypes), null, null));
             recur = mv.newLabel();

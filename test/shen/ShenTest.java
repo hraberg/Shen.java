@@ -290,6 +290,18 @@ public class ShenTest {
         is(new Cons(1, 2), "(((cons) 1) 2)");
     }
 
+    @Test
+    public void recur() {
+        is(intern("factorial"), "(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))");
+        is(3628800, "(factorial 10 1)");
+    }
+
+    @Test
+    public void cannot_recur_from_tail_position() {
+        is(intern("fib"), "(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))");
+        is(55, "(fib 10)");
+    }
+
     void is(Object expected, String actual) {
         if (expected instanceof Class)
             assertThat(神(actual), instanceOf((Class<?>) expected));
