@@ -315,7 +315,7 @@ public class ShenCompiler implements Opcodes {
                         Object first = list.get(0);
                         if (first instanceof Symbol) {
                             Symbol s = (Symbol) first;
-                            if (macros.containsKey(s)) macroExpand(s, tl(list));
+                            if (macros.containsKey(s)) macroExpand(s, tl(list), tail);
                             else indy(s, tl(list), tail);
 
                         } else {
@@ -333,8 +333,9 @@ public class ShenCompiler implements Opcodes {
             return topOfStack;
         }
 
-        void macroExpand(Symbol s, List<Object> args) throws Throwable {
-            ShenCompiler.bindTo(macros.get(s), this).invokeWithArguments(args);
+        void macroExpand(Symbol s, List<Object> args, boolean tail) throws Throwable {
+            MethodHandle macro = ShenCompiler.bindTo(macros.get(s), this);
+            ShenCompiler.bindTo(macro, tail).invokeWithArguments(args);
         }
 
         void indy(Symbol s, List<Object> args, boolean tail) {
@@ -375,7 +376,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         @Macro
-        public void trap_error(Object x, Object f) throws Throwable {
+        public void trap_error(boolean tail, Object x, Object f) throws Throwable {
             Label start = mv.newLabel();
             Label end = mv.newLabel();
             Label after = mv.newLabel();
@@ -398,7 +399,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         @Macro
-        public void kl_if(Object test, Object then, Object _else) throws Exception {
+        public void kl_if(boolean tail, Object test, Object then, Object _else) throws Exception {
             Label elseStart = mv.newLabel();
             Label end = mv.newLabel();
 
@@ -407,48 +408,48 @@ public class ShenCompiler implements Opcodes {
             if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
             mv.visitJumpInsn(IFEQ, elseStart);
 
-            compile(then);
+            compile(then, tail);
             box();
             mv.goTo(end);
 
             mv.visitLabel(elseStart);
-            compile(_else);
+            compile(_else, tail);
             box();
 
             mv.visitLabel(end);
         }
 
         @Macro
-        public void cond(List... clauses) throws Exception {
+        public void cond(boolean tail, List... clauses) throws Exception {
             if (clauses.length == 0)
                 mv.throwException(getType(IllegalArgumentException.class), "condition failure");
             else
-                kl_if(hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
+                kl_if(tail, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
         }
 
         @Macro
-        public void or(Object x, Object... clauses) throws Exception {
+        public void or(boolean tail, Object x, Object... clauses) throws Exception {
             if (clauses.length == 0)
                 bindTo(staticMH(ShenCompiler.class, "or", desc(boolean.class, boolean.class, boolean[].class)), x);
             else
-                kl_if(x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+                kl_if(tail, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
         }
 
         @Macro
-        public void and(Object x, Object... clauses) throws Exception {
+        public void and(boolean tail, Object x, Object... clauses) throws Exception {
             if (clauses.length == 0)
                 bindTo(staticMH(ShenCompiler.class, "and", desc(boolean.class, boolean.class, boolean[].class)), x);
             else
-                kl_if(x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+                kl_if(tail, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
         }
 
         @Macro
-        public void lambda(Symbol x, Object y) throws Throwable {
+        public void lambda(boolean tail, Symbol x, Object y) throws Throwable {
             fn("lambda$" + id++, y, x);
         }
 
         @Macro
-        public void defun(Symbol name, final List<Symbol> args, Object body) throws Throwable {
+        public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
             push(name);
             debug("compiling: " + name + args + " in " + getObjectType(cn.name).getClassName());
             fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
@@ -472,12 +473,12 @@ public class ShenCompiler implements Opcodes {
         }
 
         @Macro
-        public void let(Symbol x, Object y, Object z) throws Throwable {
+        public void let(boolean tail, Symbol x, Object y, Object z) throws Throwable {
             compile(y, false);
             int let = mv.newLocal(topOfStack);
             mv.storeLocal(let);
             locals.put(x, let);
-            compile(z);
+            compile(z, tail);
             locals.remove(x);
         }
 
