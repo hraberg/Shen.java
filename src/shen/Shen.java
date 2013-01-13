@@ -110,12 +110,10 @@ public class Shen {
     }
 
     public static Object cons(Object x, Object y) {
-        if (y instanceof List) //noinspection unchecked
-            return cons(x, (List) y);
         return new Cons(x, y);
     }
 
-    static List<Object> cons(Object x, List<Object> y) {
+    public static List<Object> cons(Object x, List<Object> y) {
         if (y == Collections.EMPTY_LIST)
             y = new ArrayList<>();
         y.add(0, x);
@@ -136,20 +134,6 @@ public class Shen {
 
     public static String error_to_string(Exception e) {
         return e.getMessage();
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T hd(Object list) {
-        if (list instanceof List)
-            return (T) hd((List) list);
-        return (T) hd((Cons) list);
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> List<T> tl(Object list) {
-        if (list instanceof List)
-            return (List<T>) tl((List) list);
-        return (List<T>) tl((Cons) list);
     }
 
     public static <T> T hd(List<T> list) {
@@ -239,22 +223,12 @@ public class Shen {
         return (int) s.charAt(0);
     }
 
-    public static int read_byte(Object s) throws IOException {
-        if (s instanceof  InputStream) return read_byte((InputStream) s);
-        return read_byte((Reader) s);
-    }
-
     public static int read_byte(InputStream s) throws IOException {
         return s.read();
     }
 
     public static int read_byte(Reader s) throws IOException {
         return s.read();
-    }
-
-    public static Object pr(Object x, Object s) throws IOException {
-        if (s instanceof  OutputStream) return pr(x, (OutputStream) s);
-        return pr(x, (Writer) s);
     }
 
     public static Object pr(Object x, OutputStream s) throws IOException {

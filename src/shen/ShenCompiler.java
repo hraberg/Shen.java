@@ -10,13 +10,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.*;
 import java.util.*;
-import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import static java.lang.invoke.MethodHandles.*;
-import static java.lang.invoke.MethodType.fromMethodDescriptorString;
-import static java.lang.invoke.MethodType.methodType;
+import static java.lang.invoke.MethodType.*;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
@@ -38,39 +36,49 @@ public class ShenCompiler implements Opcodes {
 
     static ShenLoader loader = new ShenLoader();
 
-    public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
+    public static Object fallback(MutableCallSite site, String name, Object... args) {
+        MethodType type = site.type();
         name = unscramble(name);
-        debug("BOOTSTRAP: " + name + type);
+        debug("BOOTSTRAP: " + name + type + " " + Arrays.toString(args));
         Symbol symbol = intern(name);
         debug("candidates: " + symbol.fn);
-        MethodHandle match = some(symbol.fn.stream(), f -> hasMatchingSignature(f, type, Class::isAssignableFrom));
+
+        int arity = symbol.fn.get(0).type().parameterCount();
+        if (arity > args.length) {
+            MutableCallSite cs = new MutableCallSite(genericMethodType(arity)); // TODO: decouple lookup from callsite
+            MethodHandle partial = insertArguments(fallback, 0, cs, name).asCollector(Object[].class, arity);
+            partial = insertArguments(partial, 0, args);
+            debug("partial: " + partial);
+            return partial;
+        }
+
+        final MethodType matchType = methodType(site.type().returnType(),
+                stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
+        MethodHandle match;
         try {
-            if (match == null) {
-                match = some(symbol.fn.stream(), f -> {
-                    try {
-                        f.asType(type);
-                        return true;
-                    } catch (WrongMethodTypeException _) {
-                        return false;
-                    }
-                });
-            }
-            if (match == null) match = symbol.fn.stream().findAny().get();
-            if (match.type().parameterCount() > type.parameterCount()) {
-                try {
-                    debug("partial: " + type.parameterCount() + " out of " + match.type().parameterCount());
-                    match = insertArguments(insertArguments, 0, match, 0).asCollector(Object[].class, type.parameterCount());
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }
+            debug("real args: " + Arrays.toString(args));
+            match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
+            debug("selected: " + match);
             match = match.asType(type);
+            site.setTarget(match);
         } catch (Throwable t) {
             debug("BSM exception: " + t);
             match = dropArguments(throwException(type.returnType(), Throwable.class).bindTo(t), 0, type.parameterList());
         }
-        debug("selected: " + match);
-        return new MutableCallSite(match);
+        try {
+            return match.invokeWithArguments(args);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+    }
+
+    public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
+        MutableCallSite site = new MutableCallSite(type);
+        MethodHandle initial = fallback.bindTo(site).bindTo(name).asCollector(Object[].class, type.parameterCount());
+        site.setTarget(initial.asType(type));
+        return site;
     }
 
     static void debug(String msg, Object... xs) {
@@ -79,10 +87,13 @@ public class ShenCompiler implements Opcodes {
     }
 
     static MethodHandle insertArguments;
+    static MethodHandle fallback;
     static {
         try {
             insertArguments = lookup().findStatic(MethodHandles.class, "insertArguments",
                     methodType(MethodHandle.class, new Class[]{MethodHandle.class, int.class, Object[].class}));
+            fallback = lookup().findStatic(ShenCompiler.class, "fallback",
+                    methodType(Object.class, new Class[]{MutableCallSite.class, String.class, Object[].class}));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -97,18 +108,6 @@ public class ShenCompiler implements Opcodes {
 
     static String desc(Type returnType, List<Type> argumentTypes) {
         return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
-    }
-
-    static boolean hasMatchingSignature(MethodHandle h, MethodType args, BiPredicate<Class, Class> match) {
-        int last = h.type().parameterCount() - 1;
-        if (h.isVarargsCollector() && args.parameterCount() - last > 0)
-            h = h.asCollector(h.type().parameterType(last), args.parameterCount() - last);
-        if (args.parameterCount() > h.type().parameterCount()) return false;
-
-        Class<?>[] classes = h.type().parameterArray();
-        for (int i = 0; i < args.parameterCount(); i++)
-            if (!match.test(classes[i], args.parameterType(i))) return false;
-        return true;
     }
 
     static Handle staticMH(Class aClass, String name, String desc) {
@@ -127,6 +126,43 @@ public class ShenCompiler implements Opcodes {
 
     static boolean isLambda(MethodHandle fn) {
         return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
+    }
+
+    static Type boxedType(Type type) {
+        try {
+            java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
+            getBoxedType.setAccessible(true);
+            return (Type) getBoxedType.invoke(null, type);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    static Class boxedType(Class type) {
+        try {
+            return Class.forName(boxedType(getType(type)).getClassName());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    static boolean canCast(Class<?> a, Class<?> b) {
+        return b.isAssignableFrom(a) || canWiden(a, b);
+    }
+
+    static List<? extends Class<?>> numbers = asList(Double.class, Long.class, Integer.class);
+
+    static boolean canWiden(Class a, Class b) {
+        if (a.isPrimitive()) a = boxedType(a);
+        if (b.isPrimitive()) b = boxedType(b);
+        return Number.class.isAssignableFrom(a) &&  Number.class.isAssignableFrom(b)
+                && numbers.indexOf(a) >= numbers.indexOf(b);
+    }
+
+    static boolean canCast(List<Class<?>> as, List<Class<?>> bs) {
+        for (int i = 0; i < as.size(); i++)
+            if (!canCast(as.get(i), bs.get(i))) return false;
+        return true;
     }
 
     public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
@@ -513,16 +549,6 @@ public class ShenCompiler implements Opcodes {
             Type maybePrimitive = topOfStack;
             mv.box(maybePrimitive);
             topOfStack = boxedType(maybePrimitive);
-        }
-
-        Type boxedType(Type type) {
-            try {
-                java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
-                getBoxedType.setAccessible(true);
-                return (Type) getBoxedType.invoke(null, type);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
         }
 
         void constructor() {

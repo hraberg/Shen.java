@@ -278,13 +278,16 @@ public class ShenTest {
     @Test
     public void partials() {
         is(MethodHandle.class, "(cons 1)");
+        is(MethodHandle.class, "(cons)");
+        is(MethodHandle.class, "((cons) 1)");
         is(asList(1), "((cons 1) ())");
-        is(asList(1, 2), "((cons 1) 2)");
+        is(new Cons(1, 2), "((cons 1) 2)");
     }
 
     @Test
     public void uncurry() {
         is(asList(1, 2), "((lambda x (lambda y (cons x (cons y ())))) 1 2)");
+        is(new Cons(1, 2), "(((cons) 1) 2)");
     }
 
     void is(Object expected, String actual) {
