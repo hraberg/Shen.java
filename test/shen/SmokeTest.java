@@ -12,7 +12,7 @@ import static shen.Shen.*;
 // These are the main methods from the interpreter and compiler, no structure or niceness.
 // Tests lots of random stuff, written while developing, most this should be covered in ShenTest.
 // Both run against the compiler, as the interpreter has been removed.
-public class SmokeTests {
+public class SmokeTest {
     @Test
     public void interpreter() throws Exception {
         out.println(eval_kl(intern("x")));
@@ -96,6 +96,10 @@ public class SmokeTests {
         out.println(eval("(absvector? (absvector 10))"));
         out.println(eval("(trap-error (/ 1 0) (lambda x x))"));
         out.println(eval("(defun fun (x y) (+ x y))"));
+        out.println(eval("(defun fun2 () (fun 1 2))"));
+        out.println(eval("(fun2)"));
+        out.println(eval("(defun fun (x y) (- x y))"));
+        out.println(eval("(fun2)"));
         out.println(eval("(fun 1 2)"));
         out.println(eval("(set x y)"));
         out.println(eval("(value x)"));
