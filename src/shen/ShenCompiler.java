@@ -291,6 +291,10 @@ public class ShenCompiler implements Opcodes {
         }
 
         Type compile(Object kl) {
+            return compile(kl, true);
+        }
+
+        Type compile(Object kl, boolean tail) {
             try {
                 Class literalClass = some(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -305,10 +309,10 @@ public class ShenCompiler implements Opcodes {
                         if (first instanceof Symbol) {
                             Symbol s = (Symbol) first;
                             if (macros.containsKey(s)) macroExpand(s, tl(list));
-                            else indy(s, tl(list));
+                            else indy(s, tl(list), tail);
 
                         } else {
-                            compile(first);
+                            compile(first, tail);
                             apply(tl(list));
                         }
                     }
@@ -326,23 +330,21 @@ public class ShenCompiler implements Opcodes {
             ShenCompiler.bindTo(macros.get(s), this).invokeWithArguments(args);
         }
 
-        void indy(Symbol s, List<Object> args) {
-            List<Type> argumentTypes = args.stream().map(this::compile).into(new ArrayList<Type>());
+        void indy(Symbol s, List<Object> args, boolean tail) {
+            List<Type> argumentTypes = args.stream().map(o -> compile(o, false)).into(new ArrayList<Type>());
 
-            if (isSelfCall(s, args) && isTailPosition()) {
-                debug("recur: "  + s);
-                recur();
-                return;
+            if (isSelfCall(s, args)) {
+                if (tail) {
+                    debug("recur: "  + s);
+                    recur();
+                    return;
+                } else debug("cannot only recur from tail position: "  + s);
             }
             MethodType type = asMethodType(s.fn.size() == 1
                     ? getType(s.fn.stream().findAny().get().type().returnType())
                     : getType(Object.class), argumentTypes);
             mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), bootstrap);
             topOfStack(type.returnType());
-        }
-
-        boolean isTailPosition() {
-            return false;
         }
 
         void recur() {
@@ -372,13 +374,13 @@ public class ShenCompiler implements Opcodes {
             Label after = mv.newLabel();
 
             mv.visitLabel(start);
-            compile(x);
+            compile(x, false);
             box();
             mv.goTo(after);
             mv.visitLabel(end);
 
             mv.catchException(start, end, getType(Exception.class));
-            compile(f);
+            compile(f, false);
             mv.checkCast(getType(MethodHandle.class));
             mv.swap();
             bindTo();
@@ -393,7 +395,7 @@ public class ShenCompiler implements Opcodes {
             Label elseStart = mv.newLabel();
             Label end = mv.newLabel();
 
-            compile(test);
+            compile(test, false);
             if (isPrimitive(topOfStack) && topOfStack != getType(boolean.class)) box();
             if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
             mv.visitJumpInsn(IFEQ, elseStart);
@@ -463,7 +465,7 @@ public class ShenCompiler implements Opcodes {
 
         @Macro
         public void let(Symbol x, Object y, Object z) throws Throwable {
-            compile(y);
+            compile(y, false);
             int let = mv.newLocal(topOfStack);
             mv.storeLocal(let);
             locals.put(x, let);
@@ -496,7 +498,7 @@ public class ShenCompiler implements Opcodes {
             for (int i = 0; i < args.size(); i++) {
                 mv.dup();
                 mv.push(i);
-                compile(args.get(i));
+                compile(args.get(i), false);
                 box();
                 mv.arrayStore(getType(Object.class));
             }
@@ -572,7 +574,7 @@ public class ShenCompiler implements Opcodes {
 
         void bindTo(Handle handle, Object arg) {
             mv.push(handle);
-            compile(arg);
+            compile(arg, false);
             box();
             bindTo();
         }

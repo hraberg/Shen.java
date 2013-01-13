@@ -297,7 +297,7 @@ public class ShenTest {
     }
 
     @Test
-    public void cannot_recur_from_tail_position() {
+    public void can_only_recur_from_tail_position() {
         is(intern("fib"), "(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))");
         is(55, "(fib 10)");
     }

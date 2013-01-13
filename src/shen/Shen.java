@@ -110,6 +110,8 @@ public class Shen {
     }
 
     public static Object cons(Object x, Object y) {
+        if (y instanceof List) //noinspection unchecked
+            return cons(x, (List) y);
         return new Cons(x, y);
     }
 
