@@ -36,7 +36,7 @@ public class ShenCompiler implements Opcodes {
 
     static ShenLoader loader = new ShenLoader();
 
-    public static Object fallback(MutableCallSite site, String name, Object... args) {
+    public static Object fallback(MutableCallSite site, String name, Object... args) throws Throwable {
         MethodType type = site.type();
         name = unscramble(name);
         debug("BOOTSTRAP: " + name + type + " " + Arrays.toString(args));
@@ -45,8 +45,7 @@ public class ShenCompiler implements Opcodes {
 
         int arity = symbol.fn.get(0).type().parameterCount();
         if (arity > args.length) {
-            MutableCallSite cs = new MutableCallSite(genericMethodType(arity)); // TODO: decouple lookup from callsite
-            MethodHandle partial = insertArguments(fallback, 0, cs, name).asCollector(Object[].class, arity);
+            MethodHandle partial = newFallback(new MutableCallSite(genericMethodType(arity)), name, arity);
             partial = insertArguments(partial, 0, args);
             debug("partial: " + partial);
             return partial;
@@ -54,30 +53,21 @@ public class ShenCompiler implements Opcodes {
 
         final MethodType matchType = methodType(site.type().returnType(),
                 stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
-        MethodHandle match;
-        try {
-            debug("real args: " + Arrays.toString(args));
-            match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
-            debug("selected: " + match);
-            match = match.asType(type);
-            site.setTarget(match);
-        } catch (Throwable t) {
-            debug("BSM exception: " + t);
-            match = dropArguments(throwException(type.returnType(), Throwable.class).bindTo(t), 0, type.parameterList());
-        }
-        try {
-            return match.invokeWithArguments(args);
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
-        }
+        debug("real args: " + Arrays.toString(args));
+
+        MethodHandle match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
+        debug("selected: " + match);
+        site.setTarget(match.asType(type));
+        return match.invokeWithArguments(args);
+    }
+
+    static MethodHandle newFallback(MutableCallSite site, String name, int arity) {
+        return insertArguments(fallback, 0, site, name).asCollector(Object[].class, arity);
     }
 
     public static CallSite bootstrap(Lookup lookup, String name, MethodType type) {
         MutableCallSite site = new MutableCallSite(type);
-        MethodHandle initial = fallback.bindTo(site).bindTo(name).asCollector(Object[].class, type.parameterCount());
-        site.setTarget(initial.asType(type));
+        site.setTarget(newFallback(site, name, type.parameterCount()).asType(type));
         return site;
     }
 
