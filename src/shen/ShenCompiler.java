@@ -83,11 +83,13 @@ public class ShenCompiler implements Opcodes {
 
     static MethodHandle insertArguments;
     static MethodHandle link;
+    static Lookup lookup = lookup();
+
     static {
         try {
-            insertArguments = lookup().findStatic(MethodHandles.class, "insertArguments",
+            insertArguments = lookup.findStatic(MethodHandles.class, "insertArguments",
                     methodType(MethodHandle.class, new Class[]{MethodHandle.class, int.class, Object[].class}));
-            link = lookup().findStatic(ShenCompiler.class, "link",
+            link = lookup.findStatic(ShenCompiler.class, "link",
                     methodType(Object.class, new Class[]{MutableCallSite.class, String.class, Object[].class}));
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -224,7 +226,7 @@ public class ShenCompiler implements Opcodes {
 
     static MethodHandle findSAM(Object lambda) {
         try {
-            return lookup().unreflect(findSAM(lambda.getClass())).bindTo(lambda);
+            return lookup.unreflect(findSAM(lambda.getClass())).bindTo(lambda);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
         }
@@ -291,7 +293,7 @@ public class ShenCompiler implements Opcodes {
 
         static void macro(java.lang.reflect.Method m)  {
             try {
-                macros.put(intern(unscramble(m.getName())), lookup().unreflect(m));
+                macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
@@ -467,7 +469,7 @@ public class ShenCompiler implements Opcodes {
             scope.addAll(asList(args));
 
             ShenCode fn = new ShenCode(cn, shen, scope.toArray(new Symbol[scope.size()]));
-            fn.compileMethod(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
+            fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
 
             insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope.subList(0, scope.size() - args.length));
         }
@@ -547,15 +549,15 @@ public class ShenCompiler implements Opcodes {
             constructor();
             java.lang.reflect.Method sam = findSAM(anInterface);
             List<Type> types = stream(sam.getParameterTypes()).map(Type::getType).into(new ArrayList<Type>());
-            compileMethod(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
+            method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
             //noinspection unchecked
             return (Class<T>) loader.define(cn);
         }
 
-        void compileMethod(int modifier, String name, Type returnType, List<Type> argumentTypes) {
+        void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
             this.name = intern(unscramble(name));
             this.argTypes = argumentTypes;
-            mv = generator(cn.visitMethod(modifier, name, desc(returnType, argumentTypes), null, null));
+            mv = generator(cn.visitMethod(modifiers, name, desc(returnType, argumentTypes), null, null));
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(shen);
@@ -597,10 +599,6 @@ public class ShenCompiler implements Opcodes {
             mv.push(handle);
             mv.push(pos);
             loadArgArray(args);
-            insertArgs();
-        }
-
-        void insertArgs() {
             mv.invokeStatic(getType(MethodHandles.class), new Method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
             topOfStack(MethodHandle.class);
         }
