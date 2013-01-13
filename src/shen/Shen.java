@@ -139,6 +139,20 @@ public class Shen {
         return e.getMessage();
     }
 
+    @SuppressWarnings("unchecked")
+    public static <T> T hd(Object list) {
+        if (list instanceof List)
+            return (T) hd((List) list);
+        return (T) hd((Cons) list);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> List<T> tl(Object list) {
+        if (list instanceof List)
+            return (List<T>) tl((List) list);
+        return (List<T>) tl((Cons) list);
+    }
+
     public static <T> T hd(List<T> list) {
         return list.isEmpty() ? null : list.get(0);
     }
@@ -226,12 +240,22 @@ public class Shen {
         return (int) s.charAt(0);
     }
 
+    public static int read_byte(Object s) throws IOException {
+        if (s instanceof  InputStream) return read_byte((InputStream) s);
+        return read_byte((Reader) s);
+    }
+
     public static int read_byte(InputStream s) throws IOException {
         return s.read();
     }
 
     public static int read_byte(Reader s) throws IOException {
         return s.read();
+    }
+
+    public static Object pr(Object x, Object s) throws IOException {
+        if (s instanceof  OutputStream) return pr(x, (OutputStream) s);
+        return pr(x, (Writer) s);
     }
 
     public static Object pr(Object x, OutputStream s) throws IOException {
@@ -275,7 +299,7 @@ public class Shen {
 
     public static class Symbol {
         public final String symbol;
-        public Set<MethodHandle> fn = new HashSet<>();
+        public List<MethodHandle> fn = new ArrayList<>();
         public Object var;
 
         public Symbol(String symbol) {

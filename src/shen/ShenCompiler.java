@@ -348,6 +348,7 @@ public class ShenCompiler implements Opcodes {
             Label end = mv.newLabel();
 
             compile(test);
+            if (isPrimitive(topOfStack) && topOfStack != getType(boolean.class)) box();
             if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
             mv.visitJumpInsn(IFEQ, elseStart);
 
