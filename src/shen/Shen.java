@@ -55,7 +55,6 @@ public class Shen {
             return left / right;
         });
 
-
         op("<", (IIPredicate) (left, right) -> left < right);
         op("<=", (IIPredicate) (left, right) -> left <= right);
         op(">", (IIPredicate) (left, right) -> left > right);
