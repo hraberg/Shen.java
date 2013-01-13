@@ -282,6 +282,8 @@ public class ShenTest {
         is(MethodHandle.class, "((cons) 1)");
         is(asList(1), "((cons 1) ())");
         is(new Cons(1, 2), "((cons 1) 2)");
+        is(new Cons(1, 2), "(((cons) 1) 2)");
+        is(new Cons(1, 2), "((cons) 1 2)");
     }
 
     @Test
