@@ -76,6 +76,10 @@ public class ShenCompiler implements Opcodes {
         return site;
     }
 
+    public static CallSite symbolBootstrap(Lookup lookup, String name, MethodType type) {
+        return new ConstantCallSite(constant(Symbol.class, intern(unscramble(name))));
+    }
+
     static void debug(String msg, Object... xs) {
         if (true == value("*debug*"))
             System.err.println(String.format(msg, xs));
@@ -97,6 +101,8 @@ public class ShenCompiler implements Opcodes {
     }
 
     static Handle bootstrap = staticMH(getInternalName(ShenCompiler.class), "bootstrap",
+            desc(CallSite.class, Lookup.class, String.class, MethodType.class));
+    static Handle symbolBootstrap = staticMH(getInternalName(ShenCompiler.class), "symbolBootstrap",
             desc(CallSite.class, Lookup.class, String.class, MethodType.class));
 
     static String desc(Class<?> returnType, Class<?>... argumentTypes ) {
@@ -521,8 +527,7 @@ public class ShenCompiler implements Opcodes {
         }
 
         void push(Symbol kl) {
-            mv.push(kl.symbol);
-            mv.invokeStatic(getType(Shen.class), new Method("intern", desc(Symbol.class, String.class)));
+            mv.invokeDynamic(scramble(kl.symbol), methodType(Symbol.class).toMethodDescriptorString(), symbolBootstrap);
             topOfStack(Symbol.class);
         }
 
