@@ -51,6 +51,8 @@ This is bound to change as we go:
 * Different bootstrap methods for invoke, apply and value/set.
 * Proper arithmetic.
 * Pre-compilation of the `kl` to `.class` files.
+* Ad-herence to Shen types when compiling typed Shen.
+* Performance.
 
 
 ## References
