@@ -19,9 +19,7 @@ import java.util.function.*;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
-import static java.lang.System.getProperty;
-import static java.lang.System.in;
-import static java.lang.System.out;
+import static java.lang.System.*;
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
@@ -931,9 +929,8 @@ public class Shen {
             }
 
             void fn(String name, Object shen, Symbol... args) throws Throwable {
-                List<Symbol> scope = new ArrayList<>(locals.keySet());// TODO: Should check whats actually used.
-                scope.addAll(this.args);
-                scope.removeAll(asList(args));
+                List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
+                scope.retainAll(locals.keySet().stream().into(new ArrayList<>(this.args)));
 
                 List<Type> types = scope.stream().map(this::typeOf).into(new ArrayList<Type>());
                 for (Symbol ignore : args) types.add(getType(Object.class));
@@ -943,6 +940,28 @@ public class Shen {
                 scope.addAll(asList(args));
                 Code fn = new Code(cn, shen, scope.toArray(new Symbol[scope.size()]));
                 fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
+            }
+
+            List<Symbol> closesOver(Set<Symbol> scope,  Object shen) {
+                Set<Symbol> result = new HashSet<>();
+                if (shen instanceof Symbol && !scope.contains(shen))
+                    result.add((Symbol) shen);
+                if (shen instanceof List) {
+                    List list = (List) shen;
+                    if (list.size() > 1) {
+                        if (intern("let").equals(list.get(0))) {
+                            scope = new HashSet<>(scope);
+                            result.addAll(closesOver(scope, list.get(2)));
+                            scope.add((Symbol) list.get(1));
+                            list = list.subList(2, list.size());
+                        }
+                        //noinspection SuspiciousMethodCalls
+                        if (!asList(intern("lambda"), intern("defun")).contains(list.get(0)))
+                            for (Object o : list.subList(1, list.size()))
+                                result.addAll(closesOver(scope, o));
+                    }
+                }
+                return new ArrayList<>(result);
             }
 
             @Macro
