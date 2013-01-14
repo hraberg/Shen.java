@@ -547,6 +547,7 @@ public class Shen {
         static MethodHandle insertArguments;
         static MethodHandle link;
         static MethodHandle isInstance;
+        static MethodHandle boxedType;
         static Lookup lookup = lookup();
 
         static {
@@ -556,6 +557,9 @@ public class Shen {
                 link = lookup.findStatic(Compiler.class, "link",
                         methodType(Object.class, asList(MutableCallSite.class, String.class, Object[].class)));
                 isInstance = lookup.findVirtual(Class.class, "isInstance", methodType(boolean.class, Object.class));
+                java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
+                getBoxedType.setAccessible(true);
+                boxedType = lookup.unreflect(getBoxedType);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -593,10 +597,8 @@ public class Shen {
 
         static Type boxedType(Type type) {
             try {
-                java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
-                getBoxedType.setAccessible(true);
-                return (Type) getBoxedType.invoke(null, type);
-            } catch (Exception e) {
+                return (Type) boxedType.invoke(type);
+            } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
         }
