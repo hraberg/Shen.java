@@ -515,7 +515,7 @@ public class Shen {
         }
 
         static List<Method> superMethods(Class aClass, Method method) {
-            if (Object.class.equals(aClass)) return new ArrayList<Method>();
+            if (Object.class.equals(aClass)) return new ArrayList<>();
             return asList(aClass.getSuperclass()).stream().into(new ArrayList<>(asList(aClass.getInterfaces()))).stream()
                     .map((Class c) -> c.getDeclaredMethods()).map(Arrays::asList)
                     .reduce(new ArrayList<>(), (x, y) -> y.stream().into(x)).stream()
