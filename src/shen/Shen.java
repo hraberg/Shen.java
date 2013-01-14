@@ -490,7 +490,7 @@ public class Shen {
         }
 
         static MethodHandle receiverCheck(MethodType type, Class<?> receiver) {
-            return isInstance.bindTo(receiver).asType(type.dropParameterTypes(1, type.parameterCount()).changeReturnType(boolean.class));
+            return isInstance.bindTo(receiver).asType(type.changeReturnType(boolean.class));
         }
 
         static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
