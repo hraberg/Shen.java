@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.*;
 import java.util.stream.Stream;
+import java.util.stream.Streams;
 
 import static java.lang.String.format;
 import static java.lang.System.*;
@@ -511,8 +512,8 @@ public class Shen {
         }
 
         static List<Method> superMethods(Class aClass, Method method) {
-            if (Object.class.equals(aClass)) return new ArrayList<>();
-            return mapcat(asList(aClass.getSuperclass()).stream().into(list(aClass.getInterfaces())).stream(),
+            if (Object.class.equals(aClass)) return list();
+            return mapcat(concat(asList(aClass.getSuperclass()), asList(aClass.getInterfaces())).stream(),
                     c -> asList(c.getDeclaredMethods()))
                     .filter(m -> m.getName().equals(method.getName()) && deepEquals(m.getParameterTypes(), method.getParameterTypes()))
                     .into(superMethods(aClass.getSuperclass(), method));
@@ -674,6 +675,10 @@ public class Shen {
 
         static<T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
             return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> y.stream().into(x)).stream();
+        }
+
+        static<T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
+            return Streams.concat(a.stream(), b.stream()).into(new ArrayList<T>());
         }
 
         @SafeVarargs
@@ -933,7 +938,7 @@ public class Shen {
 
             void fn(String name, Object shen, Symbol... args) throws Throwable {
                 List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
-                scope.retainAll(locals.keySet().stream().into(new ArrayList<>(this.args)));
+                scope.retainAll(concat(locals.keySet(), this.args));
 
                 List<Type> types = scope.stream().map(this::typeOf).into(new ArrayList<Type>());
                 for (Symbol ignore : args) types.add(getType(Object.class));
@@ -945,21 +950,18 @@ public class Shen {
                 fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
             }
 
+            @SuppressWarnings({"SuspiciousMethodCalls", "unchecked"})
             List<Symbol> closesOver(Set<Symbol> scope,  Object shen) {
                 if (shen instanceof Symbol && !scope.contains(shen))
                     return list((Symbol) shen);
                 if (shen instanceof List) {
-                    @SuppressWarnings("unchecked")
                     List<Object> list = (List) shen;
-                    if (list.size() > 1) {
-                        if (intern("let").equals(hd(list)))
-                            return closesOver(new HashSet<>(scope), list.get(2)).stream()
-                                    .into(closesOver(asList((Symbol) list.get(1)).stream()
-                                            .into(new HashSet<>(scope)), list.subList(2, list.size())));
-                        //noinspection SuspiciousMethodCalls
-                        if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
-                            return mapcat(tl(list).stream(), o -> closesOver(scope,o)).into(new ArrayList<Symbol>());
-                    }
+                    if (list.size() > 1) if (intern("let").equals(hd(list)))
+                        return concat(closesOver(new HashSet<>(scope), list.get(2)),
+                                closesOver(asList((Symbol) list.get(1)).stream()
+                                        .into(new HashSet<>(scope)), list.subList(2, list.size())));
+                    else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
+                        return mapcat(tl(list).stream(), o -> closesOver(scope, o)).into(new ArrayList<Symbol>());
                 }
                 return list();
             }
