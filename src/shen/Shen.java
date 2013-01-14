@@ -557,7 +557,7 @@ public class Shen {
                 link = lookup.findStatic(Compiler.class, "link",
                         methodType(Object.class, asList(MutableCallSite.class, String.class, Object[].class)));
                 isInstance = lookup.findVirtual(Class.class, "isInstance", methodType(boolean.class, Object.class));
-                java.lang.reflect.Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
+                Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
                 getBoxedType.setAccessible(true);
                 boxedType = lookup.unreflect(getBoxedType);
             } catch (Exception e) {
@@ -698,7 +698,7 @@ public class Shen {
             }
         }
 
-        static java.lang.reflect.Method findSAM(Class<?> lambda) {
+        static Method findSAM(Class<?> lambda) {
             return some(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
         }
 
@@ -757,7 +757,11 @@ public class Shen {
                 return new GeneratorAdapter(mn, mn.access, mn.name, mn.desc);
             }
 
-            static void macro(java.lang.reflect.Method m)  {
+            org.objectweb.asm.commons.Method method(String name, String desc) {
+                return new org.objectweb.asm.commons.Method(name, desc);
+            }
+
+            static void macro(Method m)  {
                 try {
                     macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
                 } catch (IllegalAccessException e) {
@@ -839,7 +843,7 @@ public class Shen {
 
                 loadArgArray(args);
 
-                mv.invokeStatic(getType(Compiler.class), new org.objectweb.asm.commons.Method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
+                mv.invokeStatic(getType(Compiler.class), method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
                 topOfStack = getType(Object.class);
             }
 
@@ -861,7 +865,7 @@ public class Shen {
                 mv.swap();
                 bindTo();
 
-                mv.invokeVirtual(getType(MethodHandle.class), new org.objectweb.asm.commons.Method("invoke", desc(Object.class)));
+                mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
                 mv.visitLabel(after);
                 topOfStack(Object.class);
             }
@@ -922,7 +926,7 @@ public class Shen {
                 push(name);
                 debug("compiling: " + name + args + " in " + getObjectType(cn.name).getClassName());
                 fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
-                mv.invokeStatic(getType(Compiler.class), new org.objectweb.asm.commons.Method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
+                mv.invokeStatic(getType(Compiler.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
                 topOfStack(Symbol.class);
             }
 
@@ -1013,7 +1017,7 @@ public class Shen {
             public <T> Class<T> load(Class<T> anInterface) throws Exception {
                 cn = classNode(anInterface);
                 constructor();
-                java.lang.reflect.Method sam = findSAM(anInterface);
+                Method sam = findSAM(anInterface);
                 List<Type> types = stream(sam.getParameterTypes()).map(Type::getType).into(new ArrayList<Type>());
                 method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
                 //noinspection unchecked
@@ -1044,7 +1048,7 @@ public class Shen {
             void constructor() {
                 GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class), null, null));
                 ctor.loadThis();
-                ctor.invokeConstructor(getType(Object.class), new org.objectweb.asm.commons.Method("<init>", desc(void.class)));
+                ctor.invokeConstructor(getType(Object.class), method("<init>", desc(void.class)));
                 ctor.returnValue();
             }
 
@@ -1057,7 +1061,8 @@ public class Shen {
             }
 
             void bindTo() {
-                mv.invokeStatic(getType(Compiler.class), new org.objectweb.asm.commons.Method("bindTo", desc(MethodHandle.class, MethodHandle.class, Object.class)));
+                mv.invokeStatic(getType(Compiler.class), method("bindTo",
+                        desc(MethodHandle.class, MethodHandle.class, Object.class)));
                 topOfStack(MethodHandle.class);
             }
 
@@ -1065,7 +1070,7 @@ public class Shen {
                 mv.push(handle);
                 mv.push(pos);
                 loadArgArray(args);
-                mv.invokeStatic(getType(MethodHandles.class), new org.objectweb.asm.commons.Method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
+                mv.invokeStatic(getType(MethodHandles.class), method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
                 topOfStack(MethodHandle.class);
             }
         }
