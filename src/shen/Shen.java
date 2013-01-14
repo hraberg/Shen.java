@@ -950,9 +950,10 @@ public class Shen {
                 compile(y, false);
                 int let = mv.newLocal(topOfStack);
                 mv.storeLocal(let);
-                locals.put(x, let);
+                Integer previous = locals.put(x, let);
                 compile(z, tail);
-                locals.remove(x);
+                if (previous != null) locals.put(x, previous);
+                else locals.remove(x);
             }
 
             void emptyList() {
