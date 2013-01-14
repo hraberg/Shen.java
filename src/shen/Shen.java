@@ -518,10 +518,7 @@ public class Shen {
             if (Object.class.equals(aClass)) return new ArrayList<Method>();
             return asList(aClass.getSuperclass()).stream().into(new ArrayList<>(asList(aClass.getInterfaces()))).stream()
                     .map((Class c) -> c.getDeclaredMethods()).map(Arrays::asList)
-                    .reduce(new ArrayList<>(), (x, y) -> {
-                        x.addAll(y);
-                        return x;
-                    }).stream()
+                    .reduce(new ArrayList<>(), (x, y) -> y.stream().into(x)).stream()
                     .filter(m -> m.getName().equals(method.getName()) && deepEquals(m.getParameterTypes(), method.getParameterTypes()))
                     .into(superMethods(aClass.getSuperclass(), method));
         }
