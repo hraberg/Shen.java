@@ -189,6 +189,10 @@ public class ShenTest {
         is(5, "(set x 5)");
         is(5, "(value x)");
         is(5, "(value (intern \"x\")");
+        is(intern("fun"), "(defun fun () (value x))");
+        is(5, "(fun)");
+        is(6, "(set x 6)");
+        is(6, "(fun)");
     }
 
     @Test

@@ -309,7 +309,8 @@ public class Shen {
     public static class Symbol {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
-        public SwitchPoint guard = new SwitchPoint();
+        public SwitchPoint varGuard = new SwitchPoint();
+        public SwitchPoint fnGuard = new SwitchPoint();
         public Object var;
 
         public Symbol(String symbol) {
@@ -327,14 +328,19 @@ public class Shen {
     }
 
     public static Object set(Symbol x, Object y) {
-        return x.var = y;
+        try {
+            return x.var = y;
+        } finally {
+            invalidateAll(new SwitchPoint[]{x.varGuard});
+            x.varGuard = new SwitchPoint();
+        }
     }
 
     static Object set(String x, Object y) {
         return set(intern(x), y);
     }
 
-    public static Object value(Symbol x) {
+    static Object value(Symbol x) {
         x.var.getClass();
         return x.var;
     }
@@ -424,6 +430,14 @@ public class Shen {
             return super.defineClass(cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
         }
 
+        public static Object value(MutableCallSite site, Symbol symbol) {
+            Object var = Shen.value(symbol);
+            MethodHandle value = dropArguments(constant(var.getClass(), var), 0, Symbol.class).asType(site.type());
+            MethodHandle guard = symbol.varGuard.guardWithTest(value, site.getTarget());
+            site.setTarget(guard);
+            return var;
+        }
+
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             MethodType type = site.type();
             name = unscramble(name);
@@ -456,7 +470,7 @@ public class Shen {
             MethodHandle match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
             debug("selected: " + match);
 
-            match = symbol.guard.guardWithTest(match.asType(type), site.getTarget());
+            match = symbol.fnGuard.guardWithTest(match.asType(type), site.getTarget());
             site.setTarget(match);
             return match.invokeWithArguments(args);
         }
@@ -535,12 +549,19 @@ public class Shen {
             return new ConstantCallSite(constant(Symbol.class, intern(unscramble(name))));
         }
 
+        public static CallSite valueBSM(Lookup lookup, String name, MethodType type) throws Exception {
+            MutableCallSite site = new MutableCallSite(type);
+            site.setTarget(value.bindTo(site).asType(type));
+            return site;
+        }
+
         static void debug(String msg, Object... xs) {
-            if (true == value("*debug*")) System.err.println(format(msg, xs));
+            if (true == Shen.value("*debug*")) System.err.println(format(msg, xs));
         }
 
         static MethodHandle insertArguments;
         static MethodHandle link;
+        static MethodHandle value;
         static MethodHandle isInstance;
         static MethodHandle boxedType;
         static Lookup lookup = lookup();
@@ -551,6 +572,8 @@ public class Shen {
                         methodType(MethodHandle.class, asList(MethodHandle.class, int.class, Object[].class)));
                 link = lookup.findStatic(Compiler.class, "link",
                         methodType(Object.class, asList(MutableCallSite.class, String.class, Object[].class)));
+                value = lookup.findStatic(Compiler.class, "value",
+                        methodType(Object.class, asList(MutableCallSite.class, Symbol.class)));
                 isInstance = lookup.findVirtual(Class.class, "isInstance", methodType(boolean.class, Object.class));
                 Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
                 getBoxedType.setAccessible(true);
@@ -563,6 +586,7 @@ public class Shen {
         static String bootstrapDesc = desc(CallSite.class, Lookup.class, String.class, MethodType.class);
         static Handle invokeBSM = staticMH(Compiler.class, "invokeBSM", bootstrapDesc);
         static Handle symbolBSM = staticMH(Compiler.class, "symbolBSM", bootstrapDesc);
+        static Handle valueBSM = staticMH(Compiler.class, "valueBSM", bootstrapDesc);
 
         static String desc(Class<?> returnType, Class<?>... argumentTypes) {
             return methodType(returnType, argumentTypes).toMethodDescriptorString();
@@ -628,8 +652,8 @@ public class Shen {
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
             name.fn.clear();
             name.fn.add(fn);
-            invalidateAll(new SwitchPoint[] {name.guard});
-            name.guard = new SwitchPoint();
+            invalidateAll(new SwitchPoint[] {name.fnGuard});
+            name.fnGuard = new SwitchPoint();
             return name;
         }
 
@@ -917,6 +941,13 @@ public class Shen {
                     bindTo(staticMH(Compiler.class, "and", desc(boolean.class, boolean.class, boolean[].class)), x);
                 else
                     KL_if(tail, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+            }
+
+            @Macro
+            public void value(boolean tail, Object x) throws Throwable {
+                compile(x);
+                mv.invokeDynamic("value", methodType(Object.class, Symbol.class).toMethodDescriptorString(), valueBSM);
+                topOfStack(Object.class);
             }
 
             @Macro
