@@ -19,6 +19,7 @@ import java.util.function.*;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
+import static java.lang.System.getProperty;
 import static java.lang.System.in;
 import static java.lang.System.out;
 import static java.lang.invoke.MethodHandles.*;
@@ -44,18 +45,18 @@ public class Shen {
         repl();
     }
 
-    static Map<String, Symbol> symbols = new HashMap<>();
     static Compiler loader = new Compiler();
-    static Map<String, Class> imports = new HashMap<String, Class>();
+    static Map<String, Symbol> symbols = new HashMap<>();
+    static Map<String, Class> imports = new HashMap<>();
 
     static {
         set("*language*", "Java");
-        set("*implementation*", format("[jvm %s]", System.getProperty("java.version")));
+        set("*implementation*", format("[jvm %s]", getProperty("java.version")));
         set("*porters*", "Håkan Råberg");
         set("*stinput*", in);
         set("*stoutput*", out);
         set("*debug*", false);
-        set("*home-directory*", System.getProperty("user.dir"));
+        set("*home-directory*", getProperty("user.dir"));
 
         stream(Shen.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(Shen::defun);
 
@@ -89,8 +90,7 @@ public class Shen {
         op(">", (DDPredicate) (left, right) -> left > right);
         op(">=", (DDPredicate) (left, right) -> left >= right);
 
-        KL_import(Math.class);
-        KL_import(System.class);
+        asList(Math.class, System.class).forEach(Shen::KL_import);
     }
 
     interface IIPredicate { boolean test(int a, int b);}
