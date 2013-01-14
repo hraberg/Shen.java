@@ -931,12 +931,12 @@ public class Shen {
             }
 
             void fn(String name, Object shen, Symbol... args) throws Throwable {
-                List<Type> types = locals.values().stream().map(mv::getLocalType).into(new ArrayList<Type>());
-                types.addAll(this.argTypes);
-                for (Symbol ignored : args) types.add(getType(Object.class));
-
-                List<Symbol> scope = new ArrayList<>(locals.keySet());
+                List<Symbol> scope = new ArrayList<>(locals.keySet());// TODO: Should check whats actually used.
                 scope.addAll(this.args);
+                scope.removeAll(asList(args));
+
+                List<Type> types = scope.stream().map(this::typeOf).into(new ArrayList<Type>());
+                for (Symbol ignore : args) types.add(getType(Object.class));
                 scope.addAll(asList(args));
 
                 Code fn = new Code(cn, shen, scope.toArray(new Symbol[scope.size()]));
@@ -950,9 +950,9 @@ public class Shen {
                 compile(y, false);
                 int let = mv.newLocal(topOfStack);
                 mv.storeLocal(let);
-                Integer previous = locals.put(x, let);
+                Integer hidden = locals.put(x, let);
                 compile(z, tail);
-                if (previous != null) locals.put(x, previous);
+                if (hidden != null) locals.put(x, hidden);
                 else locals.remove(x);
             }
 
@@ -962,16 +962,16 @@ public class Shen {
             }
 
             void symbol(Symbol s) {
-                if (locals.containsKey(s)) {
-                    int local = locals.get(s);
-                    mv.loadLocal(local);
-                    topOfStack = mv.getLocalType(local);
-                } else if (args.contains(s)) {
-                    int arg = args.indexOf(s);
-                    mv.loadArg(arg);
-                    topOfStack = argTypes.get(arg);
-                } else
-                    push(s);
+                if (locals.containsKey(s)) mv.loadLocal(locals.get(s));
+                else if (args.contains(s)) mv.loadArg(args.indexOf(s));
+                else push(s);
+                topOfStack = typeOf(s);
+            }
+
+            Type typeOf(Symbol s) {
+                if (locals.containsKey(s)) return mv.getLocalType(locals.get(s));
+                else if (args.contains(s)) return argTypes.get(args.indexOf(s));
+                return getType(Symbol.class);
             }
 
             void loadArgArray(List<?> args) {
