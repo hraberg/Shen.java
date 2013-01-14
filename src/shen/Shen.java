@@ -433,7 +433,7 @@ public class Shen {
             Symbol symbol = intern(name);
             debug("candidates: " + symbol.fn);
 
-            if (symbol.fn.isEmpty() && maybeJava(name)) {
+            if (maybeJava(name)) {
                 MethodHandle java = javaCall(site, name, type, args);
                 if (java != null) {
                     debug("calling java: " + java);
@@ -441,6 +441,7 @@ public class Shen {
                     return java.invokeWithArguments(args);
                 }
             }
+            if (symbol.fn.isEmpty()) throw new NoSuchMethodException(name + type);
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
@@ -464,31 +465,28 @@ public class Shen {
             return match.invokeWithArguments(args);
         }
 
-        static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) {
-            try {
-                if (name.endsWith(".")) {
-                    String ctor = name.substring(0, name.length() - 1);
-                    Class aClass = imports.get(ctor);
+        static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
+            if (name.endsWith(".")) {
+                String ctor = name.substring(0, name.length() - 1);
+                Class aClass = imports.get(ctor);
+                if (aClass != null)
                     return lookup.unreflectConstructor(findJavaMethod(type, aClass.getName(), aClass.getConstructors()));
-                }
-                if (name.startsWith(".")) {
-                    String method = name.substring(1, name.length());
-                    Method javaMethod = findJavaMethod(type, method, args[0].getClass().getMethods());
-                    MethodHandle target = lookup.unreflect(javaMethod);
-                    Method declaration = declaringMethod(javaMethod);
-                    debug("binding: " + javaMethod + " to deceleration " + declaration);
-                    return guardWithTest(receiverCheck(type, declaration.getDeclaringClass()), target.asType(type),
-                            linker(site, scramble(name), type.parameterCount()).asType(type));
-                }
-                String[] classAndMethod = name.split("/");
-                if (classAndMethod.length == 2) {
-                    Class aClass = imports.get(classAndMethod[0]);
-                    String method = classAndMethod[1];
-                    if (aClass != null)
-                        return lookup.unreflect(findJavaMethod(type, method, aClass.getMethods()));
-                }
-            } catch (Exception e) {
-                debug(e.getMessage());
+            }
+            if (name.startsWith(".")) {
+                String method = name.substring(1, name.length());
+                Method javaMethod = findJavaMethod(type, method, args[0].getClass().getMethods());
+                MethodHandle target = lookup.unreflect(javaMethod);
+                Method declaration = declaringMethod(javaMethod);
+                debug("binding: " + javaMethod + " to deceleration " + declaration);
+                return guardWithTest(receiverCheck(type, declaration.getDeclaringClass()), target.asType(type),
+                        linker(site, scramble(name), type.parameterCount()).asType(type));
+            }
+            String[] classAndMethod = name.split("/");
+            if (classAndMethod.length == 2) {
+                Class aClass = imports.get(classAndMethod[0]);
+                String method = classAndMethod[1];
+                if (aClass != null)
+                    return lookup.unreflect(findJavaMethod(type, method, aClass.getMethods()));
             }
             return null;
         }
