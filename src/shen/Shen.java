@@ -512,9 +512,8 @@ public class Shen {
 
         static List<Method> superMethods(Class aClass, Method method) {
             if (Object.class.equals(aClass)) return new ArrayList<>();
-            return asList(aClass.getSuperclass()).stream().into(new ArrayList<>(asList(aClass.getInterfaces()))).stream()
-                    .map((Class c) -> c.getDeclaredMethods()).map(Arrays::asList)
-                    .reduce(new ArrayList<>(), (x, y) -> y.stream().into(x)).stream()
+            return mapcat(asList(aClass.getSuperclass()).stream().into(list(aClass.getInterfaces())).stream(),
+                    c -> asList(c.getDeclaredMethods()))
                     .filter(m -> m.getName().equals(method.getName()) && deepEquals(m.getParameterTypes(), method.getParameterTypes()))
                     .into(superMethods(aClass.getSuperclass(), method));
         }
@@ -671,6 +670,10 @@ public class Shen {
 
         static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
             return stream.filter(predicate).findAny().orElse((T) null);
+        }
+
+        static<T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
+            return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> y.stream().into(x)).stream();
         }
 
         @SafeVarargs
@@ -943,25 +946,22 @@ public class Shen {
             }
 
             List<Symbol> closesOver(Set<Symbol> scope,  Object shen) {
-                Set<Symbol> result = new HashSet<>();
                 if (shen instanceof Symbol && !scope.contains(shen))
-                    result.add((Symbol) shen);
+                    return list((Symbol) shen);
                 if (shen instanceof List) {
-                    List list = (List) shen;
+                    @SuppressWarnings("unchecked")
+                    List<Object> list = (List) shen;
                     if (list.size() > 1) {
-                        if (intern("let").equals(list.get(0))) {
-                            scope = new HashSet<>(scope);
-                            result.addAll(closesOver(scope, list.get(2)));
-                            scope.add((Symbol) list.get(1));
-                            list = list.subList(2, list.size());
-                        }
+                        if (intern("let").equals(hd(list)))
+                            return closesOver(new HashSet<>(scope), list.get(2)).stream()
+                                    .into(closesOver(asList((Symbol) list.get(1)).stream()
+                                            .into(new HashSet<>(scope)), list.subList(2, list.size())));
                         //noinspection SuspiciousMethodCalls
-                        if (!asList(intern("lambda"), intern("defun")).contains(list.get(0)))
-                            for (Object o : list.subList(1, list.size()))
-                                result.addAll(closesOver(scope, o));
+                        if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
+                            return mapcat(tl(list).stream(), o -> closesOver(scope,o)).into(new ArrayList<Symbol>());
                     }
                 }
-                return new ArrayList<>(result);
+                return list();
             }
 
             @Macro
