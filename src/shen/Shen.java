@@ -137,11 +137,11 @@ public class Shen {
         }
     }
 
-    public static Object KL_import(Symbol s) throws ClassNotFoundException {
+    public static Class KL_import(Symbol s) throws ClassNotFoundException {
        return KL_import(Class.forName(s.symbol));
     }
 
-    static Object KL_import(Class type) {
+    static Class KL_import(Class type) {
         imports.put(type.getSimpleName(), type);
         return type;
     }
@@ -484,7 +484,7 @@ public class Shen {
             return null;
         }
 
-        private static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
+        static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
             return some(stream(methods), m -> {
                 try {
                     if (m.getName().equals(method)) {
