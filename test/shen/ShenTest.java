@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.lang.invoke.MethodHandle;
+import java.util.ArrayList;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.EMPTY_LIST;
@@ -302,6 +303,24 @@ public class ShenTest {
     public void can_only_recur_from_tail_position() {
         is(intern("fib"), "(defun fib (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))");
         is(55, "(fib 10)");
+    }
+
+    @Test
+    public void java() {
+        is(long.class, "(System/currentTimeMillis)");
+        is("Oracle Corporation", "(System/getProperty \"java.vendor\")");
+        is(1.4142135623730951, "(Math/sqrt 2)");
+        is(Class.class, "(import java.util.Arrays)");
+        is(asList(1, 2), "(Arrays/asList 1 2)");
+        is(Class.class, "(import java.util.ArrayList)");
+        is(ArrayList.class, "(ArrayList.)");
+        is(asList(1), "(ArrayList. (cons 1 ())");
+        is(1, "(.size (ArrayList. (cons 1 ()))");
+        is(asList(2), "(tl (ArrayList. (cons 1 (cons 2 ())))");
+        is("HELLO", "(.toUpperCase \"Hello\")");
+        is(intern("up"), "(defun up (x) (.toUpperCase x))");
+        is("UP", "(up \"up\")");
+        is("TWICE", "(up \"twice\")");
     }
 
     @Test

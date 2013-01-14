@@ -41,7 +41,8 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 * The K Lambda parser.
 * KL special forms.
 * Partial application.
-* Recur.
+* Implicit recur.
+* Simple Java inter-op.
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/ShenTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 
 

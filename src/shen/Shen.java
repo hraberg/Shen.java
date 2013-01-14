@@ -9,6 +9,8 @@ import java.io.*;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
@@ -43,6 +45,8 @@ public class Shen {
     }
 
     static Map<String, Symbol> symbols = new HashMap<>();
+    static Compiler loader = new Compiler();
+    static Map<String, Class> imports = new HashMap<String, Class>();
 
     static {
         set("*language*", "Java");
@@ -84,6 +88,9 @@ public class Shen {
         op("<=", (DDPredicate) (left, right) -> left <= right);
         op(">", (DDPredicate) (left, right) -> left > right);
         op(">=", (DDPredicate) (left, right) -> left >= right);
+
+        KL_import(Math.class);
+        KL_import(System.class);
     }
 
     interface IIPredicate { boolean test(int a, int b);}
@@ -128,6 +135,15 @@ public class Shen {
         public String toString() {
             return "[" + car + " | " + cdr + "]";
         }
+    }
+
+    public static Object KL_import(Symbol s) throws ClassNotFoundException {
+       return KL_import(Class.forName(s.symbol));
+    }
+
+    static Object KL_import(Class type) {
+        imports.put(type.getSimpleName(), type);
+        return type;
     }
 
     public static Object cons(Object x, Object y) {
@@ -402,8 +418,6 @@ public class Shen {
         }
     }
 
-    static Compiler loader = new Compiler();
-
     public static class Compiler extends ClassLoader implements Opcodes {
         public Class<?> define(ClassNode cn) {
             ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
@@ -418,6 +432,15 @@ public class Shen {
             debug("LINKING: " + name + type + " " + Arrays.toString(args));
             Symbol symbol = intern(name);
             debug("candidates: " + symbol.fn);
+
+            if (symbol.fn.isEmpty() && maybeJava(name)) {
+                MethodHandle java = javaCall(name, type, args);
+                if (java != null) {
+                    debug("calling java: " + java);
+                    site.setTarget(java.asType(type));
+                    return java.invokeWithArguments(args);
+                }
+            }
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
@@ -439,6 +462,43 @@ public class Shen {
             match = switchPoint.guardWithTest(match.asType(type), site.getTarget());
             site.setTarget(match);
             return match.invokeWithArguments(args);
+        }
+
+        static MethodHandle javaCall(String name, MethodType type, Object... args) throws IllegalAccessException {
+            if (name.endsWith(".")) {
+                String ctor = name.substring(0, name.length() - 1);
+                Class aClass = imports.get(ctor);
+                return lookup.unreflectConstructor(findJavaMethod(type, aClass.getName(), aClass.getConstructors()));
+            }
+            if (name.startsWith(".")) {
+                String method = name.substring(1, name.length());
+                return lookup.unreflect(findJavaMethod(type, method, args[0].getClass().getMethods()));
+            }
+            String[] classAndMethod = name.split("/");
+            if (classAndMethod.length == 2) {
+                Class aClass = imports.get(classAndMethod[0]);
+                String method = classAndMethod[1];
+                if (aClass != null)
+                    return lookup.unreflect(findJavaMethod(type, method, aClass.getMethods()));
+            }
+            return null;
+        }
+
+        private static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
+            return some(stream(methods), m -> {
+                try {
+                    if (m.getName().equals(method)) {
+                        ((m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m)).asType(type);
+                        return true;
+                    }
+                } catch (Exception ignore) {
+                }
+                return false;
+            });
+        }
+
+        static boolean maybeJava(String name) {
+            return name.contains(".") || name.contains("/") && name.length() > 1;
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) {
