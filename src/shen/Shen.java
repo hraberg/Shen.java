@@ -856,6 +856,7 @@ public class Shen {
                 box();
 
                 mv.visitLabel(end);
+                topOfStack(Object.class);
             }
 
             @Macro
