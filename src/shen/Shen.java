@@ -309,7 +309,7 @@ public class Shen {
     public static class Symbol {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
-        public List<SwitchPoint> usages = new ArrayList<>();
+        public SwitchPoint guard = new SwitchPoint();
         public Object var;
 
         public Symbol(String symbol) {
@@ -456,9 +456,7 @@ public class Shen {
             MethodHandle match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
             debug("selected: " + match);
 
-            SwitchPoint switchPoint = new SwitchPoint();
-            symbol.usages.add(switchPoint);
-            match = switchPoint.guardWithTest(match.asType(type), site.getTarget());
+            match = symbol.guard.guardWithTest(match.asType(type), site.getTarget());
             site.setTarget(match);
             return match.invokeWithArguments(args);
         }
@@ -630,8 +628,8 @@ public class Shen {
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
             name.fn.clear();
             name.fn.add(fn);
-            invalidateAll(name.usages.toArray(new SwitchPoint[name.usages.size()]));
-            name.usages.clear();
+            invalidateAll(new SwitchPoint[] {name.guard});
+            name.guard = new SwitchPoint();
             return name;
         }
 
