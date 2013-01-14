@@ -929,7 +929,7 @@ public class Shen {
             void fn(String name, Object shen, Symbol... args) throws Throwable {
                 List<Type> types = locals.values().stream().map(mv::getLocalType).into(new ArrayList<Type>());
                 types.addAll(this.argTypes);
-                for (Symbol arg : args) types.add(getType(Object.class));
+                for (Symbol ignored : args) types.add(getType(Object.class));
 
                 List<Symbol> scope = new ArrayList<>(locals.keySet());
                 scope.addAll(this.args);
