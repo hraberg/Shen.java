@@ -937,12 +937,12 @@ public class Shen {
 
                 List<Type> types = scope.stream().map(this::typeOf).into(new ArrayList<Type>());
                 for (Symbol ignore : args) types.add(getType(Object.class));
-                scope.addAll(asList(args));
 
+                insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope);
+
+                scope.addAll(asList(args));
                 Code fn = new Code(cn, shen, scope.toArray(new Symbol[scope.size()]));
                 fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
-
-                insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope.subList(0, scope.size() - args.length));
             }
 
             @Macro
