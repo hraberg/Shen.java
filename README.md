@@ -42,7 +42,7 @@ There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrai
 * KL special forms.
 * Partial application.
 * Implicit recur.
-* Simple Java inter-op.
+* Simple Java inter-op (based on Clojure's syntax).
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/ShenTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 
 
