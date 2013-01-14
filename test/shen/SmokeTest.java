@@ -14,7 +14,7 @@ import static shen.Shen.*;
 // Both run against the compiler, as the interpreter has been removed.
 public class SmokeTest {
     @Test
-    public void interpreter() throws Exception {
+    public void interpreter() throws Throwable {
         out.println(eval_kl(intern("x")));
         out.println(eval("(or false)"));
         out.println(eval("(or false false)"));

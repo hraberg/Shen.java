@@ -24,9 +24,16 @@ Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/master/src
 This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff.
 
 The idea is to compile this down to bytecode eventually. Note that I don't vouch for any of the implementation details regarding this - I'm learning as we go.
-There's a start of this in [`ShenCompiler.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/ShenCompiler.java). The primitives and parser live in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java).
+All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/ShenCompiler.java).
 
 There's an IntelliJ project, which requires [Leda EAP](http://confluence.jetbrains.net/display/IDEADEV/IDEA+12+EAP) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
+
+
+### Building
+
+    export JAVA_HOME=/path/to/jdk1.8.0/with/lambdas
+    mvn package
+    $JAVA_HOME/bin/java -jar target/shen.java-*-standalone.jar
 
 
 ### What works?

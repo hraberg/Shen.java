@@ -325,8 +325,8 @@ public class ShenTest {
     Object 神(String shen) {
         try {
             return eval(shen);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
         }
     }
 }
