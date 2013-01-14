@@ -321,6 +321,10 @@ public class ShenTest {
         is(intern("up"), "(defun up (x) (.toUpperCase x))");
         is("UP", "(up \"up\")");
         is("TWICE", "(up \"twice\")");
+        is(intern("to-string"), "(defun to-string (x) (.toString x))");
+        is("[1]", "(to-string (ArrayList. (cons 1 ()))");
+        is(Class.class, "(import java.util.LinkedList)");
+        is("[1]", "(to-string (LinkedList. (cons 1 ()))");
     }
 
     @Test

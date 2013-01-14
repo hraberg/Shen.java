@@ -434,7 +434,7 @@ public class Shen {
             debug("candidates: " + symbol.fn);
 
             if (symbol.fn.isEmpty() && maybeJava(name)) {
-                MethodHandle java = javaCall(name, type, args);
+                MethodHandle java = javaCall(site, name, type, args);
                 if (java != null) {
                     debug("calling java: " + java);
                     site.setTarget(java.asType(type));
@@ -464,7 +464,7 @@ public class Shen {
             return match.invokeWithArguments(args);
         }
 
-        static MethodHandle javaCall(String name, MethodType type, Object... args) throws IllegalAccessException {
+        static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
             if (name.endsWith(".")) {
                 String ctor = name.substring(0, name.length() - 1);
                 Class aClass = imports.get(ctor);
@@ -472,7 +472,11 @@ public class Shen {
             }
             if (name.startsWith(".")) {
                 String method = name.substring(1, name.length());
-                return lookup.unreflect(findJavaMethod(type, method, args[0].getClass().getMethods()));
+                Method javaMethod = findJavaMethod(type, method, args[0].getClass().getMethods());
+                MethodHandle target = lookup.unreflect(javaMethod);
+                Method declaration = declaringMethod(javaMethod);
+                debug("binding: " + javaMethod + " to deceleration " + declaration);
+                return guardWithTest(receiverCheck(type, declaration.getDeclaringClass()), target.asType(type), linker(site, scramble(name), type.parameterCount()).asType(type));
             }
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2) {
@@ -482,6 +486,10 @@ public class Shen {
                     return lookup.unreflect(findJavaMethod(type, method, aClass.getMethods()));
             }
             return null;
+        }
+
+        static MethodHandle receiverCheck(MethodType type, Class<?> receiver) {
+            return isInstance.bindTo(receiver).asType(type.dropParameterTypes(1, type.parameterCount()).changeReturnType(boolean.class));
         }
 
         static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
@@ -496,6 +504,23 @@ public class Shen {
                 return false;
             });
         }
+
+        static Method declaringMethod(Method method) {
+            return superMethods(method.getDeclaringClass(), method).stream().findFirst().orElse(method);
+        }
+
+        static List<Method> superMethods(Class aClass, Method method) {
+            if (Object.class.equals(aClass)) return new ArrayList<Method>();
+            return asList(aClass.getSuperclass()).stream().into(new ArrayList<>(asList(aClass.getInterfaces()))).stream()
+                    .map((Class c) -> c.getDeclaredMethods()).map(Arrays::asList)
+                    .reduce(new ArrayList<>(), (x, y) -> {
+                        x.addAll(y);
+                        return x;
+                    })
+                    .stream().filter(m -> m.getName().equals(method.getName()) && Arrays.deepEquals(m.getParameterTypes(), method.getParameterTypes()))
+                    .into(new ArrayList<Method>(superMethods(aClass.getSuperclass(), method)));
+        }
+
 
         static boolean maybeJava(String name) {
             return name.contains(".") || name.contains("/") && name.length() > 1;
@@ -521,6 +546,7 @@ public class Shen {
 
         static MethodHandle insertArguments;
         static MethodHandle link;
+        static MethodHandle isInstance;
         static Lookup lookup = lookup();
 
         static {
@@ -529,6 +555,7 @@ public class Shen {
                         methodType(MethodHandle.class, asList(MethodHandle.class, int.class, Object[].class)));
                 link = lookup.findStatic(Compiler.class, "link",
                         methodType(Object.class, asList(MutableCallSite.class, String.class, Object[].class)));
+                isInstance = lookup.findVirtual(Class.class, "isInstance", methodType(boolean.class, Object.class));
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
