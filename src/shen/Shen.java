@@ -60,8 +60,8 @@ public class Shen {
         stream(Shen.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(Shen::defun);
 
         op("=", (BiPredicate<Object, Object>) (left, right) -> left instanceof Number && right instanceof Number
-                        ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
-                        : deepEquals(left, right));
+                ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
+                : deepEquals(left, right));
         op("+", (IntBinaryOperator) (left, right) -> left + right);
         op("-", (IntBinaryOperator) (left, right) -> left - right);
         op("*", (IntBinaryOperator) (left, right) -> left * right);
@@ -92,16 +92,16 @@ public class Shen {
         asList(Math.class, System.class).forEach(Shen::KL_import);
     }
 
-    interface IIPredicate { boolean test(int a, int b);}
-    interface LLPredicate { boolean test(long a, long b);}
-    interface DDPredicate { boolean test(double a, double b);}
+    interface IIPredicate { boolean test(int a, int b); }
+    interface LLPredicate { boolean test(long a, long b); }
+    interface DDPredicate { boolean test(double a, double b); }
 
     static void op(String name, Object op) {
         intern(name).fn.add(findSAM(op));
     }
 
     static Symbol defun(Method m) {
-       try {
+        try {
             Symbol name = intern(unscramble(m.getName()));
             name.fn.add(lookup().unreflect(m));
             return name;
@@ -137,7 +137,7 @@ public class Shen {
     }
 
     public static Class KL_import(Symbol s) throws ClassNotFoundException {
-       return KL_import(Class.forName(s.symbol));
+        return KL_import(Class.forName(s.symbol));
     }
 
     static Class KL_import(Class type) {
@@ -280,7 +280,6 @@ public class Shen {
 
     public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
         if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
-
         File file = new File((String) value("*home-directory*"), string);
         switch (direction.symbol) {
             case "in": return new FileInputStream(file);
@@ -567,7 +566,7 @@ public class Shen {
         static Handle invokeBSM = staticMH(Compiler.class, "invokeBSM", bootstrapDesc);
         static Handle symbolBSM = staticMH(Compiler.class, "symbolBSM", bootstrapDesc);
 
-        static String desc(Class<?> returnType, Class<?>... argumentTypes ) {
+        static String desc(Class<?> returnType, Class<?>... argumentTypes) {
             return methodType(returnType, argumentTypes).toMethodDescriptorString();
         }
 
@@ -618,7 +617,7 @@ public class Shen {
         static boolean canWiden(Class a, Class b) {
             if (a.isPrimitive()) a = boxedType(a);
             if (b.isPrimitive()) b = boxedType(b);
-            return Number.class.isAssignableFrom(a) &&  Number.class.isAssignableFrom(b)
+            return Number.class.isAssignableFrom(a) && Number.class.isAssignableFrom(b)
                     && numbers.indexOf(a) >= numbers.indexOf(b);
         }
 
@@ -636,7 +635,7 @@ public class Shen {
             return name;
         }
 
-        public static Object apply(MethodHandle fn, Object...  args) throws Throwable {
+        public static Object apply(MethodHandle fn, Object... args) throws Throwable {
             if (isLambda(fn)) return uncurry(fn, args);
 
             MethodType targetType = methodType(Object.class, stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
@@ -673,11 +672,11 @@ public class Shen {
             return stream.filter(predicate).findAny().orElse((T) null);
         }
 
-        static<T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
+        static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
             return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> y.stream().into(x)).stream();
         }
 
-        static<T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
+        static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
             return Streams.concat(a.stream(), b.stream()).into(new ArrayList<T>());
         }
 
@@ -767,7 +766,7 @@ public class Shen {
                 return new org.objectweb.asm.commons.Method(name, desc);
             }
 
-            static void macro(Method m)  {
+            static void macro(Method m) {
                 try {
                     macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
                 } catch (IllegalAccessException e) {
@@ -821,10 +820,10 @@ public class Shen {
 
                 if (isSelfCall(s, args)) {
                     if (tail) {
-                        debug("recur: "  + s);
+                        debug("recur: " + s);
                         recur();
                         return;
-                    } else debug("can only recur from tail position: "  + s);
+                    } else debug("can only recur from tail position: " + s);
                 }
                 MethodType type = asMethodType(s.fn.size() == 1
                         ? getType(s.fn.stream().findAny().get().type().returnType())
@@ -951,17 +950,18 @@ public class Shen {
             }
 
             @SuppressWarnings({"SuspiciousMethodCalls", "unchecked"})
-            List<Symbol> closesOver(Set<Symbol> scope,  Object shen) {
+            List<Symbol> closesOver(Set<Symbol> scope, Object shen) {
                 if (shen instanceof Symbol && !scope.contains(shen))
                     return list((Symbol) shen);
                 if (shen instanceof List) {
                     List<Object> list = (List) shen;
-                    if (list.size() > 1) if (intern("let").equals(hd(list)))
-                        return concat(closesOver(new HashSet<>(scope), list.get(2)),
-                                closesOver(asList((Symbol) list.get(1)).stream()
-                                        .into(new HashSet<>(scope)), list.subList(2, list.size())));
-                    else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
-                        return mapcat(tl(list).stream(), o -> closesOver(scope, o)).into(new ArrayList<Symbol>());
+                    if (list.size() > 1)
+                        if (intern("let").equals(hd(list)))
+                            return concat(closesOver(new HashSet<>(scope), list.get(2)),
+                                    closesOver(asList((Symbol) list.get(1)).stream()
+                                            .into(new HashSet<>(scope)), list.subList(2, list.size())));
+                        else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
+                            return mapcat(tl(list).stream(), o -> closesOver(scope, o)).into(new ArrayList<Symbol>());
                 }
                 return list();
             }
@@ -1092,7 +1092,8 @@ public class Shen {
                 mv.push(handle);
                 mv.push(pos);
                 loadArgArray(args);
-                mv.invokeStatic(getType(MethodHandles.class), method("insertArguments", desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
+                mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
+                        desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
                 topOfStack(MethodHandle.class);
             }
         }
