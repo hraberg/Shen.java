@@ -899,6 +899,7 @@ public class Shen {
 
                 compile(then, tail);
                 box();
+                Type typeOfThenBranch = topOfStack;
                 mv.goTo(end);
 
                 mv.visitLabel(elseStart);
@@ -906,7 +907,8 @@ public class Shen {
                 box();
 
                 mv.visitLabel(end);
-                topOfStack(Object.class);
+                if (!typeOfThenBranch.equals(topOfStack))
+                    topOfStack(Object.class);
             }
 
             @Macro
