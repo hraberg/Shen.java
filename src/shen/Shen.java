@@ -540,7 +540,7 @@ public class Shen {
         }
 
         static boolean maybeJava(String name) {
-            return name.contains(".") || name.contains("/") && name.length() > 1;
+            return name.startsWith(".") || name.endsWith(".") || name.contains("/") && name.length() > 1;
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
