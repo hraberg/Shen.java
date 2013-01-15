@@ -764,8 +764,7 @@ public class Shen {
                     else if (kl instanceof List) {
                         @SuppressWarnings("unchecked")
                         List<Object> list = (List) kl;
-                        if (list.isEmpty())
-                            emptyList();
+                        if (list.isEmpty()) emptyList();
                         else {
                             Object first = list.get(0);
                             if (first instanceof Symbol) {
