@@ -28,6 +28,9 @@ import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
+import static java.util.function.Predicates.isEqual;
+import static java.util.function.Predicates.isSame;
+import static java.util.function.Predicates.nonNull;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
@@ -498,15 +501,15 @@ public class Shen {
         }
 
         static <T extends Executable> MethodHandle findJavaMethod(MethodType type, String method, T[] methods) {
-            return some(stream(methods).map(m -> {
+            return some(stream(methods), m -> {
                 try {
                     if (m.getName().equals(method)) {
-                        return((m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m)).asType(type);
+                        return ((m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m)).asType(type);
                     }
                 } catch (Exception ignore) {
                 }
                 return null;
-            }), m -> m !=null);
+            });
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
@@ -534,7 +537,7 @@ public class Shen {
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
-            return lookup.unreflect(some(stream(aClass.getMethods()), m -> m.getName().equals(name)
+            return lookup.unreflect(find(stream(aClass.getMethods()), m -> m.getName().equals(name)
                     && (types.length == 0 || deepEquals(m.getParameterTypes(), types))));
         }
 
@@ -635,8 +638,12 @@ public class Shen {
             return true;
         }
 
-        static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
+        static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
             return stream.filter(predicate).findFirst().orElse((T) null);
+        }
+
+        static <T, R> R some(Stream<T> stream, Function<? super T, ? extends R> mapper) {
+            return stream.map(mapper).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
         }
 
         static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
@@ -648,7 +655,7 @@ public class Shen {
         }
 
         static <T> List<T> without(Collection<T> x, T y) {
-            return x.stream().filter(t -> !t.equals(y)).into(new ArrayList<T>());
+            return x.stream().filter(isEqual(y).negate()).into(new ArrayList<T>());
         }
 
         @SafeVarargs
@@ -675,7 +682,7 @@ public class Shen {
         }
 
         static Method findSAM(Class<?> lambda) {
-            return some(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
+            return find(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
         }
 
         @Retention(RetentionPolicy.RUNTIME)
@@ -751,7 +758,7 @@ public class Shen {
 
             Type compile(Object kl, boolean tail) {
                 try {
-                    Class literalClass = some(literals.stream(), c -> c.isInstance(kl));
+                    Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                     if (literalClass != null) push(literalClass, kl);
                     else if (kl instanceof Symbol) symbol((Symbol) kl);
                     else if (kl instanceof List) {
