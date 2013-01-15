@@ -450,13 +450,11 @@ public class Shen {
             Symbol symbol = intern(name);
             debug("candidates: " + symbol.fn);
 
-            if (maybeJava(name)) {
-                MethodHandle java = javaCall(site, name, type, args);
-                if (java != null) {
-                    debug("calling java: " + java);
-                    site.setTarget(java.asType(type));
-                    return java.invokeWithArguments(args);
-                }
+            MethodHandle java = javaCall(site, name, type, args);
+            if (java != null) {
+                debug("calling java: " + java);
+                site.setTarget(java.asType(type));
+                return java.invokeWithArguments(args);
             }
             if (symbol.fn.isEmpty()) throw new NoSuchMethodException(name + type);
 
@@ -501,12 +499,8 @@ public class Shen {
                         linker(site, scramble(name), type.parameterCount()).asType(type));
             }
             String[] classAndMethod = name.split("/");
-            if (classAndMethod.length == 2) {
-                Class aClass = imports.get(classAndMethod[0]);
-                String method = classAndMethod[1];
-                if (aClass != null)
-                    return lookup.unreflect(findJavaMethod(type, method, aClass.getMethods()));
-            }
+            if (classAndMethod.length == 2 && imports.containsKey(classAndMethod[0]))
+                return lookup.unreflect(findJavaMethod(type, classAndMethod[1], imports.get(classAndMethod[0]).getMethods()));
             return null;
         }
 
@@ -537,10 +531,6 @@ public class Shen {
                     c -> asList(c.getDeclaredMethods()))
                     .filter(m -> m.getName().equals(method.getName()) && deepEquals(m.getParameterTypes(), method.getParameterTypes()))
                     .into(superMethods(aClass.getSuperclass(), method));
-        }
-
-        static boolean maybeJava(String name) {
-            return name.startsWith(".") || name.endsWith(".") || name.contains("/") && name.length() > 1;
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
