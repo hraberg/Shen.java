@@ -23,7 +23,6 @@ import java.util.stream.Streams;
 import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandles.*;
-import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.*;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
@@ -149,8 +148,6 @@ public class Shen {
     }
 
     public static Object cons(Object x, Object y) {
-        if (y instanceof List) //noinspection unchecked
-            return cons(x, (List) y);
         return new Cons(x, y);
     }
 
@@ -474,25 +471,14 @@ public class Shen {
 
             MethodHandle match = symbol.fn.stream()
                     .filter(f -> canCast(matchType.parameterList(), f.type().parameterList()))
-                    .min(signatureComparator(type)).get();
+                    .min((x, y) -> without(y.type().parameterList(), Object.class).size()
+                                 - without(x.type().parameterList(), Object.class).size()).get();
+
             debug("selected: " + match);
 
             match = symbol.fnGuard.guardWithTest(match.asType(type), site.getTarget());
             site.setTarget(match);
             return match.invokeWithArguments(args);
-        }
-
-        static Comparator<? super MethodHandle> signatureComparator(MethodType type) {
-            return (x, y) -> {
-                int sort = 0;
-                for (int i = 0; i < type.parameterCount(); i++) {
-                    if (type.parameterType(i).equals(x.type().parameterType(i)))
-                        sort--;
-                    if (type.parameterType(i).equals(y.type().parameterType(i)))
-                        sort++;
-                }
-                return sort;
-            };
         }
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
@@ -690,6 +676,10 @@ public class Shen {
 
         static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
             return Streams.concat(a.stream(), b.stream()).into(new ArrayList<T>());
+        }
+
+        static <T> List<T> without(Collection<T> x, T y) {
+            return x.stream().filter(t -> !t.equals(y)).into(new ArrayList<T>());
         }
 
         @SafeVarargs
