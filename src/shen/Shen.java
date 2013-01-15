@@ -41,7 +41,7 @@ import static sun.invoke.util.Wrapper.*;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond"})
 public class Shen {
-    public static void main(String[] args) throws Throwable {
+    public static void main(String... args) throws Throwable {
         install();
         repl();
     }
@@ -856,7 +856,7 @@ public class Shen {
 
             void apply(List<Object> args) {
                 box();
-                mv.checkCast(getType(MethodHandle.class));
+                maybeCast(MethodHandle.class);
 
                 loadArgArray(args);
 
@@ -878,7 +878,7 @@ public class Shen {
 
                 mv.catchException(start, end, getType(Exception.class));
                 compile(f, false);
-                mv.checkCast(getType(MethodHandle.class));
+                maybeCast(MethodHandle.class);
                 mv.swap();
                 bindTo();
 
@@ -936,8 +936,13 @@ public class Shen {
             @Macro
             public void value(boolean tail, Object x) throws Throwable {
                 compile(x, false);
+                maybeCast(Symbol.class);
                 mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(Compiler.class, "valueBSM")));
                 topOfStack(Object.class);
+            }
+
+            void maybeCast(Class<?> type) {
+                if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
             }
 
             @Macro
