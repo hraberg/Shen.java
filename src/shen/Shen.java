@@ -444,19 +444,18 @@ public class Shen {
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
-            MethodType type = site.type();
             name = unscramble(name);
-            debug("LINKING: " + name + type + " " + Arrays.toString(args));
+            debug("LINKING: " + name + site.type() + " " + Arrays.toString(args));
             Symbol symbol = intern(name);
             debug("candidates: " + symbol.fn);
 
-            MethodHandle java = javaCall(site, name, type, args);
+            MethodHandle java = javaCall(site, name, site.type(), args);
             if (java != null) {
                 debug("calling java: " + java);
-                site.setTarget(java.asType(type));
+                site.setTarget(java.asType(site.type()));
                 return java.invokeWithArguments(args);
             }
-            if (symbol.fn.isEmpty()) throw new NoSuchMethodException(name + type);
+            if (symbol.fn.isEmpty()) throw new NoSuchMethodException(name + site.type());
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
@@ -475,37 +474,29 @@ public class Shen {
                     .min((x, y) -> without(y.type().parameterList(), Object.class).size()
                                  - without(x.type().parameterList(), Object.class).size()).get();
             debug("selected: " + match);
-            match = catchException(match.asType(type), ClassCastException.class, dropArguments(site.getTarget(), 0, Exception.class));
 
-            match = symbol.fnGuard.guardWithTest(match, site.getTarget());
-            site.setTarget(match);
+            site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(site, match), site.getTarget()));
             return match.invokeWithArguments(args);
+        }
+
+        static MethodHandle relinkOnClassCast(MutableCallSite site, MethodHandle fn) {
+            return catchException(fn.asType(site.type()), ClassCastException.class, dropArguments(site.getTarget(), 0, Exception.class));
         }
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
             if (name.endsWith(".")) {
-                String ctor = name.substring(0, name.length() - 1);
-                Class aClass = imports.get(ctor);
+                Class aClass = imports.get(name.substring(0, name.length() - 1));
                 if (aClass != null)
                     return lookup.unreflectConstructor(findJavaMethod(type, aClass.getName(), aClass.getConstructors()));
             }
             if (name.startsWith(".")) {
-                String method = name.substring(1, name.length());
-                Method javaMethod = findJavaMethod(type, method, args[0].getClass().getMethods());
-                MethodHandle target = lookup.unreflect(javaMethod);
-                Method declaration = declaringMethod(javaMethod);
-                debug("binding: " + javaMethod + " to deceleration " + declaration);
-                return guardWithTest(receiverCheck(type, declaration.getDeclaringClass()), target.asType(type),
-                        linker(site, scramble(name), type.parameterCount()).asType(type));
+                Method javaMethod = findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods());
+                return relinkOnClassCast(site, lookup.unreflect(declaringMethod(javaMethod)));
             }
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && imports.containsKey(classAndMethod[0]))
                 return lookup.unreflect(findJavaMethod(type, classAndMethod[1], imports.get(classAndMethod[0]).getMethods()));
             return null;
-        }
-
-        static MethodHandle receiverCheck(MethodType type, Class<?> receiver) throws IllegalAccessException {
-            return mh(Class.class, "isInstance").bindTo(receiver).asType(type.changeReturnType(boolean.class));
         }
 
         static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {

@@ -8,6 +8,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
+import java.util.BitSet;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.EMPTY_LIST;
@@ -341,10 +342,20 @@ public class ShenTest {
         is(intern("up"), "(defun up (x) (.toUpperCase x))");
         is("UP", "(up \"up\")");
         is("TWICE", "(up \"twice\")");
+    }
+
+    @Test
+    public void relink_java() {
+        is(Class.class, "(import java.util.ArrayList)");
+        is(Class.class, "(import java.util.LinkedList)");
         is(intern("to-string"), "(defun to-string (x) (.toString x))");
         is("[1]", "(to-string (ArrayList. (cons 1 ()))");
-        is(Class.class, "(import java.util.LinkedList)");
         is("[1]", "(to-string (LinkedList. (cons 1 ()))");
+        is(intern("size"), "(defun size (x) (.size x))");
+        is(1, "(size (ArrayList. (cons 1 ()))");
+        is(1, "(size (LinkedList. (cons 1 ()))");
+        is(Class.class, "(import java.util.BitSet)");
+        is(new BitSet().size(), "(size (BitSet.))");
     }
 
     @Test
