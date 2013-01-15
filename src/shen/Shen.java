@@ -465,12 +465,12 @@ public class Shen {
                 return partial;
             }
 
-            final MethodType matchType = methodType(site.type().returnType(),
+            final MethodType actualType = methodType(site.type().returnType(),
                     stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
             debug("real args: " + Arrays.toString(args));
 
             MethodHandle match = symbol.fn.stream()
-                    .filter(f -> canCast(matchType.parameterList(), f.type().parameterList()))
+                    .filter(f -> canCast(actualType.parameterList(), f.type().parameterList()))
                     .min((x, y) -> without(y.type().parameterList(), Object.class).size()
                                  - without(x.type().parameterList(), Object.class).size()).get();
 
