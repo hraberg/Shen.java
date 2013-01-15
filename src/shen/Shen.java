@@ -943,6 +943,7 @@ public class Shen {
 
             void maybeCast(Class<?> type) {
                 if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
+                topOfStack(type);
             }
 
             @Macro
