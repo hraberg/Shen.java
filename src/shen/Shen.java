@@ -61,35 +61,36 @@ public class Shen {
 
         stream(Shen.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(Shen::defun);
 
-        op("=", (BiPredicate<Object, Object>) (left, right) -> left instanceof Number && right instanceof Number
-                ? ((Number) left).doubleValue() == ((Number) right).doubleValue()
-                : deepEquals(left, right));
-        op("+", (IntBinaryOperator) (left, right) -> left + right);
-        op("-", (IntBinaryOperator) (left, right) -> left - right);
-        op("*", (IntBinaryOperator) (left, right) -> left * right);
-        op("+", (LongBinaryOperator) (left, right) -> left + right);
-        op("-", (LongBinaryOperator) (left, right) -> left - right);
-        op("*", (LongBinaryOperator) (left, right) -> left * right);
-        op("+", (DoubleBinaryOperator) (left, right) -> left + right);
-        op("-", (DoubleBinaryOperator) (left, right) -> left - right);
-        op("*", (DoubleBinaryOperator) (left, right) -> left * right);
+        op("=", (BiPredicate) Objects::deepEquals,
+                (IIPredicate) (left, right) -> left == right,
+                (LLPredicate) (left, right) -> left == right,
+                (DDPredicate) (left, right) -> left == right);
+        op("+", (IntBinaryOperator) (left, right) -> left + right,
+                (LongBinaryOperator) (left, right) -> left + right,
+                (DoubleBinaryOperator) (left, right) -> left + right);
+        op("-", (IntBinaryOperator) (left, right) -> left - right,
+                (LongBinaryOperator) (left, right) -> left - right,
+                (DoubleBinaryOperator) (left, right) -> left - right);
+        op("*", (IntBinaryOperator) (left, right) -> left * right,
+                (LongBinaryOperator) (left, right) -> left * right,
+                (DoubleBinaryOperator) (left, right) -> left * right);
         op("/", (DoubleBinaryOperator) (left, right) -> {
             if (right == 0) throw new ArithmeticException("Division by zero");
             return left / right;
         });
 
-        op("<", (IIPredicate) (left, right) -> left < right);
-        op("<=", (IIPredicate) (left, right) -> left <= right);
-        op(">", (IIPredicate) (left, right) -> left > right);
-        op(">=", (IIPredicate) (left, right) -> left >= right);
-        op("<", (LLPredicate) (left, right) -> left < right);
-        op("<=", (LLPredicate) (left, right) -> left <= right);
-        op(">", (LLPredicate) (left, right) -> left > right);
-        op(">=", (LLPredicate) (left, right) -> left >= right);
-        op("<", (DDPredicate) (left, right) -> left < right);
-        op("<=", (DDPredicate) (left, right) -> left <= right);
-        op(">", (DDPredicate) (left, right) -> left > right);
-        op(">=", (DDPredicate) (left, right) -> left >= right);
+        op("<", (IIPredicate) (left, right) -> left < right,
+                (LLPredicate) (left, right) -> left < right,
+                (DDPredicate) (left, right) -> left < right);
+        op("<=", (IIPredicate) (left, right) -> left <= right,
+                (LLPredicate) (left, right) -> left <= right,
+                (DDPredicate) (left, right) -> left <= right);
+        op(">", (IIPredicate) (left, right) -> left > right,
+                (LLPredicate) (left, right) -> left > right,
+                (DDPredicate) (left, right) -> left > right);
+        op(">=", (IIPredicate) (left, right) -> left >= right,
+                (LLPredicate) (left, right) -> left >= right,
+                (DDPredicate) (left, right) -> left >= right);
 
         asList(Math.class, System.class).forEach(Shen::KL_import);
     }
@@ -98,8 +99,8 @@ public class Shen {
     interface LLPredicate { boolean test(long a, long b); }
     interface DDPredicate { boolean test(double a, double b); }
 
-    static void op(String name, Object op) {
-        intern(name).fn.add(findSAM(op));
+    static void op(String name, Object... op) {
+        stream(op).map(Compiler::findSAM).into(intern(name).fn);
     }
 
     static Symbol defun(Method m) {
