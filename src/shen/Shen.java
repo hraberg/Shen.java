@@ -1045,9 +1045,9 @@ public class Shen {
                 topOfStack(Symbol.class);
             }
 
-            void push(Class<?> aClass, Object kl) throws Exception {
+            void push(Class<?> aClass, Object kl) throws Throwable {
                 aClass = asPrimitiveType(aClass);
-                mv.getClass().getMethod("push", aClass).invoke(mv, kl);
+                mh(mv.getClass(), "push", aClass).invoke(mv, kl);
                 topOfStack(aClass);
             }
 
