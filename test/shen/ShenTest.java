@@ -197,6 +197,26 @@ public class ShenTest {
     }
 
     @Test
+    public void tagged_values() {
+        is(5, "(set x 5)");
+        is(5, "(value x)");
+        is(5.0, "(set x 5.0)");
+        is(5.0, "(value x)");
+        is(asList(), "(set x ())");
+        is(asList(), "(value x)");
+        is(intern("fun"), "(defun fun (x) (value x))");
+        is(asList(), "(fun x)");
+        is(5.0, "(set x 5.0)");
+        is(5.0, "(fun x)");
+        is(5, "(set x 5)");
+        is(5, "(fun x)");
+        is(6, "(set y 6)");
+        is(6, "(fun y)");
+        is(asList(), "(set y ())");
+        is(asList(), "(fun y)");
+    }
+
+    @Test
     public void get_time() {
         is(Number.class, "(get-time run)");
     }

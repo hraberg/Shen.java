@@ -28,9 +28,7 @@ import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
-import static java.util.function.Predicates.isEqual;
-import static java.util.function.Predicates.isSame;
-import static java.util.function.Predicates.nonNull;
+import static java.util.function.Predicates.*;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
@@ -314,7 +312,10 @@ public class Shen {
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard = new SwitchPoint();
         public Object var;
-        public SwitchPoint varGuard = new SwitchPoint();
+        public int varI;
+        public long varL;
+        public double varD;
+        public Class<?> tag = Object.class;
 
         public Symbol(String symbol) {
             this.symbol = symbol.intern();
@@ -322,6 +323,23 @@ public class Shen {
 
         public String toString() {
             return symbol;
+        }
+
+        public Object value() {
+            var.getClass();
+            return var;
+        }
+
+        public void tag(Class<?> tag) {
+            if (this.tag != tag) {
+                debug("retagging " + this + " from " + this.tag + " to " + tag);
+                this.tag = tag;
+                if (tag != Object.class) var = null;
+            }
+        }
+
+        public boolean hasTag(Class<?> tag) {
+            return this.tag == tag;
         }
     }
 
@@ -331,25 +349,39 @@ public class Shen {
     }
 
     public static Object set(Symbol x, Object y) {
-        try {
-            return x.var = y;
-        } finally {
-            invalidateAll(new SwitchPoint[]{x.varGuard});
-            x.varGuard = new SwitchPoint();
-        }
+        x.tag(Object.class);
+        return x.var = y;
+    }
+
+    public static int set(Symbol x, int y) {
+        x.tag(int.class);
+        return x.varI = y;
+    }
+
+    public static long set(Symbol x, long y) {
+        x.tag(long.class);
+        return x.varL = y;
+    }
+
+    public static double set(Symbol x, double y) {
+        x.tag(double.class);
+        return x.varD = y;
     }
 
     static Object set(String x, Object y) {
         return set(intern(x), y);
     }
 
-    static Object value(Symbol x) {
-        x.var.getClass();
-        return x.var;
-    }
-
     static Object value(String x) {
         return value(intern(x));
+    }
+
+    static Object value(Symbol x) {
+        try {
+            return Compiler.value(x).invoke(x);
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
     }
 
     public static MethodHandle function(Symbol x) throws IllegalAccessException {
@@ -438,12 +470,19 @@ public class Shen {
             return super.defineClass(cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
         }
 
-        public static Object value(MutableCallSite site, Symbol symbol) {
-            Object var = Shen.value(symbol);
-            MethodHandle value = dropArguments(constant(var.getClass(), var), 0, Symbol.class).asType(site.type());
-            MethodHandle guard = symbol.varGuard.guardWithTest(value, site.getTarget());
-            site.setTarget(guard);
-            return var;
+        public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
+            MethodHandle value = value(symbol);
+            MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
+            site.setTarget(guardWithTest(hasTag, value.asType(site.type()), site.getTarget()));
+            return value.invoke(symbol);
+        }
+
+        static MethodHandle value(Symbol symbol) throws Exception {
+            MethodHandle value = mh(Symbol.class, "value");
+            if (symbol.tag == int.class) value = field(Symbol.class, "varI");
+            if (symbol.tag == long.class) value = field(Symbol.class, "varL");
+            if (symbol.tag == double.class) value = field(Symbol.class, "varD");
+            return value;
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
@@ -470,12 +509,16 @@ public class Shen {
 
             final MethodType actualType = methodType(site.type().returnType(),
                     stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
-            debug("real args: " + Arrays.toString(args));
+            debug("real args: " + Arrays.toString(args) + " " + actualType);
 
-            MethodHandle match = symbol.fn.stream()
-                    .filter(f -> canCast(actualType.parameterList(), f.type().parameterList()))
-                    .min((x, y) -> without(y.type().parameterList(), Object.class).size()
-                                 - without(x.type().parameterList(), Object.class).size()).get();
+            MethodHandle match = find(symbol.fn.stream(),
+                    f -> f.type().wrap().changeReturnType(actualType.returnType()).equals(actualType));
+            debug("exact match: " + match);
+            if (match == null)
+                match = symbol.fn.stream()
+                        .filter(f -> canCast(actualType.parameterList(), f.type().parameterList()))
+                        .min((x, y) -> without(y.type().parameterList(), Object.class).size()
+                                - without(x.type().parameterList(), Object.class).size()).get();
             debug("selected: " + match);
 
             site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(site, match), site.getTarget()));
@@ -539,6 +582,10 @@ public class Shen {
         static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
             return lookup.unreflect(find(stream(aClass.getMethods()), m -> m.getName().equals(name)
                     && (types.length == 0 || deepEquals(m.getParameterTypes(), types))));
+        }
+
+        static MethodHandle field(Class<?> aClass, String name) throws Exception {
+            return lookup.unreflectGetter(aClass.getField(name));
         }
 
         static String desc(Class<?> returnType, Class<?>... argumentTypes) {
