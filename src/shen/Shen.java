@@ -46,6 +46,7 @@ public class Shen {
     }
 
     static Compiler loader = new Compiler();
+    static Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
     static Map<String, Class> imports = new HashMap<>();
 
@@ -105,7 +106,7 @@ public class Shen {
     static Symbol defun(Method m) {
         try {
             Symbol name = intern(unscramble(m.getName()));
-            name.fn.add(lookup().unreflect(m));
+            name.fn.add(lookup.unreflect(m));
             return name;
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
@@ -429,8 +430,6 @@ public class Shen {
             byte[] bytes = cw.toByteArray();
             return super.defineClass(cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
         }
-
-        static Lookup lookup = lookup();
 
         public static Object value(MutableCallSite site, Symbol symbol) {
             Object var = Shen.value(symbol);
