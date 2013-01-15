@@ -487,41 +487,26 @@ public class Shen {
             if (name.endsWith(".")) {
                 Class aClass = imports.get(name.substring(0, name.length() - 1));
                 if (aClass != null)
-                    return lookup.unreflectConstructor(findJavaMethod(type, aClass.getName(), aClass.getConstructors()));
+                    return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
-            if (name.startsWith(".")) {
-                Method javaMethod = findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods());
-                return relinkOnClassCast(site, lookup.unreflect(declaringMethod(javaMethod)));
-            }
+            if (name.startsWith("."))
+                return relinkOnClassCast(site, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()));
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && imports.containsKey(classAndMethod[0]))
-                return lookup.unreflect(findJavaMethod(type, classAndMethod[1], imports.get(classAndMethod[0]).getMethods()));
+                return findJavaMethod(type, classAndMethod[1], imports.get(classAndMethod[0]).getMethods());
             return null;
         }
 
-        static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
-            return some(stream(methods), m -> {
+        static <T extends Executable> MethodHandle findJavaMethod(MethodType type, String method, T[] methods) {
+            return some(stream(methods).map(m -> {
                 try {
                     if (m.getName().equals(method)) {
-                        ((m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m)).asType(type);
-                        return true;
+                        return((m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m)).asType(type);
                     }
                 } catch (Exception ignore) {
                 }
-                return false;
-            });
-        }
-
-        static Method declaringMethod(Method method) {
-            return superMethods(method.getDeclaringClass(), method).stream().findFirst().orElse(method);
-        }
-
-        static List<Method> superMethods(Class aClass, Method method) {
-            if (Object.class.equals(aClass)) return list();
-            return mapcat(concat(asList(aClass.getSuperclass()), asList(aClass.getInterfaces())).stream(),
-                    c -> asList(c.getDeclaredMethods()))
-                    .filter(m -> m.getName().equals(method.getName()) && deepEquals(m.getParameterTypes(), method.getParameterTypes()))
-                    .into(superMethods(aClass.getSuperclass(), method));
+                return null;
+            }), m -> m !=null);
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
