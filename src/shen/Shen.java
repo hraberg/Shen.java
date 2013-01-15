@@ -952,7 +952,7 @@ public class Shen {
 
             @Macro
             public void value(boolean tail, Object x) throws Throwable {
-                compile(x);
+                compile(x, false);
                 mv.invokeDynamic("value", methodType(Object.class, Symbol.class).toMethodDescriptorString(), valueBSM);
                 topOfStack(Object.class);
             }
