@@ -1046,21 +1046,13 @@ public class Shen {
             }
 
             void push(Class<?> aClass, Object kl) throws Exception {
-                aClass = maybePrimitive(aClass);
+                aClass = asPrimitiveType(aClass);
                 mv.getClass().getMethod("push", aClass).invoke(mv, kl);
                 topOfStack(aClass);
             }
 
             void topOfStack(Class<?> aClass) {
                 topOfStack = getType(aClass);
-            }
-
-            Class<?> maybePrimitive(Class<?> aClass) throws IllegalAccessException {
-                try {
-                    return (Class<?>) aClass.getField("TYPE").get(null);
-                } catch (NoSuchFieldException ignore) {
-                    return aClass;
-                }
             }
 
             public <T> Class<T> load(Class<T> anInterface) throws Exception {
