@@ -474,7 +474,6 @@ public class Shen {
                     .filter(f -> canCast(actualType.parameterList(), f.type().parameterList()))
                     .min((x, y) -> without(y.type().parameterList(), Object.class).size()
                                  - without(x.type().parameterList(), Object.class).size()).get();
-
             debug("selected: " + match);
 
             match = symbol.fnGuard.guardWithTest(match.asType(type), site.getTarget());
