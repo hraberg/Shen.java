@@ -472,7 +472,7 @@ public class Shen {
 
             MethodHandle match = symbol.fn.stream()
                     .filter(f -> canCast(matchType.parameterList(), f.type().parameterList()))
-                    .sorted(signatureComparator(type)).findFirst().get();
+                    .min(signatureComparator(type)).get();
             debug("selected: " + match);
 
             match = symbol.fnGuard.guardWithTest(match.asType(type), site.getTarget());
