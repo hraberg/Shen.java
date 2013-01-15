@@ -433,6 +433,8 @@ public class Shen {
             return super.defineClass(cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
         }
 
+        static Lookup lookup = lookup();
+
         public static Object value(MutableCallSite site, Symbol symbol) {
             Object var = Shen.value(symbol);
             MethodHandle value = dropArguments(constant(var.getClass(), var), 0, Symbol.class).asType(site.type());
@@ -519,8 +521,8 @@ public class Shen {
             return null;
         }
 
-        static MethodHandle receiverCheck(MethodType type, Class<?> receiver) {
-            return isInstance.bindTo(receiver).asType(type.changeReturnType(boolean.class));
+        static MethodHandle receiverCheck(MethodType type, Class<?> receiver) throws IllegalAccessException {
+            return mh(Class.class, "isInstance").bindTo(receiver).asType(type.changeReturnType(boolean.class));
         }
 
         static <T extends Executable> T findJavaMethod(MethodType type, String method, T[] methods) {
@@ -552,11 +554,11 @@ public class Shen {
             return name.contains(".") || name.contains("/") && name.length() > 1;
         }
 
-        static MethodHandle linker(MutableCallSite site, String name, int arity) {
-            return insertArguments(link, 0, site, name).asCollector(Object[].class, arity);
+        static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
+            return insertArguments(mh(Compiler.class, "link"), 0, site, name).asCollector(Object[].class, arity);
         }
 
-        public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) {
+        public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
             MutableCallSite site = new MutableCallSite(type);
             site.setTarget(linker(site, name, type.parameterCount()).asType(type));
             return site;
@@ -568,7 +570,7 @@ public class Shen {
 
         public static CallSite valueBSM(Lookup lookup, String name, MethodType type) throws Exception {
             MutableCallSite site = new MutableCallSite(type);
-            site.setTarget(value.bindTo(site).asType(type));
+            site.setTarget(mh(Compiler.class, "value").bindTo(site).asType(type));
             return site;
         }
 
@@ -576,30 +578,10 @@ public class Shen {
             if (true == Shen.value("*debug*")) System.err.println(format(msg, xs));
         }
 
-        static MethodHandle insertArguments;
-        static MethodHandle link;
-        static MethodHandle value;
-        static MethodHandle isInstance;
-        static Lookup lookup = lookup();
-
-        static {
-            try {
-                insertArguments = lookup.findStatic(MethodHandles.class, "insertArguments",
-                        methodType(MethodHandle.class, asList(MethodHandle.class, int.class, Object[].class)));
-                link = lookup.findStatic(Compiler.class, "link",
-                        methodType(Object.class, asList(MutableCallSite.class, String.class, Object[].class)));
-                value = lookup.findStatic(Compiler.class, "value",
-                        methodType(Object.class, asList(MutableCallSite.class, Symbol.class)));
-                isInstance = lookup.findVirtual(Class.class, "isInstance", methodType(boolean.class, Object.class));
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+        static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
+            return lookup.unreflect(some(stream(aClass.getMethods()), m -> m.getName().equals(name)
+                    && (types.length == 0 || deepEquals(m.getParameterTypes(), types))));
         }
-
-        static String bootstrapDesc = desc(CallSite.class, Lookup.class, String.class, MethodType.class);
-        static Handle invokeBSM = staticMH(Compiler.class, "invokeBSM", bootstrapDesc);
-        static Handle symbolBSM = staticMH(Compiler.class, "symbolBSM", bootstrapDesc);
-        static Handle valueBSM = staticMH(Compiler.class, "valueBSM", bootstrapDesc);
 
         static String desc(Class<?> returnType, Class<?>... argumentTypes) {
             return methodType(returnType, argumentTypes).toMethodDescriptorString();
@@ -609,11 +591,12 @@ public class Shen {
             return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
         }
 
-        static Handle staticMH(Class aClass, String name, String desc) {
-            return staticMH(getInternalName(aClass), name, desc);
+        static Handle handle(MethodHandle handle) throws ReflectiveOperationException {
+            MethodHandleInfo info = new MethodHandleInfo(handle);
+            return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
         }
 
-        static Handle staticMH(String className, String name, String desc) {
+        static Handle handle(String className, String name, String desc) {
             return new Handle(H_INVOKESTATIC, className, name, desc);
         }
 
@@ -844,7 +827,7 @@ public class Shen {
                 Compiler.bindTo(macro, tail).invokeWithArguments(args);
             }
 
-            void indy(Symbol s, List<Object> args, boolean tail) {
+            void indy(Symbol s, List<Object> args, boolean tail) throws ReflectiveOperationException {
                 List<Type> argumentTypes = args.stream().map(o -> compile(o, false)).into(new ArrayList<Type>());
 
                 if (isSelfCall(s, args)) {
@@ -857,7 +840,7 @@ public class Shen {
                 MethodType type = asMethodType(s.fn.size() == 1
                         ? getType(s.fn.stream().findAny().get().type().returnType())
                         : getType(Object.class), argumentTypes);
-                mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), invokeBSM);
+                mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), handle(mh(Compiler.class, "invokeBSM")));
                 topOfStack(type.returnType());
             }
 
@@ -937,7 +920,7 @@ public class Shen {
             @Macro
             public void or(boolean tail, Object x, Object... clauses) throws Exception {
                 if (clauses.length == 0)
-                    bindTo(staticMH(Compiler.class, "or", desc(boolean.class, boolean.class, boolean[].class)), x);
+                    bindTo(handle(Compiler.mh(Compiler.class, "or")), x);
                 else
                     KL_if(tail, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
             }
@@ -945,7 +928,7 @@ public class Shen {
             @Macro
             public void and(boolean tail, Object x, Object... clauses) throws Exception {
                 if (clauses.length == 0)
-                    bindTo(staticMH(Compiler.class, "and", desc(boolean.class, boolean.class, boolean[].class)), x);
+                    bindTo(handle(Compiler.mh(Compiler.class, "and")), x);
                 else
                     KL_if(tail, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
             }
@@ -953,7 +936,7 @@ public class Shen {
             @Macro
             public void value(boolean tail, Object x) throws Throwable {
                 compile(x, false);
-                mv.invokeDynamic("value", methodType(Object.class, Symbol.class).toMethodDescriptorString(), valueBSM);
+                mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(Compiler.class, "valueBSM")));
                 topOfStack(Object.class);
             }
 
@@ -978,7 +961,7 @@ public class Shen {
                 List<Type> types = scope.stream().map(this::typeOf).into(new ArrayList<Type>());
                 for (Symbol ignore : args) types.add(getType(Object.class));
 
-                insertArgs(staticMH(cn.name, name, desc(getType(Object.class), types)), 0, scope);
+                insertArgs(handle(cn.name, name, desc(getType(Object.class), types)), 0, scope);
 
                 scope.addAll(asList(args));
                 Code fn = new Code(cn, shen, scope.toArray(new Symbol[scope.size()]));
@@ -1018,7 +1001,7 @@ public class Shen {
                 topOfStack(List.class);
             }
 
-            void symbol(Symbol s) {
+            void symbol(Symbol s) throws ReflectiveOperationException {
                 if (locals.containsKey(s)) mv.loadLocal(locals.get(s));
                 else if (args.contains(s)) mv.loadArg(args.indexOf(s));
                 else push(s);
@@ -1049,8 +1032,8 @@ public class Shen {
                 return fromMethodDescriptorString(desc(returnType, argumentTypes), loader);
             }
 
-            void push(Symbol kl) {
-                mv.invokeDynamic(scramble(kl.symbol), methodType(Symbol.class).toMethodDescriptorString(), symbolBSM);
+            void push(Symbol kl) throws ReflectiveOperationException {
+                mv.invokeDynamic(scramble(kl.symbol), desc(Symbol.class), handle(mh(Compiler.class, "symbolBSM")));
                 topOfStack(Symbol.class);
             }
 
@@ -1105,7 +1088,6 @@ public class Shen {
                 ctor.invokeConstructor(getType(Object.class), method("<init>", desc(void.class)));
                 ctor.returnValue();
             }
-
 
             void bindTo(Handle handle, Object arg) {
                 mv.push(handle);
