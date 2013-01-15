@@ -23,7 +23,6 @@ import java.util.stream.Streams;
 import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandles.*;
-import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.*;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
@@ -350,11 +349,16 @@ public class Shen {
         return value(intern(x));
     }
 
-    public static MethodHandle function(Symbol x) {
-        return x.fn.stream().findFirst().get();
+    public static MethodHandle function(Symbol x) throws IllegalAccessException {
+        MethodHandle fn = x.fn.stream().findFirst().get();
+        if (x.fn.size() > 1) {
+            int arity = fn.type().parameterCount();
+            return linker(new MutableCallSite(genericMethodType(arity)), scramble(x.symbol), arity);
+        }
+        return fn;
     }
 
-    static MethodHandle function(String x) {
+    static MethodHandle function(String x) throws IllegalAccessException {
         return function(intern(x));
     }
 

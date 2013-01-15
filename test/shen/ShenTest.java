@@ -298,6 +298,12 @@ public class ShenTest {
     }
 
     @Test
+    public void function() {
+        is(3, "((function +) 1 2)");
+        is(3.0, "((function +) 1 2.0)");
+    }
+
+    @Test
     public void recur() {
         is(intern("factorial"), "(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))");
         is(3628800, "(factorial 10 1)");
