@@ -4,6 +4,7 @@ import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
+import sun.invoke.util.Wrapper;
 
 import java.io.*;
 import java.lang.annotation.Retention;
@@ -36,6 +37,7 @@ import static shen.Shen.Compiler.*;
 import static shen.Shen.KLReader.read;
 import static sun.invoke.util.BytecodeName.toBytecodeName;
 import static sun.invoke.util.BytecodeName.toSourceName;
+import static sun.invoke.util.Wrapper.*;
 
 @SuppressWarnings({"UnusedDeclaration", "Convert2Diamond"})
 public class Shen {
@@ -309,9 +311,9 @@ public class Shen {
     public static class Symbol {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
-        public SwitchPoint varGuard = new SwitchPoint();
         public SwitchPoint fnGuard = new SwitchPoint();
         public Object var;
+        public SwitchPoint varGuard = new SwitchPoint();
 
         public Symbol(String symbol) {
             this.symbol = symbol.intern();
@@ -467,12 +469,27 @@ public class Shen {
                     stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
             debug("real args: " + Arrays.toString(args));
 
-            MethodHandle match = some(symbol.fn.stream(), f -> canCast(matchType.parameterList(), f.type().parameterList()));
+            MethodHandle match = symbol.fn.stream()
+                    .filter(f -> canCast(matchType.parameterList(), f.type().parameterList()))
+                    .sorted(signatureComparator(type)).findFirst().get();
             debug("selected: " + match);
 
             match = symbol.fnGuard.guardWithTest(match.asType(type), site.getTarget());
             site.setTarget(match);
             return match.invokeWithArguments(args);
+        }
+
+        static Comparator<? super MethodHandle> signatureComparator(MethodType type) {
+            return (x, y) -> {
+                int sort = 0;
+                for (int i = 0; i < type.parameterCount(); i++) {
+                    if (type.parameterType(i).equals(x.type().parameterType(i)))
+                        sort--;
+                    if (type.parameterType(i).equals(y.type().parameterType(i)))
+                        sort++;
+                }
+                return sort;
+            };
         }
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
@@ -530,7 +547,6 @@ public class Shen {
                     .into(superMethods(aClass.getSuperclass(), method));
         }
 
-
         static boolean maybeJava(String name) {
             return name.contains(".") || name.contains("/") && name.length() > 1;
         }
@@ -563,7 +579,6 @@ public class Shen {
         static MethodHandle link;
         static MethodHandle value;
         static MethodHandle isInstance;
-        static MethodHandle boxedType;
         static Lookup lookup = lookup();
 
         static {
@@ -575,9 +590,6 @@ public class Shen {
                 value = lookup.findStatic(Compiler.class, "value",
                         methodType(Object.class, asList(MutableCallSite.class, Symbol.class)));
                 isInstance = lookup.findVirtual(Class.class, "isInstance", methodType(boolean.class, Object.class));
-                Method getBoxedType = GeneratorAdapter.class.getDeclaredMethod("getBoxedType", Type.class);
-                getBoxedType.setAccessible(true);
-                boxedType = lookup.unreflect(getBoxedType);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -615,32 +627,26 @@ public class Shen {
         }
 
         static Type boxedType(Type type) {
-            try {
-                return (Type) boxedType.invoke(type);
-            } catch (Throwable e) {
-                throw new RuntimeException(e);
-            }
+            if (!isPrimitive(type)) return type;
+            return getType(forBasicType(type.getDescriptor().charAt(0)).wrapperType());
         }
 
-        static Class boxedType(Class type) {
-            try {
-                return Class.forName(boxedType(getType(type)).getClassName());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+        static boolean isPrimitive(Type type) {
+            return type.getSort() < ARRAY;
         }
 
         static boolean canCast(Class<?> a, Class<?> b) {
             return b.isAssignableFrom(a) || canWiden(a, b);
         }
 
-        static List<? extends Class<?>> numbers = asList(Double.class, Long.class, Integer.class);
+        static boolean canWiden(Class<?> a, Class<?> b) {
+            return wrapper(b).isNumeric() && wrapper(b).isConvertibleFrom(wrapper(a));
+        }
 
-        static boolean canWiden(Class a, Class b) {
-            if (a.isPrimitive()) a = boxedType(a);
-            if (b.isPrimitive()) b = boxedType(b);
-            return Number.class.isAssignableFrom(a) && Number.class.isAssignableFrom(b)
-                    && numbers.indexOf(a) >= numbers.indexOf(b);
+        static Wrapper wrapper(Class<?> type) {
+            if (isPrimitiveType(type)) return forPrimitiveType(type);
+            if (isWrapperType(type)) return forWrapperType(type);
+            return Wrapper.OBJECT;
         }
 
         static boolean canCast(List<Class<?>> as, List<Class<?>> bs) {
@@ -691,7 +697,7 @@ public class Shen {
         }
 
         static <T> T some(Stream<T> stream, Predicate<? super T> predicate) {
-            return stream.filter(predicate).findAny().orElse((T) null);
+            return stream.filter(predicate).findFirst().orElse((T) null);
         }
 
         static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
@@ -1084,10 +1090,6 @@ public class Shen {
                 compile(shen);
                 if (!isPrimitive(returnType)) box();
                 mv.returnValue();
-            }
-
-            boolean isPrimitive(Type type) {
-                return type.getSort() != OBJECT;
             }
 
             void box() {
