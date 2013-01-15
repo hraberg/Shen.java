@@ -304,6 +304,16 @@ public class ShenTest {
     }
 
     @Test
+    public void rebind() {
+        is(intern("fun"), "(defun fun (x) (cons 1 x)");
+        is(asList(1), "(fun ())");
+        is(new Cons(1, 2), "(fun 2)");
+        is(intern("fun2"), "(defun fun2 (x) (+ 2 x))");
+        is(3, "(fun2 1)");
+        is(3.0, "(fun2 1.0)");
+    }
+
+    @Test
     public void recur() {
         is(intern("factorial"), "(defun factorial (cnt acc) (if (= 0 cnt) acc (factorial (- cnt 1) (* acc cnt)))");
         is(3628800, "(factorial 10 1)");

@@ -475,8 +475,9 @@ public class Shen {
                     .min((x, y) -> without(y.type().parameterList(), Object.class).size()
                                  - without(x.type().parameterList(), Object.class).size()).get();
             debug("selected: " + match);
+            match = catchException(match.asType(type), ClassCastException.class, dropArguments(site.getTarget(), 0, Exception.class));
 
-            match = symbol.fnGuard.guardWithTest(match.asType(type), site.getTarget());
+            match = symbol.fnGuard.guardWithTest(match, site.getTarget());
             site.setTarget(match);
             return match.invokeWithArguments(args);
         }
