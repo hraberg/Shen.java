@@ -20,6 +20,7 @@ import java.util.function.*;
 import java.util.stream.Stream;
 import java.util.stream.Streams;
 
+import static java.lang.Double.doubleToLongBits;
 import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandles.*;
@@ -312,10 +313,8 @@ public class Shen {
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard = new SwitchPoint();
         public Object var;
-        public int varI;
-        public long varL;
-        public double varD;
-        public Class<?> tag = Object.class;
+        public long primVar;
+        public int tag = Type.OBJECT;
 
         public Symbol(String symbol) {
             this.symbol = symbol.intern();
@@ -330,15 +329,15 @@ public class Shen {
             return var;
         }
 
-        public void tag(Class<?> tag) {
+        public void tag(int tag) {
             if (this.tag != tag) {
                 debug("retagging " + this + " from " + this.tag + " to " + tag);
                 this.tag = tag;
-                if (tag != Object.class) var = null;
+                if (tag != Type.OBJECT) var = null;
             }
         }
 
-        public boolean hasTag(Class<?> tag) {
+        public boolean hasTag(int tag) {
             return this.tag == tag;
         }
     }
@@ -349,23 +348,25 @@ public class Shen {
     }
 
     public static Object set(Symbol x, Object y) {
-        x.tag(Object.class);
+        x.tag(Type.OBJECT);
         return x.var = y;
     }
 
     public static int set(Symbol x, int y) {
-        x.tag(int.class);
-        return x.varI = y;
+        x.tag(Type.INT);
+        x.primVar = y;
+        return y;
     }
 
     public static long set(Symbol x, long y) {
-        x.tag(long.class);
-        return x.varL = y;
+        x.tag(Type.LONG);
+        return x.primVar = y;
     }
 
     public static double set(Symbol x, double y) {
-        x.tag(double.class);
-        return x.varD = y;
+        x.tag(Type.DOUBLE);
+        x.primVar = doubleToLongBits(y);
+        return y;
     }
 
     static Object set(String x, Object y) {
@@ -478,11 +479,12 @@ public class Shen {
         }
 
         static MethodHandle value(Symbol symbol) throws Exception {
-            MethodHandle value = mh(Symbol.class, "value");
-            if (symbol.tag == int.class) value = field(Symbol.class, "varI");
-            if (symbol.tag == long.class) value = field(Symbol.class, "varL");
-            if (symbol.tag == double.class) value = field(Symbol.class, "varD");
-            return value;
+            switch (symbol.tag) {
+                case Type.INT: return explicitCastArguments(field(Symbol.class, "primVar"), methodType(int.class, Symbol.class));
+                case Type.LONG: return field(Symbol.class, "primVar");
+                case Type.DOUBLE: return filterReturnValue(field(Symbol.class, "primVar"), mh(Double.class, "longBitsToDouble"));
+            }
+            return mh(Symbol.class, "value");
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
