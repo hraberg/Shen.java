@@ -2,7 +2,9 @@ package shen;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
+import sun.invoke.anon.AnonymousClassLoader;
 import sun.invoke.util.Wrapper;
+import sun.misc.Unsafe;
 
 import java.io.*;
 import java.lang.annotation.Retention;
@@ -10,6 +12,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.*;
@@ -19,6 +22,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.Streams;
 
+import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
 import static java.lang.String.format;
 import static java.lang.System.*;
@@ -422,7 +426,7 @@ public class Shen {
     static void install() throws Exception {
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
-            try (Reader in = new InputStreamReader(loader.getResourceAsStream(file + ".kl"))) {
+            try (Reader in = new InputStreamReader(getSystemClassLoader().getResourceAsStream(file + ".kl"))) {
                 load(in);
             }
     }
@@ -462,11 +466,8 @@ public class Shen {
         }
     }
 
-    public static class Compiler extends ClassLoader implements Opcodes {
-        public Class<?> define(ClassWriter cw) {
-            byte[] bytes = cw.toByteArray();
-            return super.defineClass(null, bytes, 0, bytes.length);
-        }
+    public static class Compiler implements Opcodes {
+        static AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), Compiler.class);
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
             MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
@@ -1046,7 +1047,7 @@ public class Shen {
             }
 
             MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
-                return fromMethodDescriptorString(desc(returnType, argumentTypes), loader);
+                return fromMethodDescriptorString(desc(returnType, argumentTypes), getSystemClassLoader());
             }
 
             void push(Symbol kl) throws ReflectiveOperationException {
@@ -1071,7 +1072,7 @@ public class Shen {
                 List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
                 method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
                 //noinspection unchecked
-                return (Class<T>) loader.define(cw);
+                return (Class<T>) loader.loadClass(cw.toByteArray());
             }
 
             void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
@@ -1120,6 +1121,16 @@ public class Shen {
                 mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
                         desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
                 topOfStack(MethodHandle.class);
+            }
+        }
+
+        static Unsafe unsafe() {
+            try {
+                Field unsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                unsafe.setAccessible(true);
+                return (Unsafe) unsafe.get(null);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
     }
