@@ -472,10 +472,9 @@ public class Shen {
         }
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
-            MethodHandle value = value(symbol);
             MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
-            site.setTarget(guardWithTest(hasTag, value.asType(site.type()), site.getTarget()));
-            return value.invoke(symbol);
+            site.setTarget(guardWithTest(hasTag, value(symbol).asType(site.type()), site.getTarget()));
+            return site.getTarget().invoke(symbol);
         }
 
         static MethodHandle value(Symbol symbol) throws Exception {
@@ -614,7 +613,7 @@ public class Shen {
         }
 
         static boolean isLambda(MethodHandle fn) {
-            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector();
+            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector() && Object.class == fn.type().parameterType(0);
         }
 
         static Type boxedType(Type type) {
