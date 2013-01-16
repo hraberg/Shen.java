@@ -2,8 +2,6 @@ package shen;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.MethodNode;
 import sun.invoke.util.Wrapper;
 
 import java.io.*;
@@ -465,11 +463,9 @@ public class Shen {
     }
 
     public static class Compiler extends ClassLoader implements Opcodes {
-        public Class<?> define(ClassNode cn) {
-            ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
-            cn.accept(cw);
+        public Class<?> define(ClassWriter cw) {
             byte[] bytes = cw.toByteArray();
-            return super.defineClass(cn.name.replaceAll("/", "."), bytes, 0, bytes.length);
+            return super.defineClass(null, bytes, 0, bytes.length);
         }
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
@@ -754,43 +750,38 @@ public class Shen {
 
             static int id = 1;
 
+            String className;
+            ClassWriter cw;
+
+            GeneratorAdapter mv;
             Object shen;
-            Symbol name;
+            Symbol self;
+            Map<Symbol, Integer> locals;
             List<Symbol> args;
             List<Type> argTypes;
-            Map<Symbol, Integer> locals;
-            GeneratorAdapter mv;
             Type topOfStack;
-            ClassNode cn;
             Label recur;
 
             public Code(Object shen, Symbol... args) throws Throwable {
-                this(null, shen, args);
+                this(null, "shen/ShenEval" + id++, shen, args);
             }
 
-            public Code(ClassNode cn, Object shen, Symbol... args) throws Throwable {
-                this.cn = cn;
+            public Code(ClassWriter cn, String className, Object shen, Symbol... args) throws Throwable {
+                this.cw = cn;
+                this.className = className;
                 this.shen = shen;
                 this.args = list(args);
                 this.locals = new LinkedHashMap<>();
             }
 
-            ClassNode classNode(Class<?> anInterface) {
-                ClassNode cn = new ClassNode();
-                cn.version = V1_7;
-                cn.access = ACC_PUBLIC;
-                cn.name = "shen/ShenEval" + id++;
-                cn.superName = getInternalName(Object.class);
-                cn.interfaces = asList(getInternalName(anInterface));
-                return cn;
+            ClassWriter classWriter(String name, Class<?> anInterface) {
+                ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
+                cw.visit(V1_7, ACC_PUBLIC, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
+                return cw;
             }
 
-            GeneratorAdapter generator(MethodVisitor mv) {
-                return generator((MethodNode) mv);
-            }
-
-            GeneratorAdapter generator(MethodNode mn) {
-                return new GeneratorAdapter(mn, mn.access, mn.name, mn.desc);
+            GeneratorAdapter generator(int access, org.objectweb.asm.commons.Method method) {
+                return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
             }
 
             org.objectweb.asm.commons.Method method(String name, String desc) {
@@ -869,7 +860,7 @@ public class Shen {
             }
 
             boolean isSelfCall(Symbol s, List<Object> args) {
-                return s.equals(name) && args.size() == this.args.size();
+                return s.equals(self) && args.size() == this.args.size();
             }
 
             void apply(List<Object> args) {
@@ -974,7 +965,7 @@ public class Shen {
             @Macro
             public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
                 push(name);
-                debug("compiling: " + name + args + " in " + getObjectType(cn.name).getClassName());
+                debug("compiling: " + name + args + " in " + getObjectType(className).getClassName());
                 fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
                 mv.invokeStatic(getType(Compiler.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
                 topOfStack(Symbol.class);
@@ -987,10 +978,10 @@ public class Shen {
                 List<Type> types = toList(scope.stream().map(this::typeOf));
                 for (Symbol ignore : args) types.add(getType(Object.class));
 
-                insertArgs(handle(cn.name, name, desc(getType(Object.class), types)), 0, scope);
+                insertArgs(handle(className, name, desc(getType(Object.class), types)), 0, scope);
 
                 scope.addAll(asList(args));
-                Code fn = new Code(cn, shen, scope.toArray(new Symbol[scope.size()]));
+                Code fn = new Code(cw, className, shen, scope.toArray(new Symbol[scope.size()]));
                 fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
             }
 
@@ -1074,24 +1065,25 @@ public class Shen {
             }
 
             public <T> Class<T> load(Class<T> anInterface) throws Exception {
-                cn = classNode(anInterface);
+                cw = classWriter(className, anInterface);
                 constructor();
                 Method sam = findSAM(anInterface);
                 List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
                 method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
                 //noinspection unchecked
-                return (Class<T>) loader.define(cn);
+                return (Class<T>) loader.define(cw);
             }
 
             void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
-                this.name = intern(unscramble(name));
+                this.self = intern(unscramble(name));
                 this.argTypes = argumentTypes;
-                mv = generator(cn.visitMethod(modifiers, name, desc(returnType, argumentTypes), null, null));
+                mv = generator(modifiers, method(name, desc(returnType, argumentTypes)));
                 recur = mv.newLabel();
                 mv.visitLabel(recur);
                 compile(shen);
                 if (!isPrimitive(returnType)) box();
                 mv.returnValue();
+                mv.visitMaxs(0, 0);
             }
 
             void box() {
@@ -1101,10 +1093,11 @@ public class Shen {
             }
 
             void constructor() {
-                GeneratorAdapter ctor = generator(cn.visitMethod(ACC_PUBLIC, "<init>", desc(void.class), null, null));
+                GeneratorAdapter ctor = generator(ACC_PUBLIC, method("<init>", desc(void.class)));
                 ctor.loadThis();
                 ctor.invokeConstructor(getType(Object.class), method("<init>", desc(void.class)));
                 ctor.returnValue();
+                ctor.visitMaxs(0, 0);
             }
 
             void bindTo(Handle handle, Object arg) {
