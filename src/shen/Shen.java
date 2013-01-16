@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.Streams;
 
@@ -101,7 +102,7 @@ public class Shen {
     interface DDPredicate { boolean test(double a, double b); }
 
     static void op(String name, Object... op) {
-        stream(op).map(Compiler::findSAM).into(intern(name).fn);
+        intern(name).fn.addAll(toList(stream(op).map(Compiler::findSAM)));
     }
 
     static Symbol defun(Method m) {
@@ -181,7 +182,7 @@ public class Shen {
     }
 
     public static <T> List<T> tl(List<T> list) {
-        return list.isEmpty() ? list : list.subList(1, list.size()).stream().into(new ArrayList<T>());
+        return list.isEmpty() ? list : new ArrayList<>(list.subList(1, list.size()));
     }
 
     public static Object hd(Cons cons) {
@@ -508,8 +509,7 @@ public class Shen {
                 return partial;
             }
 
-            final MethodType actualType = methodType(site.type().returnType(),
-                    stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
+            final MethodType actualType = methodType(site.type().returnType(), toList(stream(args).map(Object::getClass)));
             debug("real args: " + Arrays.toString(args) + " " + actualType);
 
             MethodHandle match = find(symbol.fn.stream(),
@@ -656,8 +656,7 @@ public class Shen {
         public static Object apply(MethodHandle fn, Object... args) throws Throwable {
             if (isLambda(fn)) return uncurry(fn, args);
 
-            MethodType targetType = methodType(Object.class, stream(args).map(Object::getClass).into(new ArrayList<Class<?>>()));
-
+            MethodType targetType = methodType(Object.class, toList(stream(args).map(Object::getClass)));
             int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
             if (nonVarargs > args.length) {
                 MethodHandle partial = insertArguments(fn.asType(fn.type()
@@ -686,6 +685,11 @@ public class Shen {
             return true;
         }
 
+        @SuppressWarnings("unchecked")
+        static <T> List<T> toList(Stream<T> stream) {
+            return (List<T>) stream.collect(Collectors.toList());
+        }
+
         static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
             return stream.filter(predicate).findFirst().orElse((T) null);
         }
@@ -695,20 +699,21 @@ public class Shen {
         }
 
         static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
-            return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> y.stream().into(x)).stream();
+            //noinspection Convert2MethodRef
+            return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> concat(x, y)).stream();
         }
 
         static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
-            return Streams.concat(a.stream(), b.stream()).into(new ArrayList<T>());
+            return toList(Streams.concat(a.stream(), b.stream()));
         }
 
         static <T> List<T> without(Collection<T> x, T y) {
-            return x.stream().filter(isEqual(y).negate()).into(new ArrayList<T>());
+            return toList(x.stream().filter(isEqual(y).negate()));
         }
 
         @SafeVarargs
         static <T> List<T> list(T... elements) {
-            return asList(elements).stream().into(new ArrayList<T>());
+            return new ArrayList<>(asList(elements));
         }
 
         static String unscramble(String s) {
@@ -841,7 +846,7 @@ public class Shen {
             }
 
             void indy(Symbol s, List<Object> args, boolean tail) throws ReflectiveOperationException {
-                List<Type> argumentTypes = args.stream().map(o -> compile(o, false)).into(new ArrayList<Type>());
+                List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
 
                 if (isSelfCall(s, args)) {
                     if (tail) {
@@ -979,7 +984,7 @@ public class Shen {
                 List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
                 scope.retainAll(concat(locals.keySet(), this.args));
 
-                List<Type> types = scope.stream().map(this::typeOf).into(new ArrayList<Type>());
+                List<Type> types = toList(scope.stream().map(this::typeOf));
                 for (Symbol ignore : args) types.add(getType(Object.class));
 
                 insertArgs(handle(cn.name, name, desc(getType(Object.class), types)), 0, scope);
@@ -998,10 +1003,10 @@ public class Shen {
                     if (list.size() > 1)
                         if (intern("let").equals(hd(list)))
                             return concat(closesOver(new HashSet<>(scope), list.get(2)),
-                                    closesOver(asList((Symbol) list.get(1)).stream()
-                                            .into(new HashSet<>(scope)), list.subList(2, list.size())));
+                                    closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)),
+                                            list.subList(2, list.size())));
                         else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
-                            return mapcat(tl(list).stream(), o -> closesOver(scope, o)).into(new ArrayList<Symbol>());
+                            return toList(mapcat(tl(list).stream(), o -> closesOver(scope, o)));
                 }
                 return list();
             }
@@ -1072,7 +1077,7 @@ public class Shen {
                 cn = classNode(anInterface);
                 constructor();
                 Method sam = findSAM(anInterface);
-                List<Type> types = stream(sam.getParameterTypes()).map(Type::getType).into(new ArrayList<Type>());
+                List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
                 method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
                 //noinspection unchecked
                 return (Class<T>) loader.define(cn);
