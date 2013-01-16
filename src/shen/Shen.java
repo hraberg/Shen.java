@@ -1083,7 +1083,7 @@ public class Shen {
                 compile(shen);
                 if (!isPrimitive(returnType)) box();
                 mv.returnValue();
-                mv.visitMaxs(0, 0);
+                mv.endMethod();
             }
 
             void box() {
@@ -1097,7 +1097,7 @@ public class Shen {
                 ctor.loadThis();
                 ctor.invokeConstructor(getType(Object.class), method("<init>", desc(void.class)));
                 ctor.returnValue();
-                ctor.visitMaxs(0, 0);
+                ctor.endMethod();
             }
 
             void bindTo(Handle handle, Object arg) {
