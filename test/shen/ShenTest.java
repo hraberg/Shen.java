@@ -372,6 +372,9 @@ public class ShenTest {
         is(FutureTask.class, "(set ft (FutureTask. (lambda x \"Call\")))");
         is(null, "(.run (value ft))");
         is("Call", "(.get (value ft))");
+        is(FutureTask.class, "(set ft (FutureTask. (lambda x x)))");
+        is(null, "(.run (value ft))");
+        is(null, "(.get (value ft))");
     }
 
     @Test

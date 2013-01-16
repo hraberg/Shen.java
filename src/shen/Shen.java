@@ -544,17 +544,23 @@ public class Shen {
             return null;
         }
 
-        public static <T> T proxy(Class<T> aClass, Object x) throws Throwable {
-            if (x instanceof MethodHandle)
-                return asInterfaceInstance(aClass, ((MethodHandle) x).asCollector(Object[].class, findSAM(aClass).getParameterTypes().length));
+        public static Object proxy(Method sam, Object x) throws Throwable {
+            if (x instanceof MethodHandle) {
+                MethodHandle target = (MethodHandle) x;
+                int arity = sam.getParameterTypes().length;
+                int actual = target.type().parameterCount();
+                if (arity < actual) target = insertArguments(target, arity, new Object[actual - arity]);
+                if (arity > actual) target = dropArguments(target, actual, asList(sam.getParameterTypes()).subList(actual, arity));
+                return asInterfaceInstance(sam.getDeclaringClass(), target);
+            }
              return null;
         }
 
         static MethodHandle convertMethodHandles(MethodHandle method) throws IllegalAccessException {
             MethodHandle[] filters = new MethodHandle[method.type().parameterCount()];
             for (int i = 0; i < method.type().parameterCount() - (method.isVarargsCollector() ? 1 : 0); i++)
-                if (findSAM(method.type().parameterType(i)) != null)
-                    filters[i] = mh(Compiler.class, "proxy").bindTo(method.type().parameterType(i))
+                if (isSAM(method.type().parameterType(i)))
+                    filters[i] = mh(Compiler.class, "proxy").bindTo(findSAM(method.type().parameterType(i)))
                             .asType(methodType(method.type().parameterType(i), Object.class));
             return filterArguments(method, 0, filters);
         }
@@ -754,6 +760,10 @@ public class Shen {
         static Method findSAM(Class<?> lambda) {
             List<Method> methods = toList(stream(lambda.getDeclaredMethods()).filter(m -> !m.isSynthetic()));
             return methods.size() == 1 ? methods.get(0) : null;
+        }
+
+        static boolean isSAM(Class<?> aClass) {
+            return findSAM(aClass) != null;
         }
 
         @Retention(RetentionPolicy.RUNTIME)
