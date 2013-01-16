@@ -83,7 +83,7 @@ This is bound to change as we go:
 
 [Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) (Garcia, 2012) - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible. Not sure you can actually create a fn definition though (see above). Did a spike, doesn't seem easy/worth the hassle, may revisit.
 
-[JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) (Forax, 2011)
+[JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) | [video](http://medianetwork.oracle.com/video/player/1113248965001) (Forax, 2011)
 
 [Patterns and Performance of InvokeDynamic in JRuby](http://bit.ly/jjug-indy-jruby-en) (Nakamura, 2012)
 
