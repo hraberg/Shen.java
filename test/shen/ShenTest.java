@@ -9,6 +9,7 @@ import java.io.FileOutputStream;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.concurrent.FutureTask;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.EMPTY_LIST;
@@ -354,6 +355,7 @@ public class ShenTest {
         is(Class.class, "(import java.util.Arrays)");
         is(asList(1, 2), "(Arrays/asList 1 2)");
         is(Class.class, "(import java.util.ArrayList)");
+        is(Class.class, "(value ArrayList)");
         is(ArrayList.class, "(ArrayList.)");
         is(asList(1), "(ArrayList. (cons 1 ())");
         is(1, "(.size (ArrayList. (cons 1 ()))");
@@ -362,6 +364,14 @@ public class ShenTest {
         is(intern("up"), "(defun up (x) (.toUpperCase x))");
         is("UP", "(up \"up\")");
         is("TWICE", "(up \"twice\")");
+    }
+
+    @Test
+    public void java_proxies() {
+        is(Class.class, "(import java.util.concurrent.FutureTask)");
+        is(FutureTask.class, "(set ft (FutureTask. (lambda x \"Call\")))");
+        is(null, "(.run (value ft))");
+        is("Call", "(.get (value ft))");
     }
 
     @Test

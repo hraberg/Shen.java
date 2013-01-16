@@ -26,6 +26,7 @@ import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
 import static java.lang.String.format;
 import static java.lang.System.*;
+import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodType.*;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
@@ -46,13 +47,12 @@ import static sun.invoke.util.Wrapper.*;
 public class Shen {
     public static void main(String... args) throws Throwable {
         install();
-        repl();
+        eval("(shen-shen)");
     }
 
     static Compiler loader = new Compiler();
     static Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
-    static Map<String, Class> imports = new HashMap<>();
 
     static {
         set("*language*", "Java");
@@ -144,12 +144,16 @@ public class Shen {
     }
 
     public static Class KL_import(Symbol s) throws ClassNotFoundException {
-        return KL_import(Class.forName(s.symbol));
+        Class aClass = Class.forName(s.symbol);
+        return set(intern(aClass.getSimpleName()), aClass);
     }
 
     static Class KL_import(Class type) {
-        imports.put(type.getSimpleName(), type);
-        return type;
+        try {
+            return KL_import(intern(type.getName()));
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static Object cons(Object x, Object y) {
@@ -273,11 +277,11 @@ public class Shen {
         return s.read();
     }
 
-    public static Object pr(Object x, OutputStream s) throws IOException {
+    public static <T> T pr(T x, OutputStream s) throws IOException {
         return pr(x, new OutputStreamWriter(s));
     }
 
-    public static Object pr(Object x, Writer s) throws IOException {
+    public static <T> T pr(T x, Writer s) throws IOException {
         s.write(str(x));
         s.flush();
         return x;
@@ -350,9 +354,10 @@ public class Shen {
         return symbols.get(string);
     }
 
-    public static Object set(Symbol x, Object y) {
+    @SuppressWarnings("unchecked")
+    public static <T> T set(Symbol x, T y) {
         x.tag(Type.OBJECT);
-        return x.var = y;
+        return (T) (x.var = y);
     }
 
     public static int set(Symbol x, int y) {
@@ -372,17 +377,19 @@ public class Shen {
         return y;
     }
 
-    static Object set(String x, Object y) {
+    static <T> T set(String x, T y) {
         return set(intern(x), y);
     }
 
-    static Object value(String x) {
-        return value(intern(x));
+    @SuppressWarnings("unchecked")
+    static <T> T value(String x) {
+        return (T) value(intern(x));
     }
 
-    static Object value(Symbol x) {
+    @SuppressWarnings("unchecked")
+    static <T> T value(Symbol x) {
         try {
-            return Compiler.value(x).invoke(x);
+            return (T) Compiler.value(x).invoke(x);
         } catch (Throwable t) {
             throw new RuntimeException(t);
         }
@@ -417,10 +424,6 @@ public class Shen {
 
     static Object eval(String shen) throws Exception {
         return eval_kl(read(new StringReader(shen)).get(0));
-    }
-
-    static Object repl() throws Exception {
-        return eval("(shen-shen)");
     }
 
     static void install() throws Exception {
@@ -529,23 +532,40 @@ public class Shen {
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
             if (name.endsWith(".")) {
-                Class aClass = imports.get(name.substring(0, name.length() - 1));
+                Class aClass = Shen.value(name.substring(0, name.length() - 1));
                 if (aClass != null)
                     return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
             if (name.startsWith("."))
                 return relinkOnClassCast(site, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()));
             String[] classAndMethod = name.split("/");
-            if (classAndMethod.length == 2 && imports.containsKey(classAndMethod[0]))
-                return findJavaMethod(type, classAndMethod[1], imports.get(classAndMethod[0]).getMethods());
+            if (classAndMethod.length == 2 && intern(classAndMethod[0]).var instanceof Class)
+                return findJavaMethod(type, classAndMethod[1], ((Class) Shen.value(classAndMethod[0])).getMethods());
             return null;
+        }
+
+        public static <T> T proxy(Class<T> aClass, Object x) throws Throwable {
+            if (x instanceof MethodHandle)
+                return asInterfaceInstance(aClass, ((MethodHandle) x).asCollector(Object[].class, findSAM(aClass).getParameterTypes().length));
+             return null;
+        }
+
+        static MethodHandle convertMethodHandles(MethodHandle method) throws IllegalAccessException {
+            MethodHandle[] filters = new MethodHandle[method.type().parameterCount()];
+            for (int i = 0; i < method.type().parameterCount() - (method.isVarargsCollector() ? 1 : 0); i++)
+                if (findSAM(method.type().parameterType(i)) != null)
+                    filters[i] = mh(Compiler.class, "proxy").bindTo(method.type().parameterType(i))
+                            .asType(methodType(method.type().parameterType(i), Object.class));
+            return filterArguments(method, 0, filters);
         }
 
         static <T extends Executable> MethodHandle findJavaMethod(MethodType type, String method, T[] methods) {
             return some(stream(methods), m -> {
                 try {
                     if (m.getName().equals(method)) {
-                        return ((m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m)).asType(type);
+                        MethodHandle mh = (m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m);
+                        mh.asType(type);
+                        return convertMethodHandles(mh);
                     }
                 } catch (Exception ignore) {
                 }
@@ -732,7 +752,8 @@ public class Shen {
         }
 
         static Method findSAM(Class<?> lambda) {
-            return find(stream(lambda.getDeclaredMethods()), m -> !m.isSynthetic());
+            List<Method> methods = toList(stream(lambda.getDeclaredMethods()).filter(m -> !m.isSynthetic()));
+            return methods.size() == 1 ? methods.get(0) : null;
         }
 
         @Retention(RetentionPolicy.RUNTIME)
