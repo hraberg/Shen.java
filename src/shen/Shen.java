@@ -695,9 +695,10 @@ public class Shen {
         }
 
         public static Object apply(Object target, Object... args) throws Throwable {
-            MethodHandle fn;
-            if (target instanceof Symbol) fn = function((Symbol) target);
-            else fn = (MethodHandle) target;
+            return apply(target instanceof Symbol ? function((Symbol) target) : (MethodHandle) target, args);
+        }
+
+        public static Object apply(MethodHandle fn, Object... args) throws Throwable {
             if (isLambda(fn)) return uncurry(fn, args);
 
             MethodType targetType = methodType(Object.class, toList(stream(args).map(Object::getClass)));
@@ -895,10 +896,7 @@ public class Shen {
 
         void apply(List<Object> args) {
             box();
-            // maybeCast(MethodHandle.class);
-
             loadArgArray(args);
-
             mv.invokeStatic(getType(RT.class), method("apply", desc(Object.class, Object.class, Object[].class)));
             topOfStack = getType(Object.class);
         }
