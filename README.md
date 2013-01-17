@@ -33,7 +33,7 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 
     export JAVA_HOME=/path/to/jdk1.8.0/with/lambdas
     mvn package
-    $JAVA_HOME/bin/java -Xss16m -jar target/shen.java-*-standalone.jar
+    $JAVA_HOME/bin/java -jar target/shen.java-*-standalone.jar
 
 
 ### What works?
@@ -52,7 +52,6 @@ This is bound to change as we go:
 
 * Full KL compilation.
 * Ability to load the `kl`.
-* Fix StackOverflow in the KL reader so it won't require `-Xss16m`.
 * The REPL
 * The Shen test suite.
 * SwitchPoints for symbols.

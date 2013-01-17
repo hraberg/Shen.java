@@ -434,9 +434,9 @@ public class Shen {
         }
 
         static Object tokenize(Scanner sc) throws Exception {
+            sc.skip("\\s*");
             if (find(sc, "\\(")) return tokenizeAll(sc);
             if (find(sc, "\"")) return nextString(sc);
-            if (find(sc, "\\s")) return tokenize(sc);
             if (find(sc, "\\)")) return null;
             if (sc.hasNextBoolean()) return sc.nextBoolean();
             if (sc.hasNextInt()) return sc.nextInt();
