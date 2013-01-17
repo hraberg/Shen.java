@@ -123,9 +123,10 @@ public class Shen {
             return symbol;
         }
 
-        public Object value() {
+        public <T> T value() {
             if (var == null) throw new IllegalArgumentException("variable " + this + " has no value");
-            return var;
+            //noinspection unchecked
+            return (T) var;
         }
 
         public void tag(int tag) {
@@ -322,7 +323,7 @@ public class Shen {
 
         public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
             if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
-            File file = new File((String) value("*home-directory*"), string);
+            File file = new File((String) intern("*home-directory*").value(), string);
             switch (direction.symbol) {
                 case "in": return new FileInputStream(file);
                 case "out": return new FileOutputStream(file);
@@ -384,20 +385,6 @@ public class Shen {
 
         static <T> T set(String x, T y) {
             return set(intern(x), y);
-        }
-
-        @SuppressWarnings("unchecked")
-        static <T> T value(String x) {
-            return (T) value(intern(x));
-        }
-
-        @SuppressWarnings("unchecked")
-        static <T> T value(Symbol x) {
-            try {
-                return (T) RT.value(x).invoke(x);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
-            }
         }
 
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
@@ -562,7 +549,7 @@ public class Shen {
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
             if (name.endsWith(".")) {
-                Class aClass = Primitives.value(name.substring(0, name.length() - 1));
+                Class aClass = intern(name.substring(0, name.length() - 1)).value();
                 if (aClass != null)
                     return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
@@ -570,7 +557,7 @@ public class Shen {
                 return relinkOnClassCast(site, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()));
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && intern(classAndMethod[0]).var instanceof Class)
-                return findJavaMethod(type, classAndMethod[1], ((Class) Primitives.value(classAndMethod[0])).getMethods());
+                return findJavaMethod(type, classAndMethod[1], ((Class) intern(classAndMethod[0]).value()).getMethods());
             return null;
         }
 
