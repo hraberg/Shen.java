@@ -37,8 +37,8 @@ import static java.util.function.Predicates.*;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
-import static shen.Shen.Compiler.*;
 import static shen.Shen.KLReader.read;
+import static shen.Shen.RT.*;
 import static sun.invoke.util.BytecodeName.toBytecodeName;
 import static sun.invoke.util.BytecodeName.toSourceName;
 import static sun.invoke.util.Wrapper.*;
@@ -50,7 +50,6 @@ public class Shen {
         eval("(shen-shen)");
     }
 
-    static Compiler loader = new Compiler();
     static Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
 
@@ -104,7 +103,7 @@ public class Shen {
     interface DDPredicate { boolean test(double a, double b); }
 
     static void op(String name, Object... op) {
-        intern(name).fn.addAll(toList(stream(op).map(Compiler::findSAM)));
+        intern(name).fn.addAll(toList(stream(op).map(RT::findSAM)));
     }
 
     static Symbol defun(Method m) {
@@ -389,7 +388,7 @@ public class Shen {
     @SuppressWarnings("unchecked")
     static <T> T value(Symbol x) {
         try {
-            return (T) Compiler.value(x).invoke(x);
+            return (T) RT.value(x).invoke(x);
         } catch (Throwable t) {
             throw new RuntimeException(t);
         }
@@ -410,7 +409,7 @@ public class Shen {
 
     public static Object eval_kl(Object kl) {
         try {
-            return new Code(kl).load(Callable.class).newInstance().call();
+            return new Compiler(kl).load(Callable.class).newInstance().call();
         } catch (Throwable t) {
             throw new IllegalArgumentException(kl.toString(), t);
         }
@@ -469,9 +468,7 @@ public class Shen {
         }
     }
 
-    public static class Compiler implements Opcodes {
-        static AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), Compiler.class);
-
+    public static class RT implements Opcodes {
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
             MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
             site.setTarget(guardWithTest(hasTag, value(symbol).asType(site.type()), site.getTarget()));
@@ -560,7 +557,7 @@ public class Shen {
             MethodHandle[] filters = new MethodHandle[method.type().parameterCount()];
             for (int i = 0; i < method.type().parameterCount() - (method.isVarargsCollector() ? 1 : 0); i++)
                 if (isSAM(method.type().parameterType(i)))
-                    filters[i] = mh(Compiler.class, "proxy").bindTo(findSAM(method.type().parameterType(i)))
+                    filters[i] = mh(RT.class, "proxy").bindTo(findSAM(method.type().parameterType(i)))
                             .asType(methodType(method.type().parameterType(i), Object.class));
             return filterArguments(method, 0, filters);
         }
@@ -580,7 +577,7 @@ public class Shen {
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
-            return insertArguments(mh(Compiler.class, "link"), 0, site, name).asCollector(Object[].class, arity);
+            return insertArguments(mh(RT.class, "link"), 0, site, name).asCollector(Object[].class, arity);
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
@@ -595,7 +592,7 @@ public class Shen {
 
         public static CallSite valueBSM(Lookup lookup, String name, MethodType type) throws Exception {
             MutableCallSite site = new MutableCallSite(type);
-            site.setTarget(mh(Compiler.class, "value").bindTo(site).asType(type));
+            site.setTarget(mh(RT.class, "value").bindTo(site).asType(type));
             return site;
         }
 
@@ -708,32 +705,6 @@ public class Shen {
             return true;
         }
 
-        @SuppressWarnings("unchecked")
-        static <T> List<T> toList(Stream<T> stream) {
-            return (List<T>) stream.collect(Collectors.toList());
-        }
-
-        static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
-            return stream.filter(predicate).findFirst().orElse((T) null);
-        }
-
-        static <T, R> R some(Stream<T> stream, Function<? super T, ? extends R> mapper) {
-            return stream.map(mapper).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
-        }
-
-        static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
-            //noinspection Convert2MethodRef
-            return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> concat(x, y)).stream();
-        }
-
-        static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
-            return toList(Streams.concat(a.stream(), b.stream()));
-        }
-
-        static <T> List<T> without(Collection<T> x, T y) {
-            return toList(x.stream().filter(isEqual(y).negate()));
-        }
-
         @SafeVarargs
         static <T> List<T> list(T... elements) {
             return new ArrayList<>(asList(elements));
@@ -766,393 +737,394 @@ public class Shen {
             return findSAM(aClass) != null;
         }
 
+    }
+
+    public static class Compiler {
+        static AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), RT.class);
+        static Map<Symbol, MethodHandle> macros = new HashMap<>();
+        static List<Class<?>> literals =
+                asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
+
+        static {
+            stream(Compiler.class.getDeclaredMethods())
+                    .filter(m -> isPublic(m.getModifiers()) && m.isAnnotationPresent(Macro.class))
+                    .forEach(Compiler::macro);
+        }
+
         @Retention(RetentionPolicy.RUNTIME)
         @interface Macro {}
 
-        static class Code {
-            static Map<Symbol, MethodHandle> macros = new HashMap<>();
-            static List<Class<?>> literals =
-                    asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
+        static int id = 1;
 
-            static {
-                stream(Code.class.getDeclaredMethods())
-                        .filter(m -> isPublic(m.getModifiers()) && m.isAnnotationPresent(Macro.class))
-                        .forEach(Code::macro);
+        String className;
+        ClassWriter cw;
+
+        GeneratorAdapter mv;
+        Object shen;
+        Symbol self;
+        Map<Symbol, Integer> locals;
+        List<Symbol> args;
+        List<Type> argTypes;
+        Type topOfStack;
+        Label recur;
+
+        public Compiler(Object shen, Symbol... args) throws Throwable {
+            this(null, "shen/ShenEval" + id++, shen, args);
+        }
+
+        public Compiler(ClassWriter cn, String className, Object shen, Symbol... args) throws Throwable {
+            this.cw = cn;
+            this.className = className;
+            this.shen = shen;
+            this.args = list(args);
+            this.locals = new LinkedHashMap<>();
+        }
+
+        ClassWriter classWriter(String name, Class<?> anInterface) {
+            ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
+            cw.visit(V1_7, ACC_PUBLIC, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
+            return cw;
+        }
+
+        GeneratorAdapter generator(int access, org.objectweb.asm.commons.Method method) {
+            return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
+        }
+
+        org.objectweb.asm.commons.Method method(String name, String desc) {
+            return new org.objectweb.asm.commons.Method(name, desc);
+        }
+
+        static void macro(Method m) {
+            try {
+                macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
             }
+        }
 
-            static int id = 1;
+        Type compile(Object kl) {
+            return compile(kl, true);
+        }
 
-            String className;
-            ClassWriter cw;
+        Type compile(Object kl, boolean tail) {
+            try {
+                Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
+                if (literalClass != null) push(literalClass, kl);
+                else if (kl instanceof Symbol) symbol((Symbol) kl);
+                else if (kl instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<Object> list = (List) kl;
+                    if (list.isEmpty()) emptyList();
+                    else {
+                        Object first = list.get(0);
+                        if (first instanceof Symbol) {
+                            Symbol s = (Symbol) first;
+                            if (macros.containsKey(s)) macroExpand(s, tl(list), tail);
+                            else indy(s, tl(list), tail);
 
-            GeneratorAdapter mv;
-            Object shen;
-            Symbol self;
-            Map<Symbol, Integer> locals;
-            List<Symbol> args;
-            List<Type> argTypes;
-            Type topOfStack;
-            Label recur;
-
-            public Code(Object shen, Symbol... args) throws Throwable {
-                this(null, "shen/ShenEval" + id++, shen, args);
-            }
-
-            public Code(ClassWriter cn, String className, Object shen, Symbol... args) throws Throwable {
-                this.cw = cn;
-                this.className = className;
-                this.shen = shen;
-                this.args = list(args);
-                this.locals = new LinkedHashMap<>();
-            }
-
-            ClassWriter classWriter(String name, Class<?> anInterface) {
-                ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
-                cw.visit(V1_7, ACC_PUBLIC, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
-                return cw;
-            }
-
-            GeneratorAdapter generator(int access, org.objectweb.asm.commons.Method method) {
-                return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
-            }
-
-            org.objectweb.asm.commons.Method method(String name, String desc) {
-                return new org.objectweb.asm.commons.Method(name, desc);
-            }
-
-            static void macro(Method m) {
-                try {
-                    macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            Type compile(Object kl) {
-                return compile(kl, true);
-            }
-
-            Type compile(Object kl, boolean tail) {
-                try {
-                    Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
-                    if (literalClass != null) push(literalClass, kl);
-                    else if (kl instanceof Symbol) symbol((Symbol) kl);
-                    else if (kl instanceof List) {
-                        @SuppressWarnings("unchecked")
-                        List<Object> list = (List) kl;
-                        if (list.isEmpty()) emptyList();
-                        else {
-                            Object first = list.get(0);
-                            if (first instanceof Symbol) {
-                                Symbol s = (Symbol) first;
-                                if (macros.containsKey(s)) macroExpand(s, tl(list), tail);
-                                else indy(s, tl(list), tail);
-
-                            } else {
-                                compile(first, tail);
-                                apply(tl(list));
-                            }
+                        } else {
+                            compile(first, tail);
+                            apply(tl(list));
                         }
-                    } else
-                        throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
-                } catch (RuntimeException | Error e) {
-                    throw e;
-                } catch (Throwable t) {
-                    throw new RuntimeException(t);
-                }
-                return topOfStack;
+                    }
+                } else
+                    throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
+            } catch (RuntimeException | Error e) {
+                throw e;
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
             }
+            return topOfStack;
+        }
 
-            void macroExpand(Symbol s, List<Object> args, boolean tail) throws Throwable {
-                MethodHandle macro = Compiler.bindTo(macros.get(s), this);
-                Compiler.bindTo(macro, tail).invokeWithArguments(args);
+        void macroExpand(Symbol s, List<Object> args, boolean tail) throws Throwable {
+            RT.bindTo(RT.bindTo(macros.get(s), this), tail).invokeWithArguments(args);
+        }
+
+        void indy(Symbol s, List<Object> args, boolean tail) throws ReflectiveOperationException {
+            List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
+
+            if (isSelfCall(s, args)) {
+                if (tail) {
+                    debug("recur: " + s);
+                    recur();
+                    return;
+                } else debug("can only recur from tail position: " + s);
             }
+            MethodType type = asMethodType(s.fn.size() == 1
+                    ? getType(s.fn.stream().findAny().get().type().returnType())
+                    : getType(Object.class), argumentTypes);
+            mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), handle(mh(RT.class, "invokeBSM")));
+            topOfStack(type.returnType());
+        }
 
-            void indy(Symbol s, List<Object> args, boolean tail) throws ReflectiveOperationException {
-                List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
+        void recur() {
+            for (int i = this.args.size() - 1; i >= 0; i--)
+                mv.storeArg(i);
+            mv.goTo(recur);
+        }
 
-                if (isSelfCall(s, args)) {
-                    if (tail) {
-                        debug("recur: " + s);
-                        recur();
-                        return;
-                    } else debug("can only recur from tail position: " + s);
-                }
-                MethodType type = asMethodType(s.fn.size() == 1
-                        ? getType(s.fn.stream().findAny().get().type().returnType())
-                        : getType(Object.class), argumentTypes);
-                mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), handle(mh(Compiler.class, "invokeBSM")));
-                topOfStack(type.returnType());
-            }
+        boolean isSelfCall(Symbol s, List<Object> args) {
+            return s.equals(self) && args.size() == this.args.size();
+        }
 
-            void recur() {
-                for (int i = this.args.size() - 1; i >= 0; i--)
-                    mv.storeArg(i);
-                mv.goTo(recur);
-            }
+        void apply(List<Object> args) {
+            box();
+            maybeCast(MethodHandle.class);
 
-            boolean isSelfCall(Symbol s, List<Object> args) {
-                return s.equals(self) && args.size() == this.args.size();
-            }
+            loadArgArray(args);
 
-            void apply(List<Object> args) {
-                box();
-                maybeCast(MethodHandle.class);
+            mv.invokeStatic(getType(RT.class), method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
+            topOfStack = getType(Object.class);
+        }
 
-                loadArgArray(args);
+        @Macro
+        public void trap_error(boolean tail, Object x, Object f) throws Throwable {
+            Label start = mv.newLabel();
+            Label end = mv.newLabel();
+            Label after = mv.newLabel();
 
-                mv.invokeStatic(getType(Compiler.class), method("apply", desc(Object.class, MethodHandle.class, Object[].class)));
-                topOfStack = getType(Object.class);
-            }
+            mv.visitLabel(start);
+            compile(x, false);
+            box();
+            mv.goTo(after);
+            mv.visitLabel(end);
 
-            @Macro
-            public void trap_error(boolean tail, Object x, Object f) throws Throwable {
-                Label start = mv.newLabel();
-                Label end = mv.newLabel();
-                Label after = mv.newLabel();
+            mv.catchException(start, end, getType(Exception.class));
+            compile(f, false);
+            maybeCast(MethodHandle.class);
+            mv.swap();
+            bindTo();
 
-                mv.visitLabel(start);
-                compile(x, false);
-                box();
-                mv.goTo(after);
-                mv.visitLabel(end);
+            mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
+            mv.visitLabel(after);
+            topOfStack(Object.class);
+        }
 
-                mv.catchException(start, end, getType(Exception.class));
-                compile(f, false);
-                maybeCast(MethodHandle.class);
-                mv.swap();
-                bindTo();
+        @Macro
+        public void KL_if(boolean tail, Object test, Object then, Object _else) throws Exception {
+            Label elseStart = mv.newLabel();
+            Label end = mv.newLabel();
 
-                mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
-                mv.visitLabel(after);
+            compile(test, false);
+            if (isPrimitive(topOfStack) && topOfStack != getType(boolean.class)) box();
+            if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
+            mv.visitJumpInsn(IFEQ, elseStart);
+
+            compile(then, tail);
+            box();
+            Type typeOfThenBranch = topOfStack;
+            mv.goTo(end);
+
+            mv.visitLabel(elseStart);
+            compile(_else, tail);
+            box();
+
+            mv.visitLabel(end);
+            if (!typeOfThenBranch.equals(topOfStack))
                 topOfStack(Object.class);
+        }
+
+        @Macro
+        public void cond(boolean tail, List... clauses) throws Exception {
+            if (clauses.length == 0)
+                mv.throwException(getType(IllegalArgumentException.class), "condition failure");
+            else
+                KL_if(tail, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
+        }
+
+        @Macro
+        public void or(boolean tail, Object x, Object... clauses) throws Exception {
+            if (clauses.length == 0)
+                bindTo(handle(RT.mh(RT.class, "or")), x);
+            else
+                KL_if(tail, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+        }
+
+        @Macro
+        public void and(boolean tail, Object x, Object... clauses) throws Exception {
+            if (clauses.length == 0)
+                bindTo(handle(RT.mh(RT.class, "and")), x);
+            else
+                KL_if(tail, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+        }
+
+        @Macro
+        public void value(boolean tail, Object x) throws Throwable {
+            compile(x, false);
+            maybeCast(Symbol.class);
+            mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
+            topOfStack(Object.class);
+        }
+
+        void maybeCast(Class<?> type) {
+            if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
+            topOfStack(type);
+        }
+
+        @Macro
+        public void lambda(boolean tail, Symbol x, Object y) throws Throwable {
+            fn("lambda_" + id++, y, x);
+        }
+
+        @Macro
+        public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
+            push(name);
+            debug("compiling: " + name + args + " in " + getObjectType(className).getClassName());
+            fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
+            mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
+            topOfStack(Symbol.class);
+        }
+
+        void fn(String name, Object shen, Symbol... args) throws Throwable {
+            List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
+            scope.retainAll(concat(locals.keySet(), this.args));
+
+            List<Type> types = toList(scope.stream().map(this::typeOf));
+            for (Symbol ignore : args) types.add(getType(Object.class));
+
+            insertArgs(handle(className, name, desc(getType(Object.class), types)), 0, scope);
+
+            scope.addAll(asList(args));
+            Compiler fn = new Compiler(cw, className, shen, scope.toArray(new Symbol[scope.size()]));
+            fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
+        }
+
+        @SuppressWarnings({"SuspiciousMethodCalls", "unchecked"})
+        List<Symbol> closesOver(Set<Symbol> scope, Object shen) {
+            if (shen instanceof Symbol && !scope.contains(shen))
+                return list((Symbol) shen);
+            if (shen instanceof List) {
+                List<Object> list = (List) shen;
+                if (list.size() > 1)
+                    if (intern("let").equals(hd(list)))
+                        return concat(closesOver(new HashSet<>(scope), list.get(2)),
+                                closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)),
+                                        list.subList(2, list.size())));
+                    else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
+                        return toList(mapcat(tl(list).stream(), o -> closesOver(scope, o)));
             }
+            return list();
+        }
 
-            @Macro
-            public void KL_if(boolean tail, Object test, Object then, Object _else) throws Exception {
-                Label elseStart = mv.newLabel();
-                Label end = mv.newLabel();
+        @Macro
+        public void let(boolean tail, Symbol x, Object y, Object z) throws Throwable {
+            compile(y, false);
+            int let = mv.newLocal(topOfStack);
+            mv.storeLocal(let);
+            Integer hidden = locals.put(x, let);
+            compile(z, tail);
+            if (hidden != null) locals.put(x, hidden);
+            else locals.remove(x);
+        }
 
-                compile(test, false);
-                if (isPrimitive(topOfStack) && topOfStack != getType(boolean.class)) box();
-                if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
-                mv.visitJumpInsn(IFEQ, elseStart);
+        void emptyList() {
+            mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
+            topOfStack(List.class);
+        }
 
-                compile(then, tail);
+        void symbol(Symbol s) throws ReflectiveOperationException {
+            if (locals.containsKey(s)) mv.loadLocal(locals.get(s));
+            else if (args.contains(s)) mv.loadArg(args.indexOf(s));
+            else push(s);
+            topOfStack = typeOf(s);
+        }
+
+        Type typeOf(Symbol s) {
+            if (locals.containsKey(s)) return mv.getLocalType(locals.get(s));
+            else if (args.contains(s)) return argTypes.get(args.indexOf(s));
+            return getType(Symbol.class);
+        }
+
+        void loadArgArray(List<?> args) {
+            mv.push(args.size());
+            mv.newArray(getType(Object.class));
+
+            for (int i = 0; i < args.size(); i++) {
+                mv.dup();
+                mv.push(i);
+                compile(args.get(i), false);
                 box();
-                Type typeOfThenBranch = topOfStack;
-                mv.goTo(end);
-
-                mv.visitLabel(elseStart);
-                compile(_else, tail);
-                box();
-
-                mv.visitLabel(end);
-                if (!typeOfThenBranch.equals(topOfStack))
-                    topOfStack(Object.class);
+                mv.arrayStore(getType(Object.class));
             }
+            topOfStack = getType(Object[].class);
+        }
 
-            @Macro
-            public void cond(boolean tail, List... clauses) throws Exception {
-                if (clauses.length == 0)
-                    mv.throwException(getType(IllegalArgumentException.class), "condition failure");
-                else
-                    KL_if(tail, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
-            }
+        MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
+            return fromMethodDescriptorString(desc(returnType, argumentTypes), getSystemClassLoader());
+        }
 
-            @Macro
-            public void or(boolean tail, Object x, Object... clauses) throws Exception {
-                if (clauses.length == 0)
-                    bindTo(handle(Compiler.mh(Compiler.class, "or")), x);
-                else
-                    KL_if(tail, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
-            }
+        void push(Symbol kl) throws ReflectiveOperationException {
+            mv.invokeDynamic(scramble(kl.symbol), desc(Symbol.class), handle(mh(RT.class, "symbolBSM")));
+            topOfStack(Symbol.class);
+        }
 
-            @Macro
-            public void and(boolean tail, Object x, Object... clauses) throws Exception {
-                if (clauses.length == 0)
-                    bindTo(handle(Compiler.mh(Compiler.class, "and")), x);
-                else
-                    KL_if(tail, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
-            }
+        void push(Class<?> aClass, Object kl) throws Throwable {
+            aClass = asPrimitiveType(aClass);
+            mh(mv.getClass(), "push", aClass).invoke(mv, kl);
+            topOfStack(aClass);
+        }
 
-            @Macro
-            public void value(boolean tail, Object x) throws Throwable {
-                compile(x, false);
-                maybeCast(Symbol.class);
-                mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(Compiler.class, "valueBSM")));
-                topOfStack(Object.class);
-            }
+        void topOfStack(Class<?> aClass) {
+            topOfStack = getType(aClass);
+        }
 
-            void maybeCast(Class<?> type) {
-                if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
-                topOfStack(type);
-            }
+        public <T> Class<T> load(Class<T> anInterface) throws Exception {
+            cw = classWriter(className, anInterface);
+            constructor();
+            Method sam = findSAM(anInterface);
+            List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
+            method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
+            //noinspection unchecked
+            return (Class<T>) loader.loadClass(cw.toByteArray());
+        }
 
-            @Macro
-            public void lambda(boolean tail, Symbol x, Object y) throws Throwable {
-                fn("lambda_" + id++, y, x);
-            }
+        void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
+            this.self = intern(unscramble(name));
+            this.argTypes = argumentTypes;
+            mv = generator(modifiers, method(name, desc(returnType, argumentTypes)));
+            recur = mv.newLabel();
+            mv.visitLabel(recur);
+            compile(shen);
+            if (!isPrimitive(returnType)) box();
+            mv.returnValue();
+            mv.endMethod();
+        }
 
-            @Macro
-            public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
-                push(name);
-                debug("compiling: " + name + args + " in " + getObjectType(className).getClassName());
-                fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
-                mv.invokeStatic(getType(Compiler.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
-                topOfStack(Symbol.class);
-            }
+        void box() {
+            Type maybePrimitive = topOfStack;
+            mv.box(maybePrimitive);
+            topOfStack = boxedType(maybePrimitive);
+        }
 
-            void fn(String name, Object shen, Symbol... args) throws Throwable {
-                List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
-                scope.retainAll(concat(locals.keySet(), this.args));
+        void constructor() {
+            GeneratorAdapter ctor = generator(ACC_PUBLIC, method("<init>", desc(void.class)));
+            ctor.loadThis();
+            ctor.invokeConstructor(getType(Object.class), method("<init>", desc(void.class)));
+            ctor.returnValue();
+            ctor.endMethod();
+        }
 
-                List<Type> types = toList(scope.stream().map(this::typeOf));
-                for (Symbol ignore : args) types.add(getType(Object.class));
+        void bindTo(Handle handle, Object arg) {
+            mv.push(handle);
+            compile(arg, false);
+            box();
+            bindTo();
+        }
 
-                insertArgs(handle(className, name, desc(getType(Object.class), types)), 0, scope);
+        void bindTo() {
+            mv.invokeStatic(getType(RT.class), method("bindTo",
+                    desc(MethodHandle.class, MethodHandle.class, Object.class)));
+            topOfStack(MethodHandle.class);
+        }
 
-                scope.addAll(asList(args));
-                Code fn = new Code(cw, className, shen, scope.toArray(new Symbol[scope.size()]));
-                fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
-            }
-
-            @SuppressWarnings({"SuspiciousMethodCalls", "unchecked"})
-            List<Symbol> closesOver(Set<Symbol> scope, Object shen) {
-                if (shen instanceof Symbol && !scope.contains(shen))
-                    return list((Symbol) shen);
-                if (shen instanceof List) {
-                    List<Object> list = (List) shen;
-                    if (list.size() > 1)
-                        if (intern("let").equals(hd(list)))
-                            return concat(closesOver(new HashSet<>(scope), list.get(2)),
-                                    closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)),
-                                            list.subList(2, list.size())));
-                        else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
-                            return toList(mapcat(tl(list).stream(), o -> closesOver(scope, o)));
-                }
-                return list();
-            }
-
-            @Macro
-            public void let(boolean tail, Symbol x, Object y, Object z) throws Throwable {
-                compile(y, false);
-                int let = mv.newLocal(topOfStack);
-                mv.storeLocal(let);
-                Integer hidden = locals.put(x, let);
-                compile(z, tail);
-                if (hidden != null) locals.put(x, hidden);
-                else locals.remove(x);
-            }
-
-            void emptyList() {
-                mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
-                topOfStack(List.class);
-            }
-
-            void symbol(Symbol s) throws ReflectiveOperationException {
-                if (locals.containsKey(s)) mv.loadLocal(locals.get(s));
-                else if (args.contains(s)) mv.loadArg(args.indexOf(s));
-                else push(s);
-                topOfStack = typeOf(s);
-            }
-
-            Type typeOf(Symbol s) {
-                if (locals.containsKey(s)) return mv.getLocalType(locals.get(s));
-                else if (args.contains(s)) return argTypes.get(args.indexOf(s));
-                return getType(Symbol.class);
-            }
-
-            void loadArgArray(List<?> args) {
-                mv.push(args.size());
-                mv.newArray(getType(Object.class));
-
-                for (int i = 0; i < args.size(); i++) {
-                    mv.dup();
-                    mv.push(i);
-                    compile(args.get(i), false);
-                    box();
-                    mv.arrayStore(getType(Object.class));
-                }
-                topOfStack = getType(Object[].class);
-            }
-
-            MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
-                return fromMethodDescriptorString(desc(returnType, argumentTypes), getSystemClassLoader());
-            }
-
-            void push(Symbol kl) throws ReflectiveOperationException {
-                mv.invokeDynamic(scramble(kl.symbol), desc(Symbol.class), handle(mh(Compiler.class, "symbolBSM")));
-                topOfStack(Symbol.class);
-            }
-
-            void push(Class<?> aClass, Object kl) throws Throwable {
-                aClass = asPrimitiveType(aClass);
-                mh(mv.getClass(), "push", aClass).invoke(mv, kl);
-                topOfStack(aClass);
-            }
-
-            void topOfStack(Class<?> aClass) {
-                topOfStack = getType(aClass);
-            }
-
-            public <T> Class<T> load(Class<T> anInterface) throws Exception {
-                cw = classWriter(className, anInterface);
-                constructor();
-                Method sam = findSAM(anInterface);
-                List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
-                method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
-                //noinspection unchecked
-                return (Class<T>) loader.loadClass(cw.toByteArray());
-            }
-
-            void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
-                this.self = intern(unscramble(name));
-                this.argTypes = argumentTypes;
-                mv = generator(modifiers, method(name, desc(returnType, argumentTypes)));
-                recur = mv.newLabel();
-                mv.visitLabel(recur);
-                compile(shen);
-                if (!isPrimitive(returnType)) box();
-                mv.returnValue();
-                mv.endMethod();
-            }
-
-            void box() {
-                Type maybePrimitive = topOfStack;
-                mv.box(maybePrimitive);
-                topOfStack = boxedType(maybePrimitive);
-            }
-
-            void constructor() {
-                GeneratorAdapter ctor = generator(ACC_PUBLIC, method("<init>", desc(void.class)));
-                ctor.loadThis();
-                ctor.invokeConstructor(getType(Object.class), method("<init>", desc(void.class)));
-                ctor.returnValue();
-                ctor.endMethod();
-            }
-
-            void bindTo(Handle handle, Object arg) {
-                mv.push(handle);
-                compile(arg, false);
-                box();
-                bindTo();
-            }
-
-            void bindTo() {
-                mv.invokeStatic(getType(Compiler.class), method("bindTo",
-                        desc(MethodHandle.class, MethodHandle.class, Object.class)));
-                topOfStack(MethodHandle.class);
-            }
-
-            void insertArgs(Handle handle, int pos, List<?> args) {
-                mv.push(handle);
-                mv.push(pos);
-                loadArgArray(args);
-                mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
-                        desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
-                topOfStack(MethodHandle.class);
-            }
+        void insertArgs(Handle handle, int pos, List<?> args) {
+            mv.push(handle);
+            mv.push(pos);
+            loadArgArray(args);
+            mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
+                    desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
+            topOfStack(MethodHandle.class);
         }
 
         static Unsafe unsafe() {
@@ -1164,5 +1136,31 @@ public class Shen {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> List<T> toList(Stream<T> stream) {
+        return (List<T>) stream.collect(Collectors.toList());
+    }
+
+    static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
+        return stream.filter(predicate).findFirst().orElse((T) null);
+    }
+
+    static <T, R> R some(Stream<T> stream, Function<? super T, ? extends R> mapper) {
+        return stream.map(mapper).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
+    }
+
+    static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
+        //noinspection Convert2MethodRef
+        return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> concat(x, y)).stream();
+    }
+
+    static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
+        return toList(Streams.concat(a.stream(), b.stream()));
+    }
+
+    static <T> List<T> without(Collection<T> x, T y) {
+        return toList(x.stream().filter(isEqual(y).negate()));
     }
 }
