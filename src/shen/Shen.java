@@ -422,7 +422,7 @@ public class Shen {
     static void install() throws Exception {
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
-            try (Reader in = resource(file + ".kl")) {
+            try (Reader in = resource(format("klambda/%s.kl", file))) {
                 load(file, in);
             }
     }
