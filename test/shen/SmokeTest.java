@@ -13,7 +13,7 @@ import static shen.Shen.Primitives.intern;
 import static shen.Shen.Primitives.str;
 
 // These are the main methods from the interpreter and compiler, no structure or niceness.
-// Tests lots of random stuff, written while developing, most this should be covered in ShenTest.
+// Tests lots of random stuff, written while developing, most this should be covered in PrimitivesTest.
 // Both run against the compiler, as the interpreter has been removed.
 public class SmokeTest {
     @Test

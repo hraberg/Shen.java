@@ -20,7 +20,7 @@ import static org.junit.Assert.assertTrue;
 import static shen.Shen.*;
 import static shen.Shen.Primitives.intern;
 
-public class ShenTest {
+public class PrimitivesTest {
     @Test
     public void equals() {
         is(2, "2");

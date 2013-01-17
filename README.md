@@ -51,7 +51,7 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 * Partial application.
 * Implicit recur.
 * Simple Java inter-op (based on Clojure's syntax).
-* [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/ShenTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
+* [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 
 
 ### Road Map
