@@ -867,7 +867,7 @@ public class Shen {
             if (isSelfCall(s, args)) {
                 if (tail) {
                     debug("recur: " + s);
-                    recur();
+                    recur(argumentTypes);
                     return;
                 } else debug("can only recur from tail position: " + s);
             }
@@ -878,9 +878,9 @@ public class Shen {
             topOfStack(type.returnType());
         }
 
-        void recur() {
+        void recur(List<Type> argumentTypes) {
             for (int i = args.size() - 1; i >= 0; i--) {
-                box(); // this is wrong, we need to know what type is actually on the stack.
+                mv.box(argumentTypes.get(i));
                 mv.storeArg(i);
             }
             mv.goTo(recur);
