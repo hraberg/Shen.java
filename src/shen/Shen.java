@@ -124,7 +124,7 @@ public class Shen {
         }
 
         public Object value() {
-            var.getClass();
+            if (var == null) throw new IllegalArgumentException("variable " + this + " has no value");
             return var;
         }
 
@@ -138,6 +138,16 @@ public class Shen {
 
         public boolean hasTag(int tag) {
             return this.tag == tag;
+        }
+
+        public boolean equals(Object o) {
+            //noinspection StringEquality
+            return o instanceof Symbol && symbol == ((Symbol) o).symbol;
+
+        }
+
+        public int hashCode() {
+            return symbol.hashCode();
         }
     }
 
@@ -231,7 +241,7 @@ public class Shen {
         }
 
         public static String str(Object x) {
-            if (consP(x)) throw new IllegalArgumentException();
+            if (consP(x)) throw new IllegalArgumentException(x + " is not an atom; str cannot convert it to a string.");
             if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
             return String.valueOf(x);
         }
@@ -311,13 +321,13 @@ public class Shen {
         }
 
         public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
-            if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
+            if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
             File file = new File((String) value("*home-directory*"), string);
             switch (direction.symbol) {
                 case "in": return new FileInputStream(file);
                 case "out": return new FileOutputStream(file);
             }
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("invalid direction");
         }
 
         public static Object close(Closeable stream) throws IOException {
@@ -331,7 +341,7 @@ public class Shen {
                 case "run": return (currentTimeMillis() - startTime) / 1000;
                 case "unix": return currentTimeMillis() / 1000;
             }
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("get-time does not understand the parameter " + time);
         }
 
         public static String cn(String s1, String s2) {
@@ -407,11 +417,14 @@ public class Shen {
             try {
                 return new Compiler(kl).load(Callable.class).newInstance().call();
             } catch (Throwable t) {
-                if (value("*debug*") == true) t.printStackTrace();
+                if (isDebug()) t.printStackTrace();
                 throw new RuntimeException(t.getMessage(), t);
             }
         }
+    }
 
+    static boolean isDebug() {
+        return intern("*debug*").primVar == 1;
     }
 
     public static Object eval(String shen) throws Exception {
@@ -617,7 +630,7 @@ public class Shen {
         }
 
         static void debug(String msg, Object... xs) {
-            if (Primitives.value("*debug*") == true) System.err.println(format(msg, xs));
+            if (isDebug()) System.err.println(format(msg, xs));
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
