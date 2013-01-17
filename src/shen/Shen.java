@@ -185,7 +185,7 @@ public class Shen {
 
         public static List<Object> cons(Object x, List<Object> y) {
             if (y == Collections.EMPTY_LIST)
-                y = new ArrayList<>();
+                return list(x);
             y.add(0, x);
             return y;
         }
@@ -452,7 +452,7 @@ public class Shen {
         }
 
         static List tokenizeAll(Scanner sc) throws Exception {
-            List<Object> list = new LinkedList<>();
+            List<Object> list = list();
             Object x;
             while ((x = tokenize(sc)) != null) list.add(x);
             return list;
