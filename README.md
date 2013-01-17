@@ -89,4 +89,4 @@ This is bound to change as we go:
 
 [InvokeDynamic: Your API for HotSpot](http://www.slideshare.net/boundaryinc/invoke-dynamic-your-api-to-hotspot) (Arcieri, 2012)
 
-[Invokedynamic and JRuby](http://vimeo.com/27207224) (Bini, 2011) - Last time I met Ola he said that he actually considered to go back to C his next language VM.
+[Invokedynamic and JRuby](http://vimeo.com/27207224) (Bini, 2011) - Last time I met Ola he said that he considered to go back to C for his next language VM.
