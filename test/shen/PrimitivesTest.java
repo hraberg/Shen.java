@@ -204,6 +204,10 @@ public class PrimitivesTest {
         is(5, "(value x)");
         is(5.0, "(set x 5.0)");
         is(5.0, "(value x)");
+        is(true, "(set x true)");
+        is(true, "(value x)");
+        is(false, "(set x false)");
+        is(false, "(value x)");
         is(asList(), "(set x ())");
         is(asList(), "(value x)");
         is(intern("fun"), "(defun fun (x) (value x))");

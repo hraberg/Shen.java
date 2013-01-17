@@ -69,7 +69,7 @@ public class Shen {
 
         stream(Primitives.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::defun);
 
-        op("=", (BiPredicate) Objects::deepEquals,
+        op("=", (BiPredicate) Objects::equals,
                 (IIPredicate) (left, right) -> left == right,
                 (LLPredicate) (left, right) -> left == right,
                 (DDPredicate) (left, right) -> left == right);
@@ -351,6 +351,12 @@ public class Shen {
             return (T) (x.var = y);
         }
 
+        public static boolean set(Symbol x, boolean y) {
+            x.tag(Type.BOOLEAN);
+            x.primVar = y ? 1 : 0;
+            return y;
+        }
+
         public static int set(Symbol x, int y) {
             x.tag(Type.INT);
             x.primVar = y;
@@ -485,11 +491,16 @@ public class Shen {
 
         static MethodHandle value(Symbol symbol) throws Exception {
             switch (symbol.tag) {
+                case Type.BOOLEAN: return filterReturnValue(field(Symbol.class, "primVar"), mh(RT.class, "booleanValue"));
                 case Type.INT: return explicitCastArguments(field(Symbol.class, "primVar"), methodType(int.class, Symbol.class));
                 case Type.LONG: return field(Symbol.class, "primVar");
                 case Type.DOUBLE: return filterReturnValue(field(Symbol.class, "primVar"), mh(Double.class, "longBitsToDouble"));
             }
             return mh(Symbol.class, "value");
+        }
+
+        public static boolean booleanValue(long b) {
+            return b == 1L;
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
@@ -887,7 +898,7 @@ public class Shen {
 
         void recur(List<Type> argumentTypes) {
             for (int i = args.size() - 1; i >= 0; i--) {
-                mv.box(argumentTypes.get(i));
+                mv.valueOf(argumentTypes.get(i));
                 mv.storeArg(i);
             }
             mv.goTo(recur);
@@ -1126,7 +1137,7 @@ public class Shen {
 
         void box() {
             Type maybePrimitive = topOfStack;
-            mv.box(maybePrimitive);
+            mv.valueOf(maybePrimitive);
             topOfStack = boxedType(maybePrimitive);
         }
 
