@@ -19,7 +19,7 @@ See also: [shen.clj](https://github.com/hraberg/shen.clj)
 
 Is a work in progress - it really doesn't work yet. The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
 
-**Shen.java is an invokedynamic based K Lambda compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go.
+**Shen.java is an [invokedynamic](http://www.slideshare.net/CharlesNutter/jax-2012-invoke-dynamic-keynote) based [K Lambda](http://www.shenlanguage.org/documentation/shendoc.htm) compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go.
 All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java).
 
 It's loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure.
@@ -108,6 +108,8 @@ This is bound to change as we go:
 [Asm 4.0](http://asm.ow2.org/index.html) Eric Bruneton, 2007-12 -"A Java bytecode engineering library"
 
 [JDK 8 with Lambda support](http://jdk8.java.net/lambda/)
+
+[InvokeDynamic - You Ain't Seen Nothin Yet](http://www.slideshare.net/CharlesNutter/jax-2012-invoke-dynamic-keynote) Charles Nutter, 2012
 
 [JSR292 Cookbook](http://code.google.com/p/jsr292-cookbook/) | [video](http://medianetwork.oracle.com/video/player/1113248965001) Rémi Forax, 2011
 
