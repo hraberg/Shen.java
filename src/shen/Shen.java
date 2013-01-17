@@ -327,10 +327,11 @@ public class Shen {
             return null;
         }
 
+        static long startTime = System.currentTimeMillis();
         public static long get_time(Symbol time) {
             switch (time.symbol) {
-                case "run": return System.nanoTime();
-                case "unix": return System.currentTimeMillis() / 1000;
+                case "run": return (currentTimeMillis() - startTime) / 1000;
+                case "unix": return currentTimeMillis() / 1000;
             }
             throw new IllegalArgumentException();
         }
@@ -830,6 +831,8 @@ public class Shen {
             try {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
+                else if (intern("true") == kl) push(Boolean.class, true);
+                else if (intern("false") == kl) push(Boolean.class, false);
                 else if (kl instanceof Symbol) symbol((Symbol) kl);
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
