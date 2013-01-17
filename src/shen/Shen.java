@@ -410,8 +410,8 @@ public class Shen {
         return eval_kl(read(new StringReader(shen)).get(0));
     }
 
-    static Object load(Reader reader) throws Exception {
-        debug("LOADING " + reader);
+    static Object load(String file, Reader reader) throws Exception {
+        debug("loading: " + file);
         //noinspection unchecked,RedundantCast
         return read(reader).stream().reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
     }
@@ -419,9 +419,13 @@ public class Shen {
     static void install() throws Exception {
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
-            try (Reader in = new InputStreamReader(getSystemClassLoader().getResourceAsStream(file + ".kl"))) {
-                load(in);
+            try (Reader in = resource(file + ".kl")) {
+                load(file, in);
             }
+    }
+
+    static Reader resource(String resource) {
+        return new BufferedReader(new InputStreamReader(getSystemClassLoader().getResourceAsStream(resource)));
     }
 
     public static class KLReader {
