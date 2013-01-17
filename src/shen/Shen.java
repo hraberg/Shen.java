@@ -906,7 +906,7 @@ public class Shen {
         }
 
         boolean isSelfCall(Symbol s, List<Object> args) {
-            return s.equals(self) && args.size() == this.args.size();
+            return self.symbol.startsWith(s.symbol) && args.size() == this.args.size();
         }
 
         void apply(List<Object> args) {
@@ -1002,19 +1002,20 @@ public class Shen {
 
         @Macro
         public void lambda(boolean tail, Symbol x, Object y) throws Throwable {
-            fn("lambda_" + id++, y, x);
+            fn("__lambda__", y, x);
         }
 
         @Macro
         public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
             push(name);
             debug("compiling: " + name + args + " in " + getObjectType(className).getClassName());
-            fn(scramble(name.symbol), body, args.toArray(new Symbol[args.size()]));
+            fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
             mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
             topOfStack(Symbol.class);
         }
 
         void fn(String name, Object shen, Symbol... args) throws Throwable {
+            name = scramble(name) + "_" + id++;
             List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
             scope.retainAll(concat(locals.keySet(), this.args));
 
@@ -1028,7 +1029,7 @@ public class Shen {
             fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
         }
 
-        @SuppressWarnings({"SuspiciousMethodCalls", "unchecked"})
+        @SuppressWarnings({"unchecked"})
         List<Symbol> closesOver(Set<Symbol> scope, Object shen) {
             if (shen instanceof Symbol && !scope.contains(shen))
                 return list((Symbol) shen);

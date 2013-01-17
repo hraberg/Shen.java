@@ -69,6 +69,12 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
     [0 3 6 9 12 15 18 21 24 27 30 33 36 39 42 45 48 51 54 57 60... etc]
 
 
+### The Shen Test Suite:
+
+Is very slow, and eventually blows the stack; it is run at the end of the build:
+
+    ./build
+
 
 ### What works?
 

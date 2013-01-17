@@ -14,4 +14,8 @@ public class TestProgramsTest {
         eval("(load \"README.shen\")");
         eval("(load \"tests.shen\")");
     }
+
+    public static void main(String... args) throws Exception {
+        new TestProgramsTest().test_programs();
+    }
 }
