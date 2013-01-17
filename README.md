@@ -19,7 +19,7 @@ See also: [shen.clj](https://github.com/hraberg/shen.clj)
 
 Is a work in progress - it really doesn't work yet. The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
 
-Shen.java is an invokedynamic based K Lambda compiler. I don't vouch for any of the implementation details regarding this - I'm learning as we go.
+**Shen.java is an invokedynamic based K Lambda compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go.
 All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java).
 
 It's loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure.
