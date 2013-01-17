@@ -28,6 +28,7 @@ import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
 import static java.lang.invoke.MethodHandles.*;
+import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.*;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
@@ -38,7 +39,10 @@ import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
 import static shen.Shen.KLReader.read;
+import static shen.Shen.Primitives.cons;
+import static shen.Shen.Primitives.*;
 import static shen.Shen.RT.*;
+import static shen.Shen.RT.lookup;
 import static sun.invoke.util.BytecodeName.toBytecodeName;
 import static sun.invoke.util.BytecodeName.toSourceName;
 import static sun.invoke.util.Wrapper.*;
@@ -50,7 +54,6 @@ public class Shen {
         eval("(shen-shen)");
     }
 
-    static Lookup lookup = lookup();
     static Map<String, Symbol> symbols = new HashMap<>();
 
     static {
@@ -62,7 +65,7 @@ public class Shen {
         set("*debug*", false);
         set("*home-directory*", getProperty("user.dir"));
 
-        stream(Shen.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(Shen::defun);
+        stream(Primitives.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::defun);
 
         op("=", (BiPredicate) Objects::deepEquals,
                 (IIPredicate) (left, right) -> left == right,
@@ -95,224 +98,12 @@ public class Shen {
                 (LLPredicate) (left, right) -> left >= right,
                 (DDPredicate) (left, right) -> left >= right);
 
-        asList(Math.class, System.class).forEach(Shen::KL_import);
+        asList(Math.class, System.class).forEach(Primitives::KL_import);
     }
 
     interface IIPredicate { boolean test(int a, int b); }
     interface LLPredicate { boolean test(long a, long b); }
     interface DDPredicate { boolean test(double a, double b); }
-
-    static void op(String name, Object... op) {
-        intern(name).fn.addAll(toList(stream(op).map(RT::findSAM)));
-    }
-
-    static Symbol defun(Method m) {
-        try {
-            Symbol name = intern(unscramble(m.getName()));
-            name.fn.add(lookup.unreflect(m));
-            return name;
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    static class Cons {
-        public final Object car, cdr;
-
-        public Cons(Object car, Object cdr) {
-            this.car = car;
-            this.cdr = cdr;
-        }
-
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            Cons cons = (Cons) o;
-            return !(car != null ? !car.equals(cons.car) : cons.car != null)
-                    && !(cdr != null ? !cdr.equals(cons.cdr) : cons.cdr != null);
-        }
-
-        public int hashCode() {
-            return 31 * (car != null ? car.hashCode() : 0) + (cdr != null ? cdr.hashCode() : 0);
-        }
-
-        public String toString() {
-            return "[" + car + " | " + cdr + "]";
-        }
-    }
-
-    public static Class KL_import(Symbol s) throws ClassNotFoundException {
-        Class aClass = Class.forName(s.symbol);
-        return set(intern(aClass.getSimpleName()), aClass);
-    }
-
-    static Class KL_import(Class type) {
-        try {
-            return KL_import(intern(type.getName()));
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static Object cons(Object x, Object y) {
-        return new Cons(x, y);
-    }
-
-    public static List<Object> cons(Object x, List<Object> y) {
-        if (y == Collections.EMPTY_LIST)
-            y = new ArrayList<>();
-        y.add(0, x);
-        return y;
-    }
-
-    public static boolean consP(Object x) {
-        return x instanceof Cons || x instanceof List && !((List) x).isEmpty();
-    }
-
-    public static Object failEX() {
-        throw new AssertionError();
-    }
-
-    public static Object simple_error(String s) {
-        throw new RuntimeException(s);
-    }
-
-    public static String error_to_string(Exception e) {
-        return e.getMessage();
-    }
-
-    public static <T> T hd(List<T> list) {
-        return list.isEmpty() ? null : list.get(0);
-    }
-
-    public static <T> List<T> tl(List<T> list) {
-        return list.isEmpty() ? list : new ArrayList<>(list.subList(1, list.size()));
-    }
-
-    public static Object hd(Cons cons) {
-        return cons.car;
-    }
-
-    public static Object tl(Cons cons) {
-        return cons.cdr;
-    }
-
-    static <T> T hd(T[] array) {
-        return array[0];
-    }
-
-    static <T> T[] tl(T[] array) {
-        return copyOfRange(array, 1, array.length);
-    }
-
-    public static String str(Object x) {
-        if (consP(x)) throw new IllegalArgumentException();
-        if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
-        return String.valueOf(x);
-    }
-
-    public static String pos(String x, int n) {
-        return str(x.charAt(n));
-    }
-
-    public static String tlstr(String x) {
-        return x.substring(1);
-    }
-
-    public static MethodHandle freeze(Object x) {
-        return dropArguments(constant(x.getClass(), x), 0, Object.class);
-    }
-
-    public static Class type(Object x) {
-        return x.getClass();
-    }
-
-    public static Object[] absvector(int n) {
-        Object[] objects = new Object[n];
-        fill(objects, intern("fail!"));
-        return objects;
-    }
-
-    public static boolean absvectorP(Object x) {
-        return x != null && x.getClass() == Object[].class;
-    }
-
-    public static Object LT_address(Object[] vector, int n) {
-        return vector[n];
-    }
-
-    public static Object[] address_GT(Object[] vector, int n, Object value) {
-        vector[n] = value;
-        return vector;
-    }
-
-    public static boolean numberP(Object x) {
-        return x instanceof Number;
-    }
-
-    public static boolean stringP(Object x) {
-        return x instanceof String;
-    }
-
-    public static String n_GTstring(int n) {
-        if (n < 0) throw new IllegalArgumentException();
-        return Character.toString((char) n);
-    }
-
-    public static String byte_GTstring(byte n) {
-        return n_GTstring(n);
-    }
-
-    public static int string_GTn(String s) {
-        return (int) s.charAt(0);
-    }
-
-    public static int read_byte(InputStream s) throws IOException {
-        return s.read();
-    }
-
-    public static int read_byte(Reader s) throws IOException {
-        return s.read();
-    }
-
-    public static <T> T pr(T x, OutputStream s) throws IOException {
-        return pr(x, new OutputStreamWriter(s));
-    }
-
-    public static <T> T pr(T x, Writer s) throws IOException {
-        s.write(str(x));
-        s.flush();
-        return x;
-    }
-
-    public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
-        if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
-        File file = new File((String) value("*home-directory*"), string);
-        switch (direction.symbol) {
-            case "in": return new FileInputStream(file);
-            case "out": return new FileOutputStream(file);
-        }
-        throw new IllegalArgumentException();
-    }
-
-
-    public static Object close(Closeable stream) throws IOException {
-        stream.close();
-        return null;
-    }
-
-    public static long get_time(Symbol time) {
-        switch (time.symbol) {
-            case "run": return System.nanoTime();
-            case "unix": return System.currentTimeMillis() / 1000;
-        }
-        throw new IllegalArgumentException();
-    }
-
-    public static String cn(String s1, String s2) {
-        return s1 + s2;
-    }
 
     public static class Symbol {
         public final String symbol;
@@ -348,81 +139,281 @@ public class Shen {
         }
     }
 
-    public static Symbol intern(String string) {
-        if (!symbols.containsKey(string)) symbols.put(string, new Symbol(string));
-        return symbols.get(string);
-    }
+    public static class Cons {
+        public final Object car, cdr;
 
-    @SuppressWarnings("unchecked")
-    public static <T> T set(Symbol x, T y) {
-        x.tag(Type.OBJECT);
-        return (T) (x.var = y);
-    }
+        public Cons(Object car, Object cdr) {
+            this.car = car;
+            this.cdr = cdr;
+        }
 
-    public static int set(Symbol x, int y) {
-        x.tag(Type.INT);
-        x.primVar = y;
-        return y;
-    }
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
 
-    public static long set(Symbol x, long y) {
-        x.tag(Type.LONG);
-        return x.primVar = y;
-    }
+            Cons cons = (Cons) o;
+            return !(car != null ? !car.equals(cons.car) : cons.car != null)
+                    && !(cdr != null ? !cdr.equals(cons.cdr) : cons.cdr != null);
+        }
 
-    public static double set(Symbol x, double y) {
-        x.tag(Type.DOUBLE);
-        x.primVar = doubleToLongBits(y);
-        return y;
-    }
+        public int hashCode() {
+            return 31 * (car != null ? car.hashCode() : 0) + (cdr != null ? cdr.hashCode() : 0);
+        }
 
-    static <T> T set(String x, T y) {
-        return set(intern(x), y);
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T> T value(String x) {
-        return (T) value(intern(x));
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T> T value(Symbol x) {
-        try {
-            return (T) RT.value(x).invoke(x);
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
+        public String toString() {
+            return "[" + car + " | " + cdr + "]";
         }
     }
 
-    public static MethodHandle function(Symbol x) throws IllegalAccessException {
-        MethodHandle fn = x.fn.stream().findFirst().get();
-        if (x.fn.size() > 1) {
-            int arity = fn.type().parameterCount();
-            return linker(new MutableCallSite(genericMethodType(arity)), scramble(x.symbol), arity);
+    public static class Primitives {
+        public static Class KL_import(Symbol s) throws ClassNotFoundException {
+            Class aClass = Class.forName(s.symbol);
+            return set(intern(aClass.getSimpleName()), aClass);
         }
-        return fn;
+
+        static Class KL_import(Class type) {
+            try {
+                return KL_import(intern(type.getName()));
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public static Object cons(Object x, Object y) {
+            return new Cons(x, y);
+        }
+
+        public static List<Object> cons(Object x, List<Object> y) {
+            if (y == Collections.EMPTY_LIST)
+                y = new ArrayList<>();
+            y.add(0, x);
+            return y;
+        }
+
+        public static boolean consP(Object x) {
+            return x instanceof Cons || x instanceof List && !((List) x).isEmpty();
+        }
+
+        public static Object failEX() {
+            throw new AssertionError();
+        }
+
+        public static Object simple_error(String s) {
+            throw new RuntimeException(s);
+        }
+
+        public static String error_to_string(Exception e) {
+            return e.getMessage();
+        }
+
+        public static <T> T hd(List<T> list) {
+            return list.isEmpty() ? null : list.get(0);
+        }
+
+        public static <T> List<T> tl(List<T> list) {
+            return list.isEmpty() ? list : new ArrayList<>(list.subList(1, list.size()));
+        }
+
+        public static Object hd(Cons cons) {
+            return cons.car;
+        }
+
+        public static Object tl(Cons cons) {
+            return cons.cdr;
+        }
+
+        static <T> T hd(T[] array) {
+            return array[0];
+        }
+
+        static <T> T[] tl(T[] array) {
+            return copyOfRange(array, 1, array.length);
+        }
+
+        public static String str(Object x) {
+            if (consP(x)) throw new IllegalArgumentException();
+            if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
+            return String.valueOf(x);
+        }
+
+        public static String pos(String x, int n) {
+            return str(x.charAt(n));
+        }
+
+        public static String tlstr(String x) {
+            return x.substring(1);
+        }
+
+        public static MethodHandle freeze(Object x) {
+            return dropArguments(constant(x.getClass(), x), 0, Object.class);
+        }
+
+        public static Class type(Object x) {
+            return x.getClass();
+        }
+
+        public static Object[] absvector(int n) {
+            Object[] objects = new Object[n];
+            fill(objects, intern("fail!"));
+            return objects;
+        }
+
+        public static boolean absvectorP(Object x) {
+            return x != null && x.getClass() == Object[].class;
+        }
+
+        public static Object LT_address(Object[] vector, int n) {
+            return vector[n];
+        }
+
+        public static Object[] address_GT(Object[] vector, int n, Object value) {
+            vector[n] = value;
+            return vector;
+        }
+
+        public static boolean numberP(Object x) {
+            return x instanceof Number;
+        }
+
+        public static boolean stringP(Object x) {
+            return x instanceof String;
+        }
+
+        public static String n_GTstring(int n) {
+            if (n < 0) throw new IllegalArgumentException();
+            return Character.toString((char) n);
+        }
+
+        public static String byte_GTstring(byte n) {
+            return n_GTstring(n);
+        }
+
+        public static int string_GTn(String s) {
+            return (int) s.charAt(0);
+        }
+
+        public static int read_byte(InputStream s) throws IOException {
+            return s.read();
+        }
+
+        public static int read_byte(Reader s) throws IOException {
+            return s.read();
+        }
+
+        public static <T> T pr(T x, OutputStream s) throws IOException {
+            return pr(x, new OutputStreamWriter(s));
+        }
+
+        public static <T> T pr(T x, Writer s) throws IOException {
+            s.write(str(x));
+            s.flush();
+            return x;
+        }
+
+        public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
+            if (!"file".equals(type.symbol)) throw new IllegalArgumentException();
+            File file = new File((String) value("*home-directory*"), string);
+            switch (direction.symbol) {
+                case "in": return new FileInputStream(file);
+                case "out": return new FileOutputStream(file);
+            }
+            throw new IllegalArgumentException();
+        }
+
+        public static Object close(Closeable stream) throws IOException {
+            stream.close();
+            return null;
+        }
+
+        public static long get_time(Symbol time) {
+            switch (time.symbol) {
+                case "run": return System.nanoTime();
+                case "unix": return System.currentTimeMillis() / 1000;
+            }
+            throw new IllegalArgumentException();
+        }
+
+        public static String cn(String s1, String s2) {
+            return s1 + s2;
+        }
+
+        public static Symbol intern(String string) {
+            if (!symbols.containsKey(string)) symbols.put(string, new Symbol(string));
+            return symbols.get(string);
+        }
+
+        @SuppressWarnings("unchecked")
+        public static <T> T set(Symbol x, T y) {
+            x.tag(Type.OBJECT);
+            return (T) (x.var = y);
+        }
+
+        public static int set(Symbol x, int y) {
+            x.tag(Type.INT);
+            x.primVar = y;
+            return y;
+        }
+
+        public static long set(Symbol x, long y) {
+            x.tag(Type.LONG);
+            return x.primVar = y;
+        }
+
+        public static double set(Symbol x, double y) {
+            x.tag(Type.DOUBLE);
+            x.primVar = doubleToLongBits(y);
+            return y;
+        }
+
+        static <T> T set(String x, T y) {
+            return set(intern(x), y);
+        }
+
+        @SuppressWarnings("unchecked")
+        static <T> T value(String x) {
+            return (T) value(intern(x));
+        }
+
+        @SuppressWarnings("unchecked")
+        static <T> T value(Symbol x) {
+            try {
+                return (T) RT.value(x).invoke(x);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+        }
+
+        public static MethodHandle function(Symbol x) throws IllegalAccessException {
+            MethodHandle fn = x.fn.stream().findFirst().get();
+            if (x.fn.size() > 1) {
+                int arity = fn.type().parameterCount();
+                return linker(new MutableCallSite(genericMethodType(arity)), scramble(x.symbol), arity);
+            }
+            return fn;
+        }
+
+        static MethodHandle function(String x) throws IllegalAccessException {
+            return function(intern(x));
+        }
+
+        public static Object eval_kl(Object kl) {
+            try {
+                return new Compiler(kl).load(Callable.class).newInstance().call();
+            } catch (Throwable t) {
+                throw new IllegalArgumentException(kl.toString(), t);
+            }
+        }
+
     }
 
-    static MethodHandle function(String x) throws IllegalAccessException {
-        return function(intern(x));
-    }
-
-    public static Object eval_kl(Object kl) {
-        try {
-            return new Compiler(kl).load(Callable.class).newInstance().call();
-        } catch (Throwable t) {
-            throw new IllegalArgumentException(kl.toString(), t);
-        }
+    public static Object eval(String shen) throws Exception {
+        return eval_kl(read(new StringReader(shen)).get(0));
     }
 
     static Object load(Reader reader) throws Exception {
         debug("LOADING " + reader);
         //noinspection unchecked,RedundantCast
         return read(reader).stream().reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
-    }
-
-    static Object eval(String shen) throws Exception {
-        return eval_kl(read(new StringReader(shen)).get(0));
     }
 
     static void install() throws Exception {
@@ -468,7 +459,9 @@ public class Shen {
         }
     }
 
-    public static class RT implements Opcodes {
+    public static class RT {
+        static Lookup lookup = lookup();
+
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
             MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
             site.setTarget(guardWithTest(hasTag, value(symbol).asType(site.type()), site.getTarget()));
@@ -529,7 +522,7 @@ public class Shen {
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
             if (name.endsWith(".")) {
-                Class aClass = Shen.value(name.substring(0, name.length() - 1));
+                Class aClass = Primitives.value(name.substring(0, name.length() - 1));
                 if (aClass != null)
                     return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
@@ -537,7 +530,7 @@ public class Shen {
                 return relinkOnClassCast(site, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()));
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && intern(classAndMethod[0]).var instanceof Class)
-                return findJavaMethod(type, classAndMethod[1], ((Class) Shen.value(classAndMethod[0])).getMethods());
+                return findJavaMethod(type, classAndMethod[1], ((Class) Primitives.value(classAndMethod[0])).getMethods());
             return null;
         }
 
@@ -597,7 +590,7 @@ public class Shen {
         }
 
         static void debug(String msg, Object... xs) {
-            if (true == Shen.value("*debug*")) System.err.println(format(msg, xs));
+            if (true == Primitives.value("*debug*")) System.err.println(format(msg, xs));
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
@@ -623,7 +616,7 @@ public class Shen {
         }
 
         static Handle handle(String className, String name, String desc) {
-            return new Handle(H_INVOKESTATIC, className, name, desc);
+            return new Handle(Opcodes.H_INVOKESTATIC, className, name, desc);
         }
 
         static Object uncurry(Object chain, Object... args) throws Throwable {
@@ -673,6 +666,20 @@ public class Shen {
             return name;
         }
 
+        static void op(String name, Object... op) {
+            intern(name).fn.addAll(toList(stream(op).map(RT::findSAM)));
+        }
+
+        static Symbol defun(Method m) {
+            try {
+                Symbol name = intern(unscramble(m.getName()));
+                name.fn.add(lookup.unreflect(m));
+                return name;
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
         public static Object apply(MethodHandle fn, Object... args) throws Throwable {
             if (isLambda(fn)) return uncurry(fn, args);
 
@@ -705,11 +712,6 @@ public class Shen {
             return true;
         }
 
-        @SafeVarargs
-        static <T> List<T> list(T... elements) {
-            return new ArrayList<>(asList(elements));
-        }
-
         static String unscramble(String s) {
             return toSourceName(s).replaceAll("_", "-").replaceAll("^KL-", "")
                     .replaceAll("GT", ">").replaceAll("LT", "<")
@@ -739,7 +741,7 @@ public class Shen {
 
     }
 
-    public static class Compiler {
+    public static class Compiler implements Opcodes {
         static AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), RT.class);
         static Map<Symbol, MethodHandle> macros = new HashMap<>();
         static List<Class<?>> literals =
@@ -1136,6 +1138,11 @@ public class Shen {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    @SafeVarargs
+    static <T> List<T> list(T... elements) {
+        return new ArrayList<>(asList(elements));
     }
 
     @SuppressWarnings("unchecked")

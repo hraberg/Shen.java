@@ -8,6 +8,9 @@ import java.util.LinkedList;
 import static java.lang.System.out;
 import static java.util.Arrays.asList;
 import static shen.Shen.*;
+import static shen.Shen.Primitives.eval_kl;
+import static shen.Shen.Primitives.intern;
+import static shen.Shen.Primitives.str;
 
 // These are the main methods from the interpreter and compiler, no structure or niceness.
 // Tests lots of random stuff, written while developing, most this should be covered in ShenTest.

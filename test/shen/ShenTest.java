@@ -18,6 +18,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static shen.Shen.*;
+import static shen.Shen.Primitives.intern;
 
 public class ShenTest {
     @Test
