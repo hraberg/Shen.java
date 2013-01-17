@@ -29,11 +29,10 @@ This is pretty experimental, and this entire project acts as a playground for va
 There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
 
 
-### Building
+### To run the REPL:
 
     export JAVA_HOME=/path/to/jdk1.8.0/with/lambdas
-    mvn package
-    $JAVA_HOME/bin/java -jar target/shen.java-*-standalone.jar
+    ./shen.java
 
     Shen 2010, copyright (C) 2010 Mark Tarver
     www.shenlanguage.org, version 7.1
@@ -41,7 +40,34 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
     port 0.1.0-SNAPSHOT ported by Håkan Råberg
 
 
-    (0-)
+    (0-) (define super
+           [Value Succ End] Action Combine Zero ->
+             (if (End Value)
+                 Zero
+                 (Combine (Action Value)
+                          (super [(Succ Value) Succ End]
+                                 Action Combine Zero))))
+    super
+
+    (1-) (define for
+           Stream Action -> (super Stream Action do 0))
+    for
+
+    (2-) (define filter
+           Stream Condition ->
+             (super Stream
+                    (/. Val (if (Condition Val) [Val] []))
+                    append
+                    []))
+    filter
+
+    (3-) (for [0 (+ 1) (= 10)] print)
+    01234567890
+
+    (4-) (filter [0 (+ 1) (= 100)]
+                 (/. X (integer? (/ X 3))))
+    [0 3 6 9 12 15 18 21 24 27 30 33 36 39 42 45 48 51 54 57 60... etc]
+
 
 
 ### What works?

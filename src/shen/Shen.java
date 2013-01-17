@@ -186,8 +186,6 @@ public class Shen {
         }
 
         public static List<Object> cons(Object x, List<Object> y) {
-            if (y == Collections.EMPTY_LIST)
-                return list(x);
             y.add(0, x);
             return y;
         }
@@ -409,7 +407,8 @@ public class Shen {
             try {
                 return new Compiler(kl).load(Callable.class).newInstance().call();
             } catch (Throwable t) {
-                throw new IllegalArgumentException(kl.toString(), t);
+                if (value("*debug*") == true) t.printStackTrace();
+                throw new IllegalArgumentException(t + ": " + kl.toString(), t);
             }
         }
 
@@ -482,6 +481,12 @@ public class Shen {
 
     public static class RT {
         static Lookup lookup = lookup();
+
+        @SafeVarargs
+        public static <T> List<T> list(T... elements) {
+            if (elements == null) return new ArrayList<>();
+            return new ArrayList<>(asList(elements));
+        }
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
             MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
@@ -612,7 +617,7 @@ public class Shen {
         }
 
         static void debug(String msg, Object... xs) {
-            if (true == Primitives.value("*debug*")) System.err.println(format(msg, xs));
+            if (Primitives.value("*debug*") == true) System.err.println(format(msg, xs));
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
@@ -1029,13 +1034,15 @@ public class Shen {
                 return list((Symbol) shen);
             if (shen instanceof List) {
                 List<Object> list = (List) shen;
-                if (list.size() > 1)
+                if (!list.isEmpty())
                     if (intern("let").equals(hd(list)))
                         return concat(closesOver(new HashSet<>(scope), list.get(2)),
-                                closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)),
-                                        list.subList(2, list.size())));
-                    else if (!asList(intern("lambda"), intern("defun")).contains(hd(list)))
-                        return toList(mapcat(tl(list).stream(), o -> closesOver(scope, o)));
+                                closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)), list.get(3)));
+                    if (intern("lambda").equals(hd(list)))
+                        return closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)), list.get(2));
+                    if (intern("defun").equals(hd(list)))
+                        return closesOver(new HashSet<>(concat((List<Symbol>) list.get(2), scope)), list.get(3));
+                    return toList(mapcat(list.stream(), o -> closesOver(scope, o)));
             }
             return list();
         }
@@ -1059,7 +1066,8 @@ public class Shen {
         }
 
         void emptyList() {
-            mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
+            mv.push((String) null);
+            mv.invokeStatic(getType(RT.class), method("list", desc(List.class, Object[].class)));
             topOfStack(List.class);
         }
 
@@ -1172,11 +1180,6 @@ public class Shen {
                 throw new RuntimeException(e);
             }
         }
-    }
-
-    @SafeVarargs
-    static <T> List<T> list(T... elements) {
-        return new ArrayList<>(asList(elements));
     }
 
     @SuppressWarnings("unchecked")
