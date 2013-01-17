@@ -491,16 +491,12 @@ public class Shen {
 
         static MethodHandle value(Symbol symbol) throws Exception {
             switch (symbol.tag) {
-                case Type.BOOLEAN: return filterReturnValue(field(Symbol.class, "primVar"), mh(RT.class, "booleanValue"));
+                case Type.BOOLEAN: return explicitCastArguments(field(Symbol.class, "primVar"), methodType(boolean.class, Symbol.class));
                 case Type.INT: return explicitCastArguments(field(Symbol.class, "primVar"), methodType(int.class, Symbol.class));
                 case Type.LONG: return field(Symbol.class, "primVar");
                 case Type.DOUBLE: return filterReturnValue(field(Symbol.class, "primVar"), mh(Double.class, "longBitsToDouble"));
             }
             return mh(Symbol.class, "value");
-        }
-
-        public static boolean booleanValue(long b) {
-            return b == 1L;
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
