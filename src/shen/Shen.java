@@ -779,7 +779,7 @@ public class Shen {
             this.className = className;
             this.shen = shen;
             this.args = list(args);
-            this.locals = new LinkedHashMap<>();
+            this.locals = new HashMap<>();
         }
 
         ClassWriter classWriter(String name, Class<?> anInterface) {
