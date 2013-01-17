@@ -885,11 +885,11 @@ public class Shen {
                     return;
                 } else debug("can only recur from tail position: " + s);
             }
-            MethodType type = asMethodType(s.fn.size() == 1
-                    ? getType(s.fn.stream().findAny().get().type().returnType())
-                    : getType(Object.class), argumentTypes);
-            mv.invokeDynamic(scramble(s.symbol), type.toMethodDescriptorString(), handle(mh(RT.class, "invokeBSM")));
-            topOfStack(type.returnType());
+            Type returnType = s.fn.size() == 1
+                    ? getType(s.fn.get(0).type().returnType())
+                    : getType(Object.class);
+            mv.invokeDynamic(scramble(s.symbol), desc(returnType, argumentTypes), handle(mh(RT.class, "invokeBSM")));
+            topOfStack = returnType;
         }
 
         void recur(List<Type> argumentTypes) {
@@ -1088,10 +1088,6 @@ public class Shen {
                 mv.arrayStore(getType(Object.class));
             }
             topOfStack = getType(Object[].class);
-        }
-
-        MethodType asMethodType(Type returnType, List<Type> argumentTypes) {
-            return fromMethodDescriptorString(desc(returnType, argumentTypes), getSystemClassLoader());
         }
 
         void push(Symbol kl) throws ReflectiveOperationException {
