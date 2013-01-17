@@ -60,6 +60,7 @@ public class Shen {
         set("*language*", "Java");
         set("*implementation*", format("[jvm %s]", getProperty("java.version")));
         set("*porters*", "Håkan Råberg");
+        set("*port*", "0.1.0");
         set("*stinput*", in);
         set("*stoutput*", out);
         set("*debug*", false);
@@ -823,7 +824,7 @@ public class Shen {
                     if (list.isEmpty()) emptyList();
                     else {
                         Object first = list.get(0);
-                        if (first instanceof Symbol) {
+                        if (first instanceof Symbol && !inScope((Symbol) first)) {
                             Symbol s = (Symbol) first;
                             if (macros.containsKey(s)) macroExpand(s, tl(list), tail);
                             else indy(s, tl(list), tail);
@@ -841,6 +842,10 @@ public class Shen {
                 throw new RuntimeException(t);
             }
             return topOfStack;
+        }
+
+        boolean inScope(Symbol x) {
+            return (locals.containsKey(x) || args.contains(x));
         }
 
         void macroExpand(Symbol s, List<Object> args, boolean tail) throws Throwable {
@@ -865,8 +870,10 @@ public class Shen {
         }
 
         void recur() {
-            for (int i = this.args.size() - 1; i >= 0; i--)
+            for (int i = args.size() - 1; i >= 0; i--) {
+                box(); // this is wrong, we need to know what type is actually on the stack.
                 mv.storeArg(i);
+            }
             mv.goTo(recur);
         }
 
@@ -1022,6 +1029,13 @@ public class Shen {
             compile(z, tail);
             if (hidden != null) locals.put(x, hidden);
             else locals.remove(x);
+        }
+
+        @Macro
+        public void KL_do(boolean tail, Object x, Object y) throws Throwable {
+            compile(x, false);
+            mv.pop();
+            compile(y, tail);
         }
 
         void emptyList() {

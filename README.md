@@ -35,6 +35,14 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
     mvn package
     $JAVA_HOME/bin/java -jar target/shen.java-*-standalone.jar
 
+    Shen 2010, copyright (C) 2010 Mark Tarver
+    www.shenlanguage.org, version 7.1
+    running under Java, implementation: [jvm 1.8.0-ea]
+    port 0.1.0 ported by Håkan Råberg
+
+
+    (0-)
+
 
 ### What works?
 
