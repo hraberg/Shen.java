@@ -408,7 +408,7 @@ public class Shen {
                 return new Compiler(kl).load(Callable.class).newInstance().call();
             } catch (Throwable t) {
                 if (value("*debug*") == true) t.printStackTrace();
-                throw new IllegalArgumentException(t.getMessage(), t);
+                throw new RuntimeException(t.getMessage(), t);
             }
         }
 
