@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.*;
+import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.Streams;
@@ -60,7 +61,7 @@ public class Shen {
         set("*language*", "Java");
         set("*implementation*", format("[jvm %s]", getProperty("java.version")));
         set("*porters*", "Håkan Råberg");
-        set("*port*", "0.1.0");
+        set("*port*", version());
         set("*stinput*", in);
         set("*stoutput*", out);
         set("*debug*", false);
@@ -427,6 +428,14 @@ public class Shen {
 
     static Reader resource(String resource) {
         return new BufferedReader(new InputStreamReader(getSystemClassLoader().getResourceAsStream(resource)));
+    }
+
+    static String version() {
+        try (InputStream manifest = getSystemClassLoader().getResourceAsStream("META-INF/MANIFEST.MF")) {
+            return new Manifest(manifest).getMainAttributes().getValue("Implementation-Version");
+        } catch (Exception e) {
+            return "<unknown>";
+        }
     }
 
     public static class KLReader {

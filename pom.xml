@@ -46,6 +46,8 @@
                     <archive>
                         <manifest>
                             <mainClass>shen.Shen</mainClass>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
                         </manifest>
                     </archive>
                     <descriptorRefs>
