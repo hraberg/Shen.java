@@ -6,7 +6,7 @@ import org.junit.Test;
 import static shen.Shen.eval;
 import static shen.Shen.install;
 
-public class ShenTestProgramsTest {
+public class TestProgramsTest {
     @Test @Ignore
     public void test_programs() throws Exception {
         install();
