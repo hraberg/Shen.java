@@ -52,15 +52,13 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 * Implicit recur.
 * Simple Java inter-op (based on Clojure's syntax).
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
+* The REPL.
 
 
 ### Road Map
 
 This is bound to change as we go:
 
-* Full KL compilation.
-* Ability to load the `kl`.
-* The REPL
 * The Shen test suite.
 * SwitchPoints for symbols.
 * Saner choice of target method.
