@@ -71,9 +71,24 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 
 ### The Shen Test Suite
 
-Is very slow, and eventually blows the stack about a third in, and has many failures. It is run at the end of the build:
+Is very slow, and has several failures. A few tests go into infinite (at least for my patience) loops. It is run at the end of the build:
 
     ./build
+
+
+By removing a couple of tests, it eventually finishes:
+
+    passed ... 98
+    failed ...37
+    pass rate ...72.5925925925926%
+
+    ok
+    0
+
+    run time: 157 secs
+
+
+The tests suite has 146 tests, so 11 are skipped here. It's close to 10x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) running all 146 tests.
 
 
 ### What works?
