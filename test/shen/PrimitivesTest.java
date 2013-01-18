@@ -224,7 +224,7 @@ public class PrimitivesTest {
 
     @Test
     public void get_time() {
-        is(Number.class, "(get-time run)");
+        is(Long.class, "(get-time run)");
     }
 
     @Test
@@ -232,12 +232,12 @@ public class PrimitivesTest {
         is(String.class, "(set fileName (cn (str (get-time run)) \".txt\"))");
         is(FileOutputStream.class, "(set writeFile (open file (value fileName) out))");
         is("foobar", "(pr \"foobar\" (value writeFile))");
-        is(null, "(close (value writeFile))");
+        is(asList(), "(close (value writeFile))");
         is(FileInputStream.class, "(set readFile (open file (value fileName) in))");
         is(102, "(read-byte (value readFile))");
         is(111, "(read-byte (value readFile))");
         is(false, "(= 102 (read-byte (value readFile)))");
-        is(null, "(close (value readFile))");
+        is(asList(), "(close (value readFile))");
     }
 
     @After

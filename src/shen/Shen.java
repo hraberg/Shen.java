@@ -27,6 +27,7 @@ import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
 import static java.lang.String.format;
 import static java.lang.System.*;
+import static java.lang.System.in;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodHandles.lookup;
@@ -217,12 +218,12 @@ public class Shen {
             return e.getMessage();
         }
 
-        public static <T> T hd(List<T> list) {
-            return list.isEmpty() ? null : list.get(0);
+        public static Object hd(List list) {
+            return list.isEmpty() ? list() : list.get(0);
         }
 
         public static <T> List<T> tl(List<T> list) {
-            return list.isEmpty() ? list : new ArrayList<>(list.subList(1, list.size()));
+            return new ArrayList<>(list.subList(list.isEmpty() ? 0 : 1, list.size()));
         }
 
         public static Object hd(Cons cons) {
@@ -333,7 +334,7 @@ public class Shen {
 
         public static Object close(Closeable stream) throws IOException {
             stream.close();
-            return null;
+            return list();
         }
 
         static long startTime = System.currentTimeMillis();
@@ -388,7 +389,7 @@ public class Shen {
         }
 
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
-            MethodHandle fn = x.fn.stream().findFirst().get();
+            MethodHandle fn = x.fn.get(0);
             if (x.fn.size() > 1) {
                 int arity = fn.type().parameterCount();
                 return linker(new MutableCallSite(genericMethodType(arity)), scramble(x.symbol), arity);
@@ -400,13 +401,8 @@ public class Shen {
             return function(intern(x));
         }
 
-        public static Object eval_kl(Object kl) {
-            try {
-                return new Compiler(kl).load(Callable.class).newInstance().call();
-            } catch (Throwable t) {
-                if (isDebug()) t.printStackTrace();
-                throw new RuntimeException(t.getMessage(), t);
-            }
+        public static Object eval_kl(Object kl) throws Throwable {
+            return new Compiler(kl).load(Callable.class).newInstance().call();
         }
     }
 
@@ -414,21 +410,17 @@ public class Shen {
         return intern("*debug*").primVar == 1;
     }
 
-    public static Object eval(String shen) throws Exception {
+    public static Object eval(String shen) throws Throwable {
         return eval_kl(read(new StringReader(shen)).get(0));
     }
 
-    static Object load(String file, Reader reader) throws Exception {
-        debug("loading: " + file);
-        //noinspection unchecked,RedundantCast
-        return read(reader).stream().reduce(null, (BinaryOperator) (left, right) -> eval_kl(right));
-    }
-
-    static void install() throws Exception {
+    static void install() throws Throwable {
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
             try (Reader in = resource(format("klambda/%s.kl", file))) {
-                load(file, in);
+                debug("loading: " + file);
+                for (Object kl : read(in))
+                    eval_kl(kl);
             }
     }
 
@@ -516,7 +508,9 @@ public class Shen {
                 site.setTarget(java.asType(site.type()));
                 return java.invokeWithArguments(args);
             }
-            if (symbol.fn.isEmpty()) throw new NoSuchMethodException(name + site.type());
+            final NoSuchMethodException notFound = new NoSuchMethodException("undefined function " + name + site.type()
+                    + (symbol.fn.isEmpty() ?  "" : " in " + toList(symbol.fn.stream().map(MethodHandle::type))));
+            if (symbol.fn.isEmpty()) throw notFound;
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
@@ -536,7 +530,7 @@ public class Shen {
                 match = symbol.fn.stream()
                         .filter(f -> canCast(actualType.parameterList(), f.type().parameterList()))
                         .min((x, y) -> without(y.type().parameterList(), Object.class).size()
-                                - without(x.type().parameterList(), Object.class).size()).get();
+                                - without(x.type().parameterList(), Object.class).size()).orElseThrow(() -> notFound);
             debug("selected: " + match);
 
             site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(site, match), site.getTarget()));
