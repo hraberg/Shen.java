@@ -638,7 +638,7 @@ public class Shen {
         static Object uncurry(Object chain, Object... args) throws Throwable {
             for (Object arg : args)
                 chain = ((MethodHandle) chain).invoke(arg);
-            return (chain instanceof MethodHandle) ? uncurry(chain, list()) : chain;
+            return chain;
         }
 
         static boolean isLambda(MethodHandle fn) {
