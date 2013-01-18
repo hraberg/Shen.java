@@ -78,14 +78,16 @@ Is very slow, and has several failures. A few tests go into infinite (at least f
 
 By removing a couple of tests, it eventually finishes:
 
-    passed ... 98
-    failed ...37
-    pass rate ...72.5925925925926%
+    run time: 0 secs
+    passed
+    passed ... 110
+    failed ...25
+    pass rate ...81.48148148148148%
 
     ok
     0
 
-    run time: 157 secs
+    run time: 162 secs
 
 
 The tests suite has 146 tests, so 11 are skipped here. It's close to 10x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) running all 146 tests.

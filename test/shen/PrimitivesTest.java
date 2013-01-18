@@ -308,6 +308,13 @@ public class PrimitivesTest {
     }
 
     @Test
+    public void parse_numbers() {
+        is(Integer.class, "1");
+        is(Double.class, "1.1");
+        is(Long.class, "10000000000");
+    }
+
+    @Test
     public void partials() {
         is(MethodHandle.class, "(cons 1)");
         is(MethodHandle.class, "(cons)");
