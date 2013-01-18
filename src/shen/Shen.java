@@ -27,11 +27,11 @@ import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
 import static java.lang.String.format;
 import static java.lang.System.*;
-import static java.lang.System.in;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
 import static java.lang.invoke.MethodHandles.*;
 import static java.lang.invoke.MethodHandles.lookup;
-import static java.lang.invoke.MethodType.*;
+import static java.lang.invoke.MethodType.genericMethodType;
+import static java.lang.invoke.MethodType.methodType;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
@@ -392,7 +392,7 @@ public class Shen {
             MethodHandle fn = x.fn.get(0);
             if (x.fn.size() > 1) {
                 int arity = fn.type().parameterCount();
-                return linker(new MutableCallSite(genericMethodType(arity)), scramble(x.symbol), arity);
+                return linker(new MutableCallSite(genericMethodType(arity)), toBytecodeName(x.symbol), arity);
             }
             return fn;
         }
@@ -407,7 +407,7 @@ public class Shen {
     }
 
     static boolean isDebug() {
-        return intern("*debug*").primVar == 1;
+        return intern("*debug*").value();
     }
 
     public static Object eval(String shen) throws Throwable {
@@ -497,8 +497,10 @@ public class Shen {
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
-            name = unscramble(name);
+            name = toSourceName(name);
             debug("LINKING: " + name + site.type() + " " + Arrays.toString(args));
+            final MethodType actualType = methodType(site.type().returnType(), toList(stream(args).map(Object::getClass)));
+            debug("actual types: " + actualType);
             Symbol symbol = intern(name);
             debug("candidates: " + symbol.fn);
 
@@ -519,9 +521,6 @@ public class Shen {
                 debug("partial: " + partial);
                 return partial;
             }
-
-            final MethodType actualType = methodType(site.type().returnType(), toList(stream(args).map(Object::getClass)));
-            debug("real args: " + Arrays.toString(args) + " " + actualType);
 
             MethodHandle match = find(symbol.fn.stream(),
                     f -> f.type().wrap().changeReturnType(actualType.returnType()).equals(actualType));
@@ -601,7 +600,7 @@ public class Shen {
         }
 
         public static CallSite symbolBSM(Lookup lookup, String name, MethodType type) {
-            return new ConstantCallSite(constant(Symbol.class, intern(unscramble(name))));
+            return new ConstantCallSite(constant(Symbol.class, intern(toSourceName(name))));
         }
 
         public static CallSite valueBSM(Lookup lookup, String name, MethodType type) throws Exception {
@@ -610,8 +609,8 @@ public class Shen {
             return site;
         }
 
-        static void debug(String msg, Object... xs) {
-            if (isDebug()) System.err.println(format(msg, xs));
+        static void debug(String msg) {
+            if (isDebug()) System.err.println(msg);
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
@@ -743,10 +742,6 @@ public class Shen {
                     .replaceAll("EX$", "!").replaceAll("P$", "?");
         }
 
-        static String scramble(String s) {
-            return toBytecodeName(s);
-        }
-
         static MethodHandle findSAM(Object lambda) {
             try {
                 return lookup.unreflect(findSAM(lambda.getClass())).bindTo(lambda);
@@ -837,8 +832,6 @@ public class Shen {
             try {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
-                else if (intern("true") == kl) push(Boolean.class, true);
-                else if (intern("false") == kl) push(Boolean.class, false);
                 else if (kl instanceof Symbol) symbol((Symbol) kl);
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
@@ -887,7 +880,7 @@ public class Shen {
             Type returnType = s.fn.size() == 1
                     ? getType(s.fn.get(0).type().returnType())
                     : getType(Object.class);
-            mv.invokeDynamic(scramble(s.symbol), desc(returnType, argumentTypes), handle(mh(RT.class, "invokeBSM")));
+            mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), handle(mh(RT.class, "invokeBSM")));
             topOfStack = returnType;
         }
 
@@ -1009,7 +1002,7 @@ public class Shen {
         }
 
         void fn(String name, Object shen, Symbol... args) throws Throwable {
-            name = scramble(name) + "_" + id++;
+            name = toBytecodeName(name) + "_" + id++;
             List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
             scope.retainAll(concat(locals.keySet(), this.args));
 
@@ -1066,8 +1059,12 @@ public class Shen {
             topOfStack(List.class);
         }
 
-        void symbol(Symbol s) throws ReflectiveOperationException {
-            if (locals.containsKey(s)) mv.loadLocal(locals.get(s));
+        void symbol(Symbol s) throws Throwable {
+            if (asList("true", "false").contains(s.symbol)) {
+                push(Boolean.class, Boolean.valueOf(s.symbol));
+                return;
+            }
+            else if (locals.containsKey(s)) mv.loadLocal(locals.get(s));
             else if (args.contains(s)) mv.loadArg(args.indexOf(s));
             else push(s);
             topOfStack = typeOf(s);
@@ -1094,7 +1091,7 @@ public class Shen {
         }
 
         void push(Symbol kl) throws ReflectiveOperationException {
-            mv.invokeDynamic(scramble(kl.symbol), desc(Symbol.class), handle(mh(RT.class, "symbolBSM")));
+            mv.invokeDynamic(toBytecodeName(kl.symbol), desc(Symbol.class), handle(mh(RT.class, "symbolBSM")));
             topOfStack(Symbol.class);
         }
 
@@ -1119,7 +1116,7 @@ public class Shen {
         }
 
         void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
-            this.self = intern(unscramble(name));
+            this.self = intern(toSourceName(name));
             this.argTypes = argumentTypes;
             mv = generator(modifiers, method(name, desc(returnType, argumentTypes)));
             recur = mv.newLabel();
