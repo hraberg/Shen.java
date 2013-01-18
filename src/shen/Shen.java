@@ -1008,18 +1008,18 @@ public class Shen {
         }
 
         void fn(String name, Object shen, Symbol... args) throws Throwable {
-            name = toBytecodeName(name) + "_" + id++;
+            String bytecodeName = toBytecodeName(name) + "_" + id++;
             List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
             scope.retainAll(concat(locals.keySet(), this.args));
 
             List<Type> types = toList(scope.stream().map(this::typeOf));
             for (Symbol ignore : args) types.add(getType(Object.class));
 
-            insertArgs(handle(className, name, desc(getType(Object.class), types)), 0, scope);
+            insertArgs(handle(className, bytecodeName, desc(getType(Object.class), types)), 0, scope);
 
             scope.addAll(asList(args));
             Compiler fn = new Compiler(cw, className, shen, scope.toArray(new Symbol[scope.size()]));
-            fn.method(ACC_PUBLIC | ACC_STATIC, name, getType(Object.class), types);
+            fn.method(ACC_PUBLIC | ACC_STATIC, intern(name), bytecodeName, getType(Object.class), types);
         }
 
         @SuppressWarnings({"unchecked"})
@@ -1115,15 +1115,15 @@ public class Shen {
             constructor();
             Method sam = findSAM(anInterface);
             List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
-            method(ACC_PUBLIC, sam.getName(), getType(sam.getReturnType()), types);
+            method(ACC_PUBLIC, intern(sam.getName()), toBytecodeName(sam.getName()), getType(sam.getReturnType()), types);
             //noinspection unchecked
             return (Class<T>) loader.loadClass(cw.toByteArray());
         }
 
-        void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
-            this.self = intern(toSourceName(name.replaceFirst("_\\d+$", "")));
+        void method(int modifiers, Symbol name, String bytecodeName, Type returnType, List<Type> argumentTypes) {
+            this.self = name;
             this.argTypes = argumentTypes;
-            mv = generator(modifiers, method(name, desc(returnType, argumentTypes)));
+            mv = generator(modifiers, method(bytecodeName, desc(returnType, argumentTypes)));
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(shen);
