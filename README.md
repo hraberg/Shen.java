@@ -139,3 +139,19 @@ This is bound to change as we go:
 [InvokeDynamic: Your API for HotSpot](http://www.slideshare.net/boundaryinc/invoke-dynamic-your-api-to-hotspot) Tony Arcieri, 2012
 
 [Invokedynamic and JRuby](http://vimeo.com/27207224) Ola Bini, 2011 - Last time I met Ola he said that he considered to go back to C for his next language VM.
+
+
+## License
+
+http://shenlanguage.org/license.html
+
+Shen, Copyright © 2010-2012 Mark Tarver
+
+Shen.java, Copyright © 2012-2013 Håkan Råberg
+
+---
+YourKit is kindly supporting open source projects with its full-featured Java Profiler.
+YourKit, LLC is the creator of innovative and intelligent tools for profiling
+Java and .NET applications. Take a look at YourKit's leading software products:
+<a href="http://www.yourkit.com/java/profiler/index.jsp">YourKit Java Profiler</a> and
+<a href="http://www.yourkit.com/.net/profiler/index.jsp">YourKit .NET Profiler</a>.
