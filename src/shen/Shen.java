@@ -221,7 +221,7 @@ public class Shen {
         }
 
         public static Object hd(List list) {
-            return list.isEmpty() ? list() : list.get(0);
+            return list.isEmpty() ? list : list.get(0);
         }
 
         public static <T> List<T> tl(List<T> list) {
@@ -408,7 +408,7 @@ public class Shen {
     }
 
     static boolean isDebug() {
-        return intern("*debug*").value();
+        return intern("*debug*").primVar == 1 || (boolean) intern("*debug*").value();
     }
 
     public static Object eval(String shen) throws Throwable {
@@ -894,7 +894,7 @@ public class Shen {
         }
 
         boolean isSelfCall(Symbol s, List<Object> args) {
-            return self.symbol.startsWith(s.symbol) && args.size() == this.args.size();
+            return self.equals(s) && args.size() == this.args.size();
         }
 
         void apply(List<Object> args) {
@@ -1121,7 +1121,7 @@ public class Shen {
         }
 
         void method(int modifiers, String name, Type returnType, List<Type> argumentTypes) {
-            this.self = intern(toSourceName(name));
+            this.self = intern(toSourceName(name.replaceFirst("_\\d+$", "")));
             this.argTypes = argumentTypes;
             mv = generator(modifiers, method(name, desc(returnType, argumentTypes)));
             recur = mv.newLabel();
