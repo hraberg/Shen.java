@@ -184,7 +184,8 @@ public class PrimitivesTest {
         is(intern("hello"), "(eval-kl hello)");
         is(intern("hello"), "(eval-kl hello)");
         is(MethodHandle.class, "(freeze (+ 2 2)");
-        is(4, "((freeze (+ 2 2)) 0)");
+        is(MethodHandle.class, "(freeze (/ 2 0))");
+        is(4, "((freeze (+ 2 2)))");
     }
 
     @Test

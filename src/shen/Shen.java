@@ -256,10 +256,6 @@ public class Shen {
             return x.substring(1);
         }
 
-        public static MethodHandle freeze(Object x) {
-            return dropArguments(constant(x.getClass(), x), 0, Object.class);
-        }
-
         public static Class type(Object x) {
             return x.getClass();
         }
@@ -990,6 +986,13 @@ public class Shen {
         @Macro
         public void lambda(boolean tail, Symbol x, Object y) throws Throwable {
             fn("__lambda__", y, x);
+        }
+
+        @Macro
+        public void freeze(boolean tail, Object x) throws Throwable {
+            lambda(tail, intern("_"), x);
+            emptyList();
+            bindTo();
         }
 
         @Macro
