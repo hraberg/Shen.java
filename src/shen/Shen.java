@@ -334,7 +334,7 @@ public class Shen {
         }
 
         static long startTime = System.currentTimeMillis();
-        public static long get_time(Symbol time) {
+        public static double get_time(Symbol time) {
             switch (time.symbol) {
                 case "run": return (currentTimeMillis() - startTime) / 1000;
                 case "unix": return currentTimeMillis() / 1000;
@@ -990,9 +990,7 @@ public class Shen {
 
         @Macro
         public void freeze(boolean tail, Object x) throws Throwable {
-            lambda(tail, intern("_"), x);
-            emptyList();
-            bindTo();
+            fn("__freeze__", x);
         }
 
         @Macro

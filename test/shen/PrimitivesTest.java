@@ -225,7 +225,7 @@ public class PrimitivesTest {
 
     @Test
     public void get_time() {
-        is(Long.class, "(get-time run)");
+        is(Number.class, "(get-time run)");
     }
 
     @Test
