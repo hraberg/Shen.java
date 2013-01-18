@@ -37,6 +37,7 @@ import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
+import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
@@ -198,6 +199,7 @@ public class Shen {
         }
 
         public static List<Object> cons(Object x, List<Object> y) {
+            y = new ArrayList<Object>(y);
             y.add(0, x);
             return y;
         }
@@ -223,7 +225,10 @@ public class Shen {
         }
 
         public static <T> List<T> tl(List<T> list) {
-            return new ArrayList<>(list.subList(list.isEmpty() ? 0 : 1, list.size()));
+            if (list.isEmpty()) return list;
+            list = new ArrayList<>(list);
+            list.remove(0);
+            return list;
         }
 
         public static Object hd(Cons cons) {
@@ -244,7 +249,7 @@ public class Shen {
 
         public static String str(Object x) {
             if (consP(x)) throw new IllegalArgumentException(x + " is not an atom; str cannot convert it to a string.");
-            if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
+            if (x != null && x.getClass() == Object[].class) return deepToString((Object[]) x);
             return String.valueOf(x);
         }
 
@@ -426,10 +431,11 @@ public class Shen {
 
     static String version() {
         try (InputStream manifest = getSystemClassLoader().getResourceAsStream("META-INF/MANIFEST.MF")) {
-            return new Manifest(manifest).getMainAttributes().getValue("Implementation-Version");
-        } catch (Exception e) {
-            return "<unknown>";
+            if (manifest != null)
+                return new Manifest(manifest).getMainAttributes().getValue(IMPLEMENTATION_VERSION);
+        } catch (Exception ignored) {
         }
+        return "<unknown>";
     }
 
     public static class KLReader {
@@ -472,7 +478,6 @@ public class Shen {
 
         @SafeVarargs
         public static <T> List<T> list(T... elements) {
-            if (elements == null) return new ArrayList<>();
             return new ArrayList<>(asList(elements));
         }
 
@@ -1055,8 +1060,7 @@ public class Shen {
         }
 
         void emptyList() {
-            mv.push((String) null);
-            mv.invokeStatic(getType(RT.class), method("list", desc(List.class, Object[].class)));
+            mv.getStatic(getType(Collections.class), "EMPTY_LIST", getType(List.class));
             topOfStack(List.class);
         }
 
