@@ -464,16 +464,13 @@ public class Shen {
     static <T> Class<T> compile(String file, Class<T> aClass) throws Throwable {
         try (Reader in = resource(format("%s.kl", file))) {
             debug("loading: %s", file);
-            List<Object> body = cons(intern("do"), list());
-            for (Object kl : read(in))
-                body.add(kl);
-            Compiler compiler = new Compiler(null, file, body);
+            Compiler compiler = new Compiler(null, file, cons(intern("do"), read(in)));
+            File compilePath = new File((String) intern("*compile-path*").value());
+            if (!compilePath.isDirectory() || compilePath.mkdirs()) throw new IOException("could not make directory: " + compilePath);
             try {
                 return compiler.load(aClass);
             } finally {
-                //noinspection ResultOfMethodCallIgnored
-                new File((String) intern("*compile-path*").value()).mkdirs();
-                try (OutputStream out = new FileOutputStream("target/classes/" + file + ".class")) {
+                try (OutputStream out = new FileOutputStream(new File(compilePath, file + ".class"))) {
                     out.write(compiler.bytes);
                 }
             }
@@ -494,7 +491,8 @@ public class Shen {
     }
 
     public static class KLReader {
-        static List read(Reader reader) throws Exception {
+        static List<Object> read(Reader reader) throws Exception {
+            //noinspection unchecked
             return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
         }
 
