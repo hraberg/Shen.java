@@ -42,6 +42,7 @@ import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
+import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
 import static shen.Shen.Primitives.cons;
 import static shen.Shen.Primitives.*;
@@ -407,7 +408,7 @@ public class Shen {
         }
 
         public static Object eval_kl(Object kl) throws Throwable {
-            return new Compiler(kl).load(Callable.class).newInstance().call();
+            return new Compiler(kl).load("__eval__", Callable.class).newInstance().call();
         }
     }
 
@@ -466,11 +467,12 @@ public class Shen {
             debug("loading: %s", file);
             Compiler compiler = new Compiler(null, file, cons(intern("do"), read(in)));
             File compilePath = new File((String) intern("*compile-path*").value());
+            File classFile = new File(compilePath, file + ".class");
             if (!compilePath.isDirectory() || compilePath.mkdirs()) throw new IOException("could not make directory: " + compilePath);
             try {
-                return compiler.load(aClass);
+                return compiler.load(classFile.getName().replaceAll(".class$", ".kl"), aClass);
             } finally {
-                try (OutputStream out = new FileOutputStream(new File(compilePath, file + ".class"))) {
+                try (OutputStream out = new FileOutputStream(classFile)) {
                     out.write(compiler.bytes);
                 }
             }
@@ -491,13 +493,18 @@ public class Shen {
     }
 
     public static class KLReader {
+        static Map<Object, Integer> lines = new IdentityHashMap<>();
+        static int currentLine;
+
         static List<Object> read(Reader reader) throws Exception {
+            lines.clear();
+            currentLine = 1;
             //noinspection unchecked
             return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
         }
 
         static Object tokenize(Scanner sc) throws Exception {
-            sc.skip("\\s*");
+            whitespace(sc);
             if (find(sc, "\\(")) return tokenizeAll(sc);
             if (find(sc, "\"")) return nextString(sc);
             if (find(sc, "\\)")) return null;
@@ -509,17 +516,27 @@ public class Shen {
             return null;
         }
 
+        static void whitespace(Scanner sc) {
+            sc.skip("[^\\S\\n]*");
+            while (find(sc, "\\n")) {
+                currentLine++;
+                sc.skip("[^\\S\\n]*");
+            }
+        }
+
         static boolean find(Scanner sc, String pattern) {
             return sc.findWithinHorizon(pattern, 1) != null;
         }
 
         static Object nextString(Scanner sc) throws IOException {
             String s = sc.findWithinHorizon("(?s).*?\"", 0);
+            currentLine += s.replaceAll("[^\n]", "").length();
             return s.substring(0, s.length() - 1);
         }
 
         static List tokenizeAll(Scanner sc) throws Exception {
             List<Object> list = list();
+            lines.put(list, currentLine);
             Object x;
             while ((x = tokenize(sc)) != null) list.add(x);
             return list;
@@ -918,6 +935,7 @@ public class Shen {
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
                     List<Object> list = (List) kl;
+                    lineNumber(list);
                     if (list.isEmpty()) emptyList();
                     else {
                         Object first = list.get(0);
@@ -939,6 +957,14 @@ public class Shen {
                 throw new RuntimeException(t);
             }
             return topOfStack;
+        }
+
+        void lineNumber(List<Object> list) {
+            if (lines.containsKey(list)) {
+                Label line = mv.newLabel();
+                mv.visitLabel(line);
+                mv.visitLineNumber(lines.get(list), line);
+            }
         }
 
         boolean inScope(Symbol x) {
@@ -1193,8 +1219,9 @@ public class Shen {
             topOfStack = getType(aClass);
         }
 
-        public <T> Class<T> load(Class<T> anInterface) throws Exception {
+        public <T> Class<T> load(String source, Class<T> anInterface) throws Exception {
             cw = classWriter(className, anInterface);
+            cw.visitSource(source, null);
             constructor();
             Method sam = findSAM(anInterface);
             List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
