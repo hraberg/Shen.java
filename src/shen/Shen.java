@@ -1122,7 +1122,8 @@ public class Shen {
             List<Type> types = toList(scope.stream().map(this::typeOf));
             for (Symbol ignore : args) types.add(getType(Object.class));
 
-            insertArgs(handle(className, bytecodeName, desc(getType(Object.class), types)), 0, scope);
+            push(handle(className, bytecodeName, desc(getType(Object.class), types)));
+            insertArgs(0, scope);
 
             scope.addAll(asList(args));
             Compiler fn = new Compiler(cw, className, shen, scope.toArray(new Symbol[scope.size()]));
@@ -1209,6 +1210,11 @@ public class Shen {
             topOfStack(Symbol.class);
         }
 
+        void push(Handle handle) {
+            mv.push(handle);
+            topOfStack(MethodHandle.class);
+        }
+
         void push(Class<?> aClass, Object kl) throws Throwable {
             aClass = asPrimitiveType(aClass);
             mh(mv.getClass(), "push", aClass).invoke(mv, kl);
@@ -1258,7 +1264,7 @@ public class Shen {
         }
 
         void bindTo(Handle handle, Object arg) {
-            mv.push(handle);
+            push(handle);
             compile(arg, false);
             box();
             bindTo();
@@ -1270,8 +1276,8 @@ public class Shen {
             topOfStack(MethodHandle.class);
         }
 
-        void insertArgs(Handle handle, int pos, List<?> args) {
-            mv.push(handle);
+        void insertArgs(int pos, List<?> args) {
+            if (args.isEmpty()) return;
             mv.push(pos);
             loadArgArray(args);
             mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
