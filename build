@@ -5,6 +5,8 @@ mvn clean
 echo "(System/exit 0)" | ./shen.java
 echo
 
+mvn package -DskipTests=true
+
 test_classpath="target/test-classes:`find . -name shen.java-*-standalone.jar`"
 
 yes | java $JAVA_OPTS -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log

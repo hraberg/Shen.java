@@ -68,6 +68,7 @@ public class Shen {
         set("*stinput*", in);
         set("*stoutput*", out);
         set("*debug*", false);
+        set("*compile-path*", "target/classes");
         set("*home-directory*", getProperty("user.dir"));
 
         stream(Primitives.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::defun);
@@ -443,13 +444,40 @@ public class Shen {
     }
 
     static void install() throws Throwable {
+        long start = currentTimeMillis();
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
-            try (Reader in = resource(format("klambda/%s.kl", file))) {
-                debug("loading: %s", file);
-                for (Object kl : read(in))
-                    eval_kl(kl);
+            load("klambda/" + file, Callable.class).newInstance().call();
+        debug("install took %f s", (currentTimeMillis() - start) / 1000.0);
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> Class<T> load(String file, Class<T> aClass) throws Throwable {
+        try {
+            return (Class<T>) getSystemClassLoader().loadClass(file.replaceAll("/", "."));
+        } catch (ClassNotFoundException e) {
+            debug("compiling: %s", file);
+            return compile(file, aClass);
+        }
+    }
+
+    static <T> Class<T> compile(String file, Class<T> aClass) throws Throwable {
+        try (Reader in = resource(format("%s.kl", file))) {
+            debug("loading: %s", file);
+            List<Object> body = cons(intern("do"), list());
+            for (Object kl : read(in))
+                body.add(kl);
+            Compiler compiler = new Compiler(null, file, body);
+            try {
+                return compiler.load(aClass);
+            } finally {
+                //noinspection ResultOfMethodCallIgnored
+                new File((String) intern("*compile-path*").value()).mkdirs();
+                try (OutputStream out = new FileOutputStream("target/classes/" + file + ".class")) {
+                    out.write(compiler.bytes);
+                }
             }
+        }
     }
 
     static Reader resource(String resource) {
@@ -827,6 +855,7 @@ public class Shen {
                     .forEach(Compiler::macro);
         }
 
+
         @Retention(RetentionPolicy.RUNTIME)
         @interface Macro {}
 
@@ -834,6 +863,7 @@ public class Shen {
 
         String className;
         ClassWriter cw;
+        byte[] bytes;
 
         GeneratorAdapter mv;
         Object shen;
@@ -1106,10 +1136,12 @@ public class Shen {
         }
 
         @Macro
-        public void KL_do(boolean tail, Object x, Object y) throws Throwable {
-            compile(x, false);
-            mv.pop();
-            compile(y, tail);
+        public void KL_do(boolean tail, Object... xs) throws Throwable {
+            for (int i = 0; i < xs.length; i++) {
+                boolean last = i == xs.length - 1;
+                compile(xs[i], last  && tail);
+                if (!last) mv.pop();
+            }
         }
 
         void emptyList() {
@@ -1169,8 +1201,9 @@ public class Shen {
             Method sam = findSAM(anInterface);
             List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
             method(ACC_PUBLIC, intern(sam.getName()), toBytecodeName(sam.getName()), getType(sam.getReturnType()), types);
+            bytes = cw.toByteArray();
             //noinspection unchecked
-            return (Class<T>) loader.loadClass(cw.toByteArray());
+            return (Class<T>) loader.loadClass(bytes);
         }
 
         void method(int modifiers, Symbol name, String bytecodeName, Type returnType, List<Type> argumentTypes) {

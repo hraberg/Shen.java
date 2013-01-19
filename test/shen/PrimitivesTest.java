@@ -361,6 +361,12 @@ public class PrimitivesTest {
     }
 
     @Test
+    public void kl_do() {
+        is(2, "(do 1 2)");
+        is(3, "(do 1 2 3)");
+    }
+
+    @Test
     public void java() {
         is(long.class, "(System/currentTimeMillis)");
         is("Oracle Corporation", "(System/getProperty \"java.vendor\")");
