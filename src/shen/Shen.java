@@ -2,6 +2,8 @@ package shen;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
+import org.objectweb.asm.util.ASMifier;
+import org.objectweb.asm.util.TraceClassVisitor;
 import sun.invoke.anon.AnonymousClassLoader;
 import sun.invoke.util.Wrapper;
 import sun.misc.Unsafe;
@@ -1226,15 +1228,20 @@ public class Shen {
         }
 
         public <T> Class<T> load(String source, Class<T> anInterface) throws Exception {
-            cw = classWriter(className, anInterface);
-            cw.visitSource(source, null);
-            constructor();
-            Method sam = findSAM(anInterface);
-            List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
-            method(ACC_PUBLIC, intern(sam.getName()), toBytecodeName(sam.getName()), getType(sam.getReturnType()), types);
-            bytes = cw.toByteArray();
-            //noinspection unchecked
-            return (Class<T>) loader.loadClass(bytes);
+            try {
+                cw = classWriter(className, anInterface);
+                cw.visitSource(source, null);
+                constructor();
+                Method sam = findSAM(anInterface);
+                List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
+                method(ACC_PUBLIC, intern(sam.getName()), toBytecodeName(sam.getName()), getType(sam.getReturnType()), types);
+                bytes = cw.toByteArray();
+                //noinspection unchecked
+                return (Class<T>) loader.loadClass(bytes);
+            } catch (VerifyError e) {
+                printASM(bytes);
+                throw e;
+            }
         }
 
         void method(int modifiers, Symbol name, String bytecodeName, Type returnType, List<Type> argumentTypes) {
@@ -1283,6 +1290,10 @@ public class Shen {
             mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
                     desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
             topOfStack(MethodHandle.class);
+        }
+
+        static void printASM(byte[] bytes) {
+            new ClassReader(bytes).accept(new TraceClassVisitor(null, new ASMifier(), new PrintWriter(System.out)), ClassReader.SKIP_DEBUG);
         }
 
         static Unsafe unsafe() {
