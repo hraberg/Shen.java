@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.Streams;
 
+import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
 import static java.lang.String.format;
@@ -70,6 +71,7 @@ public class Shen {
         set("*home-directory*", getProperty("user.dir"));
 
         stream(Primitives.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::defun);
+        stream(Overrides.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::override);
 
         op("=", (BiPredicate) Objects::equals,
                 (IIPredicate) (left, right) -> left == right,
@@ -133,7 +135,7 @@ public class Shen {
 
         public void tag(int tag) {
             if (this.tag != tag) {
-                debug("retagging " + this + " from " + this.tag + " to " + tag);
+                debug("retagging %s from %s to %s", this, this.tag,  tag);
                 this.tag = tag;
                 if (tag != Type.OBJECT) var = null;
             }
@@ -244,6 +246,7 @@ public class Shen {
         }
 
         static <T> T[] tl(T[] array) {
+            if (array.length == 0) return array;
             return copyOfRange(array, 1, array.length);
         }
 
@@ -407,6 +410,30 @@ public class Shen {
         }
     }
 
+    public static class Overrides {
+        public static boolean variableP(MethodHandle target, Object x) {
+            return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
+        }
+
+        public static boolean booleanP(MethodHandle target, Object x) {
+            return x instanceof Boolean;
+        }
+
+        public static boolean elementP(MethodHandle target, Object x, Collection z) {
+            return z.contains(x);
+        }
+
+        public static Object[] ATp(MethodHandle target, Object x, Object y) {
+            return new Object[] {intern("shen-tuple"), x, y};
+        }
+
+        public static Object shen_compose(MethodHandle target, List fs, Object x) throws Throwable {
+            for (Object f : fs)
+                x = apply(f, x);
+            return x;
+        }
+    }
+
     static boolean isDebug() {
         return intern("*debug*").primVar == 1 || (boolean) intern("*debug*").value();
     }
@@ -419,7 +446,7 @@ public class Shen {
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
             try (Reader in = resource(format("klambda/%s.kl", file))) {
-                debug("loading: " + file);
+                debug("loading: %s", file);
                 for (Object kl : read(in))
                     eval_kl(kl);
             }
@@ -430,12 +457,12 @@ public class Shen {
     }
 
     static String version() {
+        String version = null;
         try (InputStream manifest = getSystemClassLoader().getResourceAsStream("META-INF/MANIFEST.MF")) {
-            if (manifest != null)
-                return new Manifest(manifest).getMainAttributes().getValue(IMPLEMENTATION_VERSION);
+                version = new Manifest(manifest).getMainAttributes().getValue(IMPLEMENTATION_VERSION);
         } catch (Exception ignored) {
         }
-        return "<unknown>";
+        return version != null ? version : "<unknown>";
     }
 
     public static class KLReader {
@@ -475,6 +502,14 @@ public class Shen {
 
     public static class RT {
         static Lookup lookup = lookup();
+        static Map<Symbol, MethodHandle> overrides = new HashMap<>();
+
+        static MethodHandle
+                link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"), hasTag = mh(Symbol.class, "hasTag"),
+                value = mh(Symbol.class, "value"), primVar = field(Symbol.class, "primVar"),
+                booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
+                intValue = explicitCastArguments(primVar, methodType(int.class, Symbol.class)),
+                doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble"));
 
         @SafeVarargs
         public static <T> List<T> list(T... elements) {
@@ -482,59 +517,58 @@ public class Shen {
         }
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
-            MethodHandle hasTag = insertArguments(mh(Symbol.class, "hasTag"), 1, symbol.tag);
+            MethodHandle hasTag = insertArguments(RT.hasTag, 1, symbol.tag);
             site.setTarget(guardWithTest(hasTag, value(symbol).asType(site.type()), site.getTarget()));
             return site.getTarget().invoke(symbol);
         }
 
         static MethodHandle value(Symbol symbol) throws Exception {
             switch (symbol.tag) {
-                case Type.BOOLEAN: return explicitCastArguments(field(Symbol.class, "primVar"), methodType(boolean.class, Symbol.class));
-                case Type.INT: return explicitCastArguments(field(Symbol.class, "primVar"), methodType(int.class, Symbol.class));
-                case Type.LONG: return field(Symbol.class, "primVar");
-                case Type.DOUBLE: return filterReturnValue(field(Symbol.class, "primVar"), mh(Double.class, "longBitsToDouble"));
+                case Type.BOOLEAN: return booleanValue;
+                case Type.INT: return intValue;
+                case Type.LONG: return primVar;
+                case Type.DOUBLE: return doubleValue;
             }
-            return mh(Symbol.class, "value");
+            return value;
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
-            debug("LINKING: " + name + site.type() + " " + Arrays.toString(args));
-            final MethodType actualType = methodType(site.type().returnType(), toList(stream(args).map(Object::getClass)));
-            debug("actual types: " + actualType);
+            debug("LINKING: %s%s %s", name, site.type(), args);
+            List<Class<?>> actualTypes = toList(stream(args).map(Object::getClass));
+            debug("actual types: %s", actualTypes);
             Symbol symbol = intern(name);
-            debug("candidates: " + symbol.fn);
+            debug("candidates: %s", symbol.fn);
 
-            MethodHandle java = javaCall(site, name, site.type(), args);
-            if (java != null) {
-                debug("calling java: " + java);
-                site.setTarget(java.asType(site.type()));
-                return java.invokeWithArguments(args);
+            if (symbol.fn.isEmpty()) {
+                MethodHandle java = javaCall(site, name, site.type(), args);
+                if (java != null) {
+                    debug("calling java: %s", java);
+                    site.setTarget(java.asType(site.type()));
+                    return java.invokeWithArguments(args);
+                }
+                throw new NoSuchMethodException("undefined function " + name + site.type()
+                        + (symbol.fn.isEmpty() ?  "" : " in " + toList(symbol.fn.stream().map(MethodHandle::type))));
             }
-            final NoSuchMethodException notFound = new NoSuchMethodException("undefined function " + name + site.type()
-                    + (symbol.fn.isEmpty() ?  "" : " in " + toList(symbol.fn.stream().map(MethodHandle::type))));
-            if (symbol.fn.isEmpty()) throw notFound;
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
                 MethodHandle partial = linker(new MutableCallSite(genericMethodType(arity)), name, arity);
                 partial = insertArguments(partial, 0, args);
-                debug("partial: " + partial);
+                debug("partial: %s", partial);
                 return partial;
             }
 
-            MethodHandle match = find(symbol.fn.stream(),
-                    f -> f.type().wrap().changeReturnType(actualType.returnType()).equals(actualType));
-            debug("exact match: " + match);
+            MethodHandle match = find(symbol.fn.stream(), f -> f.type().wrap().parameterList().equals(actualTypes));
+            if (match != null) debug("exact match: %s", match);
             if (match == null)
                 match = symbol.fn.stream()
-                        .filter(f -> canCast(actualType.parameterList(), f.type().parameterList()))
-                        .min((x, y) -> without(y.type().parameterList(), Object.class).size()
-                                - without(x.type().parameterList(), Object.class).size()).orElseThrow(() -> notFound);
-            debug("selected: " + match);
-
+                    .filter(f -> canCast(actualTypes, f.type().parameterList()))
+                    .min((x, y) -> without(y.type().parameterList(), Object.class).size()
+                            - without(x.type().parameterList(), Object.class).size()).get();
+            debug("selected: %s", match);
             site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(site, match), site.getTarget()));
-            return match.invokeWithArguments(args);
+            return insertArguments(match.asType(match.type().changeReturnType(Object.class)), 0, args).invokeExact();
         }
 
         static MethodHandle relinkOnClassCast(MutableCallSite site, MethodHandle fn) {
@@ -571,7 +605,7 @@ public class Shen {
             MethodHandle[] filters = new MethodHandle[method.type().parameterCount()];
             for (int i = 0; i < method.type().parameterCount() - (method.isVarargsCollector() ? 1 : 0); i++)
                 if (isSAM(method.type().parameterType(i)))
-                    filters[i] = mh(RT.class, "proxy").bindTo(findSAM(method.type().parameterType(i)))
+                    filters[i] = proxy.bindTo(findSAM(method.type().parameterType(i)))
                             .asType(methodType(method.type().parameterType(i), Object.class));
             return filterArguments(method, 0, filters);
         }
@@ -591,7 +625,7 @@ public class Shen {
         }
 
         static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
-            return insertArguments(mh(RT.class, "link"), 0, site, name).asCollector(Object[].class, arity);
+            return insertArguments(link, 0, site, name).asCollector(Object[].class, arity);
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
@@ -610,17 +644,26 @@ public class Shen {
             return site;
         }
 
-        static void debug(String msg) {
-            if (isDebug()) System.err.println(msg);
+        static void debug(String format, Object... args) {
+            if (isDebug()) System.err.println(format(format,
+                    stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
         }
 
-        static MethodHandle mh(Class<?> aClass, String name, Class... types) throws IllegalAccessException {
-            return lookup.unreflect(find(stream(aClass.getMethods()), m -> m.getName().equals(name)
-                    && (types.length == 0 || deepEquals(m.getParameterTypes(), types))));
+        static MethodHandle mh(Class<?> aClass, String name, Class... types) {
+            try {
+                return lookup.unreflect(find(stream(aClass.getMethods()), m -> m.getName().equals(name)
+                        && (types.length == 0 || deepEquals(m.getParameterTypes(), types))));
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
         }
 
-        static MethodHandle field(Class<?> aClass, String name) throws Exception {
-            return lookup.unreflectGetter(aClass.getField(name));
+        static MethodHandle field(Class<?> aClass, String name) {
+            try {
+                return lookup.unreflectGetter(aClass.getField(name));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         static String desc(Class<?> returnType, Class<?>... argumentTypes) {
@@ -642,7 +685,7 @@ public class Shen {
 
         static Object uncurry(Object chain, Object... args) throws Throwable {
             for (Object arg : args)
-                chain = ((MethodHandle) chain).invoke(arg);
+                chain = ((MethodHandle) chain).invokeExact(arg);
             return chain;
         }
 
@@ -660,7 +703,7 @@ public class Shen {
         }
 
         static boolean canCast(Class<?> a, Class<?> b) {
-            return b.isAssignableFrom(a) || canWiden(a, b);
+            return a == b || b.isAssignableFrom(a) || canWiden(a, b);
         }
 
         static boolean canWiden(Class<?> a, Class<?> b) {
@@ -680,6 +723,8 @@ public class Shen {
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
+            if (overrides.containsKey(name) && name.fn.isEmpty())
+                fn  = overrides.get(name).bindTo(fn);
             name.fn.clear();
             name.fn.add(fn);
             invalidateAll(new SwitchPoint[] {name.fnGuard});
@@ -689,6 +734,14 @@ public class Shen {
 
         static void op(String name, Object... op) {
             intern(name).fn.addAll(toList(stream(op).map(RT::findSAM)));
+        }
+
+        static void override(Method m) {
+            try {
+                overrides.put(intern(unscramble(m.getName())), lookup.unreflect(m));
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(e);
+            }
         }
 
         static Symbol defun(Method m) {
@@ -740,7 +793,7 @@ public class Shen {
         static String unscramble(String s) {
             return toSourceName(s).replaceAll("_", "-").replaceAll("^KL-", "")
                     .replaceAll("GT", ">").replaceAll("LT", "<")
-                    .replaceAll("EX$", "!").replaceAll("P$", "?");
+                    .replaceAll("EX$", "!").replaceAll("P$", "?").replaceAll("^AT", "@");
         }
 
         static MethodHandle findSAM(Object lambda) {
@@ -873,10 +926,10 @@ public class Shen {
 
             if (isSelfCall(s, args)) {
                 if (tail) {
-                    debug("recur: " + s);
+                    debug("recur: %s", s);
                     recur(argumentTypes);
                     return;
-                } else debug("can only recur from tail position: " + s);
+                } else debug("can only recur from tail position: %s", s);
             }
             Type returnType = s.fn.size() == 1
                     ? getType(s.fn.get(0).type().returnType())
@@ -1001,7 +1054,7 @@ public class Shen {
         @Macro
         public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
             push(name);
-            debug("compiling: " + name + args + " in " + getObjectType(className).getClassName());
+            debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
             fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
             mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
             topOfStack(Symbol.class);
