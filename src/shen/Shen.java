@@ -1150,10 +1150,9 @@ public class Shen {
             }
 
             public void KL_do(boolean tail, Type returnType, Object... xs) throws Throwable {
-                Iterator<?> i = asList(xs).iterator();
-                while (i.hasNext()) {
-                    boolean last = i.hasNext();
-                    compile(i.next(), last ? getType(Object.class) : returnType, last && tail);
+                for (int i = 0; i < xs.length; i++) {
+                    boolean last = i == xs.length - 1;
+                    compile(xs[i], last ? returnType : getType(Object.class), last && tail);
                     if (!last) popStack();
                 }
             }
