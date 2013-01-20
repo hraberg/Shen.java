@@ -997,7 +997,7 @@ public class Shen {
         }
 
         void macroExpand(Symbol s, List<Object> args, Type returnType, boolean tail) throws Throwable {
-            RT.bindTo(RT.bindTo(RT.bindTo(macros.get(s), new Macros()), tail), returnType).invokeWithArguments(args);
+            macros.get(s).invokeWithArguments(concat(asList(new Macros(), tail, returnType), args));
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
