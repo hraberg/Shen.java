@@ -400,11 +400,9 @@ public class Shen {
         }
 
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
+            if (x.fn.isEmpty()) return relinker(x.symbol, 0);
             MethodHandle fn = x.fn.get(0);
-            if (x.fn.size() > 1) {
-                int arity = fn.type().parameterCount();
-                return relinker(toBytecodeName(x.symbol), arity);
-            }
+            if (x.fn.size() > 1) return relinker(x.symbol, fn.type().parameterCount());
             return fn;
         }
 

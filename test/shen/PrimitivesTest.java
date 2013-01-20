@@ -345,6 +345,8 @@ public class PrimitivesTest {
         is(intern("x"), "(defun x (y) (y))");
         is(intern("y"), "(defun y () 1))");
         is(1, "(x y)");
+        is(MethodHandle.class, "(function undefined)");
+        is(-1, "(trap-error ((function undefined)) (lambda E -1))");
     }
 
     @Test
