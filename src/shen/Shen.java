@@ -10,8 +10,6 @@ import sun.invoke.util.Wrapper;
 import sun.misc.Unsafe;
 
 import java.io.*;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.lang.invoke.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
@@ -76,8 +74,8 @@ public class Shen {
         set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
-        stream(Primitives.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::defun);
-        stream(Overrides.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::override);
+        register(Primitives.class, RT::defun);
+        register(Overrides.class, RT::override);
 
         op("=", (BiPredicate) Objects::equals,
                 (IIPredicate) (left, right) -> left == right,
@@ -503,6 +501,7 @@ public class Shen {
             try {
                 return compiler.load(classFile.getName().replaceAll(".class$", ".kl"), aClass);
             } finally {
+                lines.clear();
                 try (OutputStream out = new FileOutputStream(classFile)) {
                     out.write(compiler.bytes);
                 }
@@ -634,7 +633,6 @@ public class Shen {
             }
 
             MethodHandle match = find(symbol.fn.stream(), f -> f.type().wrap().parameterList().equals(actualTypes));
-            if (match != null) debug("exact match: %s", match);
             if (match == null)
                 match = symbol.fn.stream()
                     .filter(f -> canCast(actualTypes, f.type().parameterList()))
@@ -810,6 +808,10 @@ public class Shen {
             intern(name).fn.addAll(toList(stream(op).map(RT::findSAM)));
         }
 
+        static void register(Class<?> aClass, Block<? super Method> hook) {
+            stream(aClass.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(hook);
+        }
+
         static void override(Method m) {
             try {
                 overrides.put(intern(unscramble(m.getName())), lookup.unreflect(m));
@@ -886,7 +888,6 @@ public class Shen {
         static boolean isSAM(Class<?> aClass) {
             return findSAM(aClass) != null;
         }
-
     }
 
     public static class Compiler implements Opcodes {
@@ -896,14 +897,8 @@ public class Shen {
                 asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
 
         static {
-            stream(Compiler.class.getDeclaredMethods())
-                    .filter(m -> isPublic(m.getModifiers()) && m.isAnnotationPresent(Macro.class))
-                    .forEach(Compiler::macro);
+            register(Macros.class, Compiler::macro);
         }
-
-
-        @Retention(RetentionPolicy.RUNTIME)
-        @interface Macro {}
 
         static int id = 1;
 
@@ -912,7 +907,7 @@ public class Shen {
         byte[] bytes;
 
         GeneratorAdapter mv;
-        Object shen;
+        Object kl;
         Symbol self;
         Map<Symbol, Integer> locals;
         List<Symbol> args;
@@ -920,29 +915,25 @@ public class Shen {
         Type topOfStack;
         Label recur;
 
-        public Compiler(Object shen, Symbol... args) throws Throwable {
-            this(null, "shen/ShenEval" + id++, shen, args);
+        public Compiler(Object kl, Symbol... args) throws Throwable {
+            this(null, "shen/ShenEval" + id++, kl, args);
         }
 
-        public Compiler(ClassWriter cn, String className, Object shen, Symbol... args) throws Throwable {
+        public Compiler(ClassWriter cn, String className, Object kl, Symbol... args) throws Throwable {
             this.cw = cn;
             this.className = className;
-            this.shen = shen;
+            this.kl = kl;
             this.args = list(args);
             this.locals = new HashMap<>();
         }
 
-        ClassWriter classWriter(String name, Class<?> anInterface) {
+        static ClassWriter classWriter(String name, Class<?> anInterface) {
             ClassWriter cw = new ClassWriter(COMPUTE_FRAMES);
             cw.visit(V1_7, ACC_PUBLIC, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
             return cw;
         }
 
-        GeneratorAdapter generator(int access, org.objectweb.asm.commons.Method method) {
-            return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
-        }
-
-        org.objectweb.asm.commons.Method method(String name, String desc) {
+        static org.objectweb.asm.commons.Method method(String name, String desc) {
             return new org.objectweb.asm.commons.Method(name, desc);
         }
 
@@ -952,6 +943,10 @@ public class Shen {
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        GeneratorAdapter generator(int access, org.objectweb.asm.commons.Method method) {
+            return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
         }
 
         Type compile(Object kl) {
@@ -986,8 +981,7 @@ public class Shen {
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
-                if (isPrimitive(returnType) && !isPrimitive(topOfStack)) unbox(returnType);
-                else if (!isPrimitive(returnType) && isPrimitive(topOfStack)) box();
+                handlePrimitives(returnType);
                 return topOfStack;
             } catch (RuntimeException | Error e) {
                 throw e;
@@ -996,9 +990,9 @@ public class Shen {
             }
         }
 
-        void unbox(Type type) {
-            mv.unbox(type);
-            topOfStack = type;
+        void handlePrimitives(Type returnType) {
+            if (isPrimitive(returnType) && !isPrimitive(topOfStack)) unbox(returnType);
+            else if (!isPrimitive(returnType) && isPrimitive(topOfStack)) box();
         }
 
         void lineNumber(List<Object> list) {
@@ -1014,7 +1008,7 @@ public class Shen {
         }
 
         void macroExpand(Symbol s, List<Object> args, Type returnType, boolean tail) throws Throwable {
-            RT.bindTo(RT.bindTo(RT.bindTo(macros.get(s), this), tail), returnType).invokeWithArguments(args);
+            RT.bindTo(RT.bindTo(RT.bindTo(macros.get(s), new Macros()), tail), returnType).invokeWithArguments(args);
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
@@ -1050,116 +1044,119 @@ public class Shen {
             topOfStack(Object.class);
         }
 
-        @Macro
-        public void trap_error(boolean tail, Type returnType, Object x, Object f) throws Throwable {
-            Label start = mv.newLabel();
-            Label end = mv.newLabel();
-            Label after = mv.newLabel();
+        class Macros {
+            public void trap_error(boolean tail, Type returnType, Object x, Object f) throws Throwable {
+                Label start = mv.newLabel();
+                Label end = mv.newLabel();
+                Label after = mv.newLabel();
 
-            mv.visitLabel(start);
-            compile(x, returnType, false);
-            mv.goTo(after);
-            mv.visitLabel(end);
+                mv.visitLabel(start);
+                compile(x, returnType, false);
+                mv.goTo(after);
+                mv.visitLabel(end);
 
-            mv.catchException(start, end, getType(Exception.class));
-            compile(f, false);
-            maybeCast(MethodHandle.class);
-            mv.swap();
-            bindTo();
+                mv.catchException(start, end, getType(Exception.class));
+                compile(f, false);
+                maybeCast(MethodHandle.class);
+                mv.swap();
+                bindTo();
 
-            mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
-            if (isPrimitive(returnType)) unbox(returnType);
-            else topOfStack(Object.class);
-            mv.visitLabel(after);
-        }
-
-        @Macro
-        public void KL_if(boolean tail, Type returnType, Object test, Object then, Object _else) throws Exception {
-            Label elseStart = mv.newLabel();
-            Label end = mv.newLabel();
-
-            compile(test, BOOLEAN_TYPE, false);
-            if (!BOOLEAN_TYPE.equals(topOfStack)) {
-                popStack();
-                mv.throwException(getType(IllegalArgumentException.class), "boolean expected");
-                return;
+                mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
+                if (isPrimitive(returnType)) unbox(returnType);
+                else topOfStack(Object.class);
+                mv.visitLabel(after);
             }
-            mv.visitJumpInsn(IFEQ, elseStart);
 
-            compile(then, returnType, tail);
-            Type typeOfThenBranch = topOfStack;
-            mv.goTo(end);
+            public void KL_if(boolean tail, Type returnType, Object test, Object then, Object _else) throws Exception {
+                Label elseStart = mv.newLabel();
+                Label end = mv.newLabel();
 
-            mv.visitLabel(elseStart);
-            compile(_else, returnType, tail);
+                compile(test, BOOLEAN_TYPE, false);
+                if (!BOOLEAN_TYPE.equals(topOfStack)) {
+                    popStack();
+                    mv.throwException(getType(IllegalArgumentException.class), "boolean expected");
+                    return;
+                }
+                mv.visitJumpInsn(IFEQ, elseStart);
 
-            mv.visitLabel(end);
-            if (!typeOfThenBranch.equals(topOfStack) && !isPrimitive(returnType))
+                compile(then, returnType, tail);
+                Type typeOfThenBranch = topOfStack;
+                mv.goTo(end);
+
+                mv.visitLabel(elseStart);
+                compile(_else, returnType, tail);
+
+                mv.visitLabel(end);
+                if (!typeOfThenBranch.equals(topOfStack) && !isPrimitive(returnType))
+                    topOfStack(Object.class);
+            }
+
+            public void cond(boolean tail, Type returnType, List... clauses) throws Exception {
+                if (clauses.length == 0)
+                    mv.throwException(getType(IllegalArgumentException.class), "condition failure");
+                else
+                    KL_if(tail, returnType, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
+            }
+
+            public void or(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
+                if (clauses.length == 0)
+                    bindTo(handle(RT.mh(RT.class, "or")), x);
+                else {
+                    KL_if(tail, BOOLEAN_TYPE, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+                    if (!isPrimitive(returnType)) mv.box(returnType);
+                }
+            }
+
+            public void and(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
+                if (clauses.length == 0)
+                    bindTo(handle(RT.mh(RT.class, "and")), x);
+                else {
+                    KL_if(tail, BOOLEAN_TYPE, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+                    if (!isPrimitive(returnType)) mv.box(returnType);
+                }
+            }
+
+            public void value(boolean tail, Type returnType, Object x) throws Throwable {
+                compile(x, false);
+                maybeCast(Symbol.class);
+                mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
                 topOfStack(Object.class);
-        }
-
-        void popStack() {
-            if (topOfStack.getSize() == 1) mv.pop(); else mv.pop2();
-        }
-
-        @Macro
-        public void cond(boolean tail, Type returnType, List... clauses) throws Exception {
-            if (clauses.length == 0)
-                mv.throwException(getType(IllegalArgumentException.class), "condition failure");
-            else
-                KL_if(tail, returnType, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
-        }
-
-        @Macro
-        public void or(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
-            if (clauses.length == 0)
-                bindTo(handle(RT.mh(RT.class, "or")), x);
-            else {
-                KL_if(tail, BOOLEAN_TYPE, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
-                if (!isPrimitive(returnType)) mv.box(returnType);
             }
-        }
 
-        @Macro
-        public void and(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
-            if (clauses.length == 0)
-                bindTo(handle(RT.mh(RT.class, "and")), x);
-            else {
-                KL_if(tail, BOOLEAN_TYPE, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
-                if (!isPrimitive(returnType)) mv.box(returnType);
+            public void lambda(boolean tail, Type returnType, Symbol x, Object y) throws Throwable {
+                fn("__lambda__", y, x);
             }
-        }
 
-        @Macro
-        public void value(boolean tail, Type returnType, Object x) throws Throwable {
-            compile(x, false);
-            maybeCast(Symbol.class);
-            mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
-            topOfStack(Object.class);
-        }
+            public void freeze(boolean tail, Type returnType, Object x) throws Throwable {
+                fn("__freeze__", x);
+            }
 
-        void maybeCast(Class<?> type) {
-            if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
-            topOfStack(type);
-        }
+            public void defun(boolean tail, Type returnType, Symbol name, final List<Symbol> args, Object body) throws Throwable {
+                push(name);
+                debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
+                fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
+                mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
+                topOfStack(Symbol.class);
+            }
 
-        @Macro
-        public void lambda(boolean tail, Type returnType, Symbol x, Object y) throws Throwable {
-            fn("__lambda__", y, x);
-        }
+            public void let(boolean tail, Type returnType, Symbol x, Object y, Object z) throws Throwable {
+                compile(y, false);
+                int let = mv.newLocal(topOfStack);
+                mv.storeLocal(let);
+                Integer hidden = locals.put(x, let);
+                compile(z, returnType, tail);
+                if (hidden != null) locals.put(x, hidden);
+                else locals.remove(x);
+            }
 
-        @Macro
-        public void freeze(boolean tail, Type returnType, Object x) throws Throwable {
-            fn("__freeze__", x);
-        }
-
-        @Macro
-        public void defun(boolean tail, Type returnType, Symbol name, final List<Symbol> args, Object body) throws Throwable {
-            push(name);
-            debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
-            fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
-            mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
-            topOfStack(Symbol.class);
+            public void KL_do(boolean tail, Type returnType, Object... xs) throws Throwable {
+                Iterator<?> i = asList(xs).iterator();
+                while (i.hasNext()) {
+                    boolean last = i.hasNext();
+                    compile(i.next(), last ? getType(Object.class) : returnType, last && tail);
+                    if (!last) popStack();
+                }
+            }
         }
 
         void fn(String name, Object shen, Symbol... args) throws Throwable {
@@ -1195,26 +1192,6 @@ public class Shen {
                     return toList(mapcat(list.stream(), o -> closesOver(scope, o)));
             }
             return list();
-        }
-
-        @Macro
-        public void let(boolean tail, Type returnType, Symbol x, Object y, Object z) throws Throwable {
-            compile(y, false);
-            int let = mv.newLocal(topOfStack);
-            mv.storeLocal(let);
-            Integer hidden = locals.put(x, let);
-            compile(z, returnType, tail);
-            if (hidden != null) locals.put(x, hidden);
-            else locals.remove(x);
-        }
-
-        @Macro
-        public void KL_do(boolean tail, Type returnType, Object... xs) throws Throwable {
-            for (int i = 0; i < xs.length; i++) {
-                boolean last = i == xs.length - 1;
-                compile(xs[i], last ? returnType : getType(Object.class), last && tail);
-                if (!last) popStack();
-            }
         }
 
         void emptyList() {
@@ -1269,6 +1246,26 @@ public class Shen {
             topOfStack(aClass);
         }
 
+        void box() {
+            Type maybePrimitive = topOfStack;
+            mv.valueOf(maybePrimitive);
+            topOfStack = boxedType(maybePrimitive);
+        }
+
+        void unbox(Type type) {
+            mv.unbox(type);
+            topOfStack = type;
+        }
+
+        void popStack() {
+            if (topOfStack.getSize() == 1) mv.pop(); else mv.pop2();
+        }
+
+        void maybeCast(Class<?> type) {
+            if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
+            topOfStack(type);
+        }
+
         void topOfStack(Class<?> aClass) {
             topOfStack = getType(aClass);
         }
@@ -1297,16 +1294,10 @@ public class Shen {
             mv = generator(modifiers, method(bytecodeName, desc(returnType, argumentTypes)));
             recur = mv.newLabel();
             mv.visitLabel(recur);
-            compile(shen);
+            compile(kl);
             if (isPrimitive(topOfStack)) box();
             mv.returnValue();
             mv.endMethod();
-        }
-
-        void box() {
-            Type maybePrimitive = topOfStack;
-            mv.valueOf(maybePrimitive);
-            topOfStack = boxedType(maybePrimitive);
         }
 
         void constructor() {
