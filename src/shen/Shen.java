@@ -473,11 +473,9 @@ public class Shen {
     }
 
     static void install() throws Throwable {
-        long start = currentTimeMillis();
         for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
                 "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
             load("klambda/" + file, Callable.class).newInstance().call();
-        debug("install took %f s", (currentTimeMillis() - start) / 1000.0);
     }
 
     @SuppressWarnings("unchecked")
@@ -581,7 +579,7 @@ public class Shen {
                 value = mh(Symbol.class, "value"), primVar = field(Symbol.class, "primVar"),
                 booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
                 intValue = explicitCastArguments(primVar, methodType(int.class, Symbol.class)),
-                doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble"));
+                doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")), apply = mh(RT.class, "apply");
 
         @SafeVarargs
         public static <T> List<T> list(T... elements) {
@@ -715,6 +713,17 @@ public class Shen {
             return site;
         }
 
+        public static Object apply(Object target, Object... args) throws Throwable {
+            MethodHandle mh =  target instanceof Symbol ? function((Symbol) target) : (MethodHandle) target;
+            if (isLambda(mh)) return uncurry(mh, args);
+            if (mh.type().parameterCount() > args.length) return insertArguments(mh, 0, args);
+            return mh.invokeWithArguments(args);
+        }
+
+        public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
+            return new ConstantCallSite(mh(RT.class, "apply").asCollector(Object[].class, type.parameterCount() - 1).asType(type));
+        }
+
         static void debug(String format, Object... args) {
             if (isDebug()) System.err.println(format(format,
                     stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
@@ -817,24 +826,6 @@ public class Shen {
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException(e);
             }
-        }
-
-        public static Object apply(Object target, Object... args) throws Throwable {
-            return apply(target.getClass() == Symbol.class ? function((Symbol) target) : (MethodHandle) target, args);
-        }
-
-        public static Object apply(MethodHandle fn, Object... args) throws Throwable {
-            if (isLambda(fn)) return uncurry(fn, args);
-
-            MethodType targetType = methodType(Object.class, toList(stream(args).map(Object::getClass)));
-            int nonVarargs = fn.isVarargsCollector() ? fn.type().parameterCount() - 1 : fn.type().parameterCount();
-            if (nonVarargs > args.length) {
-                MethodHandle partial = insertArguments(fn.asType(fn.type()
-                        .dropParameterTypes(0, targetType.parameterCount())
-                        .insertParameterTypes(0, targetType.parameterArray())), 0, args);
-                return fn.isVarargsCollector() ? partial.asVarargsCollector(fn.type().parameterType(nonVarargs)) : partial;
-            }
-            return insertArguments(fn.asType(targetType), 0, args).invokeExact();
         }
 
         static Object uncurry(Object chain, Object... args) throws Throwable {
@@ -974,7 +965,7 @@ public class Shen {
 
                         } else {
                             compile(first, tail);
-                            apply(tl(list));
+                            apply(returnType, tl(list));
                         }
                     }
                 } else
@@ -1035,11 +1026,11 @@ public class Shen {
             return self.equals(s) && args.size() == this.args.size();
         }
 
-        void apply(List<Object> args) {
-            box();
-            loadArgArray(args);
-            mv.invokeStatic(getType(RT.class), method("apply", desc(Object.class, Object.class, Object[].class)));
-            topOfStack(Object.class);
+        void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
+            List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
+            argumentTypes.add(0, getType(Object.class));
+            mv.invokeDynamic("apply", desc(returnType, argumentTypes), handle(mh(RT.class, "applyBSM")));
+            topOfStack = returnType;
         }
 
         class Macros {

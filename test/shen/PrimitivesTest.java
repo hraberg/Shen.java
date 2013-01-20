@@ -338,6 +338,13 @@ public class PrimitivesTest {
     public void function() {
         is(3, "((function +) 1 2)");
         is(3.0, "((function +) 1 2.0)");
+        is(intern("x"), "(defun x () y)");
+        is(intern("y"), "(let z x (z)))");
+        is(intern("x"), "(defun x (y) y)");
+        is(2, "(let a x (a 2)))");
+        is(intern("x"), "(defun x (y) (y))");
+        is(intern("y"), "(defun y () 1))");
+        is(1, "(x y)");
     }
 
     @Test
@@ -421,6 +428,9 @@ public class PrimitivesTest {
         is(intern("fun"), "(defun fun (x y) (- x y))");
         is(-1, "(fun 1 2)");
         is(-1, "(fun2)");
+        is(intern("fun"), "(defun fun (x y) (+ x y))");
+        is(3, "(fun 1 2)");
+        is(3, "(fun2)");
     }
 
     void is(Object expected, String actual) {
