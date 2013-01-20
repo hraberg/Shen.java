@@ -469,8 +469,8 @@ public class Shen {
         return intern(property).primVar == 1;
     }
 
-    public static Object eval(String shen) throws Throwable {
-        return eval_kl(read(new StringReader(shen)).get(0));
+    public static Object eval(String kl) throws Throwable {
+        return eval_kl(read(new StringReader(kl)).get(0));
     }
 
     static void install() throws Throwable {
@@ -755,16 +755,6 @@ public class Shen {
             return new Handle(Opcodes.H_INVOKESTATIC, className, name, desc);
         }
 
-        static Object uncurry(Object chain, Object... args) throws Throwable {
-            for (Object arg : args)
-                chain = ((MethodHandle) chain).invokeExact(arg);
-            return chain;
-        }
-
-        static boolean isLambda(MethodHandle fn) {
-            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector() && Object.class == fn.type().parameterType(0);
-        }
-
         static Type boxedType(Type type) {
             if (!isPrimitive(type)) return type;
             return getType(forBasicType(type.getDescriptor().charAt(0)).wrapperType());
@@ -848,6 +838,16 @@ public class Shen {
             return insertArguments(fn.asType(targetType), 0, args).invokeExact();
         }
 
+        static Object uncurry(Object chain, Object... args) throws Throwable {
+            for (Object arg : args)
+                chain = ((MethodHandle) chain).invokeExact(arg);
+            return chain;
+        }
+
+        static boolean isLambda(MethodHandle fn) {
+            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector() && Object.class == fn.type().parameterType(0);
+        }
+
         public static MethodHandle bindTo(MethodHandle fn, Object arg) {
             return fn.isVarargsCollector() ?
                     insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
@@ -867,9 +867,8 @@ public class Shen {
         }
 
         static String unscramble(String s) {
-            return toSourceName(s).replaceAll("_", "-").replaceAll("^KL-", "")
-                    .replaceAll("GT", ">").replaceAll("LT", "<")
-                    .replaceAll("EX$", "!").replaceAll("P$", "?").replaceAll("^AT", "@");
+            return toSourceName(s).replaceAll("_", "-").replaceAll("^KL-", "") .replaceAll("GT", ">")
+                    .replaceAll("LT", "<").replaceAll("EX$", "!").replaceAll("P$", "?").replaceAll("^AT", "@");
         }
 
         static MethodHandle findSAM(Object lambda) {
@@ -1158,9 +1157,9 @@ public class Shen {
             }
         }
 
-        void fn(String name, Object shen, Symbol... args) throws Throwable {
+        void fn(String name, Object kl, Symbol... args) throws Throwable {
             String bytecodeName = toBytecodeName(name) + "_" + id++;
-            List<Symbol> scope = closesOver(new HashSet<>(asList(args)), shen);
+            List<Symbol> scope = closesOver(new HashSet<>(asList(args)), kl);
             scope.retainAll(concat(locals.keySet(), this.args));
 
             List<Type> types = toList(scope.stream().map(this::typeOf));
@@ -1170,16 +1169,16 @@ public class Shen {
             insertArgs(0, scope);
 
             scope.addAll(asList(args));
-            Compiler fn = new Compiler(cw, className, shen, scope.toArray(new Symbol[scope.size()]));
+            Compiler fn = new Compiler(cw, className, kl, scope.toArray(new Symbol[scope.size()]));
             fn.method(ACC_PUBLIC | ACC_STATIC, intern(name), bytecodeName, getType(Object.class), types);
         }
 
         @SuppressWarnings({"unchecked"})
-        List<Symbol> closesOver(Set<Symbol> scope, Object shen) {
-            if (shen instanceof Symbol && !scope.contains(shen))
-                return list((Symbol) shen);
-            if (shen instanceof List) {
-                List<Object> list = (List) shen;
+        List<Symbol> closesOver(Set<Symbol> scope, Object kl) {
+            if (kl instanceof Symbol && !scope.contains(kl))
+                return list((Symbol) kl);
+            if (kl instanceof List) {
+                List<Object> list = (List) kl;
                 if (!list.isEmpty())
                     if (intern("let").equals(hd(list)))
                         return concat(closesOver(new HashSet<>(scope), list.get(2)),
