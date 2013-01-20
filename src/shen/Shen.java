@@ -403,7 +403,7 @@ public class Shen {
             MethodHandle fn = x.fn.get(0);
             if (x.fn.size() > 1) {
                 int arity = fn.type().parameterCount();
-                return linker(new MutableCallSite(genericMethodType(arity)), toBytecodeName(x.symbol), arity);
+                return relinker(toBytecodeName(x.symbol), arity);
             }
             return fn;
         }
@@ -623,8 +623,7 @@ public class Shen {
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
-                MethodHandle partial = linker(new MutableCallSite(genericMethodType(arity)), name, arity);
-                partial = insertArguments(partial, 0, args);
+                MethodHandle partial = insertArguments(relinker(name, arity), 0, args);
                 debug("partial: %s", partial);
                 return partial;
             }
@@ -636,12 +635,13 @@ public class Shen {
                     .min((x, y) -> without(y.type().parameterList(), Object.class).size()
                             - without(x.type().parameterList(), Object.class).size()).get();
             debug("selected: %s", match);
-            site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(site, match), site.getTarget()));
+            MethodHandle fallback = linker(site, toBytecodeName(name)).asType(site.type());
+            site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(match, fallback), fallback));
             return insertArguments(match.asType(match.type().changeReturnType(Object.class)), 0, args).invokeExact();
         }
 
-        static MethodHandle relinkOnClassCast(MutableCallSite site, MethodHandle fn) {
-            return catchException(fn.asType(site.type()), ClassCastException.class, dropArguments(site.getTarget(), 0, Exception.class));
+        static MethodHandle relinkOnClassCast(MethodHandle fn, MethodHandle fallback) {
+            return catchException(fn.asType(fallback.type()), ClassCastException.class, dropArguments(fallback, 0, Exception.class));
         }
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
@@ -651,7 +651,8 @@ public class Shen {
                     return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
             if (name.startsWith("."))
-                return relinkOnClassCast(site, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()));
+                return relinkOnClassCast(findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()),
+                        linker(site, toBytecodeName(name)));
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && intern(classAndMethod[0]).var instanceof Class)
                 return findJavaMethod(type, classAndMethod[1], ((Class) intern(classAndMethod[0]).value()).getMethods());
@@ -693,13 +694,31 @@ public class Shen {
             });
         }
 
-        static MethodHandle linker(MutableCallSite site, String name, int arity) throws IllegalAccessException {
-            return insertArguments(link, 0, site, name).asCollector(Object[].class, arity);
+        public static Object apply(Object target, Object... args) throws Throwable {
+            MethodHandle mh =  target.getClass() == Symbol.class ? function((Symbol) target) : (MethodHandle) target;
+            if (isLambda(mh)) return uncurry(mh, args);
+            if (mh.type().parameterCount() > args.length) return insertArguments(mh, 0, args);
+            return mh.invokeWithArguments(args);
+        }
+
+        static MethodHandle linker(MutableCallSite site, String name) throws IllegalAccessException {
+            return insertArguments(link, 0, site, name).asCollector(Object[].class, site.type().parameterCount());
+        }
+
+        static Map<String, MethodHandle> relinkers = new HashMap<>();
+
+        static MethodHandle relinker(String name, int arity) throws IllegalAccessException {
+            String key = name + "-" + arity;
+            if (!relinkers.containsKey(key)) relinkers.put(key, linker(new MutableCallSite(genericMethodType(arity)) {
+                public void setTarget(MethodHandle newTarget) {
+                }
+            }, name));
+            return relinkers.get(key);
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
             MutableCallSite site = new MutableCallSite(type);
-            site.setTarget(linker(site, name, type.parameterCount()).asType(type));
+            site.setTarget(linker(site, name).asType(type));
             return site;
         }
 
@@ -713,20 +732,8 @@ public class Shen {
             return site;
         }
 
-        public static Object apply(Object target, Object... args) throws Throwable {
-            MethodHandle mh =  target.getClass() == Symbol.class ? function((Symbol) target) : (MethodHandle) target;
-            if (isLambda(mh)) return uncurry(mh, args);
-            if (mh.type().parameterCount() > args.length) return insertArguments(mh, 0, args);
-            return mh.invokeWithArguments(args);
-        }
-
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
             return new ConstantCallSite(apply.asCollector(Object[].class, type.parameterCount() - 1).asType(type));
-        }
-
-        static void debug(String format, Object... args) {
-            if (isDebug()) System.err.println(format(format,
-                    stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) {
@@ -1342,6 +1349,11 @@ public class Shen {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    static void debug(String format, Object... args) {
+        if (isDebug()) System.err.println(format(format,
+                stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
     }
 
     @SuppressWarnings("unchecked")
