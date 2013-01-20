@@ -4,8 +4,8 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -233,10 +233,10 @@ public class PrimitivesTest {
     @Test
     public void streams() {
         is(String.class, "(set fileName (cn (str (get-time run)) \".txt\"))");
-        is(FileOutputStream.class, "(set writeFile (open file (value fileName) out))");
+        is(OutputStream.class, "(set writeFile (open file (value fileName) out))");
         is("foobar", "(pr \"foobar\" (value writeFile))");
         is(asList(), "(close (value writeFile))");
-        is(FileInputStream.class, "(set readFile (open file (value fileName) in))");
+        is(InputStream.class, "(set readFile (open file (value fileName) in))");
         is(102, "(read-byte (value readFile))");
         is(111, "(read-byte (value readFile))");
         is(false, "(= 102 (read-byte (value readFile)))");

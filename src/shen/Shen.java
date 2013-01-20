@@ -336,8 +336,8 @@ public class Shen {
             if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
             File file = new File((String) intern("*home-directory*").value(), string);
             switch (direction.symbol) {
-                case "in": return new FileInputStream(file);
-                case "out": return new FileOutputStream(file);
+                case "in": return new BufferedInputStream(new FileInputStream(file));
+                case "out": return new BufferedOutputStream(new FileOutputStream(file));
             }
             throw new IllegalArgumentException("invalid direction");
         }
@@ -421,26 +421,45 @@ public class Shen {
     }
 
     public static class Overrides {
-        public static boolean variableP(MethodHandle target, Object x) {
+        public static boolean variableP(Object x) {
             return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
         }
 
-        public static boolean booleanP(MethodHandle target, Object x) {
+        public static boolean booleanP(Object x) {
             return x instanceof Boolean;
         }
 
-        public static boolean elementP(MethodHandle target, Object x, Collection z) {
+        public static boolean elementP(Object x, Collection z) {
             return z.contains(x);
         }
 
-        public static Object[] ATp(MethodHandle target, Object x, Object y) {
+        public static Object[] ATp(Object x, Object y) {
             return new Object[] {intern("shen-tuple"), x, y};
         }
 
-        public static Object shen_compose(MethodHandle target, List fs, Object x) throws Throwable {
+        public static Object shen_compose(List fs, Object x) throws Throwable {
             for (Object f : fs)
                 x = apply(f, x);
             return x;
+        }
+
+        public static Object shen_walk(Object x, Object y) throws Throwable {
+            if (y instanceof List)
+                //noinspection unchecked
+                return apply(x, toList(((List<Object>) y).stream().map((Object z) -> {
+                    try {
+                        return shen_walk(x, z);
+                    } catch (Throwable t) {
+                        throw new RuntimeException(t);
+                    }
+                })));
+            return apply(x, y);
+        }
+
+        public static Object macroexpand(Object x) throws Throwable {
+            Object y = shen_compose((List) intern("*macros*").value(), x);
+            if (x.equals(y)) return x;
+            return shen_walk(intern("macroexpand"), y);
         }
     }
 
@@ -778,8 +797,8 @@ public class Shen {
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
-            if (overrides.containsKey(name) && name.fn.isEmpty())
-                fn  = overrides.get(name).bindTo(fn);
+            if (overrides.containsKey(name))
+                fn  = overrides.get(name);
             name.fn.clear();
             name.fn.add(fn);
             invalidateAll(new SwitchPoint[] {name.fnGuard});
