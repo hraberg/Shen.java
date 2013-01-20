@@ -123,7 +123,7 @@ public class Shen {
         public long primVar;
         public int tag = Type.OBJECT;
 
-        public Symbol(String symbol) {
+        Symbol(String symbol) {
             this.symbol = symbol.intern();
         }
 
@@ -152,7 +152,6 @@ public class Shen {
         public boolean equals(Object o) {
             //noinspection StringEquality
             return o instanceof Symbol && symbol == ((Symbol) o).symbol;
-
         }
 
         public int hashCode() {
@@ -397,7 +396,7 @@ public class Shen {
         }
 
         static Boolean set(String x, Boolean y) {
-            return set(intern(x), y);
+            return set(intern(x), (boolean) y);
         }
 
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
@@ -821,7 +820,7 @@ public class Shen {
         }
 
         public static Object apply(Object target, Object... args) throws Throwable {
-            return apply(target instanceof Symbol ? function((Symbol) target) : (MethodHandle) target, args);
+            return apply(target.getClass() == Symbol.class ? function((Symbol) target) : (MethodHandle) target, args);
         }
 
         public static Object apply(MethodHandle fn, Object... args) throws Throwable {
