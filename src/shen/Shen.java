@@ -2,6 +2,7 @@ package shen;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.GeneratorAdapter;
+import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.util.ASMifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 import sun.invoke.anon.AnonymousClassLoader;
@@ -41,8 +42,8 @@ import static java.util.Arrays.*;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
+import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
-import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Type.*;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
@@ -70,8 +71,9 @@ public class Shen {
         set("*port*", version());
         set("*stinput*", in);
         set("*stoutput*", out);
-        set("*debug*", false);
-        set("*compile-path*", "target/classes");
+        set("*debug*", Boolean.valueOf(getProperty("shen.debug", "false")));
+        set("*debug-asm*", Boolean.valueOf(getProperty("shen.debug.asm", "false")));
+        set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
         stream(Primitives.class.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(RT::defun);
@@ -396,6 +398,10 @@ public class Shen {
             return set(intern(x), y);
         }
 
+        static Boolean set(String x, Boolean y) {
+            return set(intern(x), y);
+        }
+
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
             MethodHandle fn = x.fn.get(0);
             if (x.fn.size() > 1) {
@@ -439,7 +445,11 @@ public class Shen {
     }
 
     static boolean isDebug() {
-        return intern("*debug*").primVar == 1 || (boolean) intern("*debug*").value();
+        return booleanProperty("*debug*");
+    }
+
+    static boolean booleanProperty(String property) {
+        return intern(property).primVar == 1;
     }
 
     public static Object eval(String shen) throws Throwable {
@@ -904,7 +914,7 @@ public class Shen {
         }
 
         ClassWriter classWriter(String name, Class<?> anInterface) {
-            ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
+            ClassWriter cw = new ClassWriter(COMPUTE_FRAMES);
             cw.visit(V1_7, ACC_PUBLIC, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
             return cw;
         }
@@ -957,17 +967,19 @@ public class Shen {
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
-                if (isPrimitive(returnType) && !isPrimitive(topOfStack)) {
-                    mv.unbox(returnType);
-                    topOfStack = returnType;
-                } else if (!isPrimitive(returnType) && isPrimitive(topOfStack))
-                    box();
+                if (isPrimitive(returnType) && !isPrimitive(topOfStack)) unbox(returnType);
+                else if (!isPrimitive(returnType) && isPrimitive(topOfStack)) box();
                 return topOfStack;
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
+        }
+
+        void unbox(Type type) {
+            mv.unbox(type);
+            topOfStack = type;
         }
 
         void lineNumber(List<Object> list) {
@@ -1016,7 +1028,7 @@ public class Shen {
             box();
             loadArgArray(args);
             mv.invokeStatic(getType(RT.class), method("apply", desc(Object.class, Object.class, Object[].class)));
-            topOfStack = getType(Object.class);
+            topOfStack(Object.class);
         }
 
         @Macro
@@ -1026,8 +1038,7 @@ public class Shen {
             Label after = mv.newLabel();
 
             mv.visitLabel(start);
-            compile(x, false);
-            box();
+            compile(x, returnType, false);
             mv.goTo(after);
             mv.visitLabel(end);
 
@@ -1038,8 +1049,9 @@ public class Shen {
             bindTo();
 
             mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
+            if (isPrimitive(returnType)) unbox(returnType);
+            else topOfStack(Object.class);
             mv.visitLabel(after);
-            topOfStack(Object.class);
         }
 
         @Macro
@@ -1063,8 +1075,8 @@ public class Shen {
             compile(_else, returnType, tail);
 
             mv.visitLabel(end);
-            if (!typeOfThenBranch.equals(topOfStack))
-                topOfStack = returnType;
+            if (!typeOfThenBranch.equals(topOfStack) && !isPrimitive(returnType))
+                topOfStack(Object.class);
         }
 
         void popStack() {
@@ -1172,7 +1184,7 @@ public class Shen {
             int let = mv.newLocal(topOfStack);
             mv.storeLocal(let);
             Integer hidden = locals.put(x, let);
-            compile(z, tail);
+            compile(z, returnType, tail);
             if (hidden != null) locals.put(x, hidden);
             else locals.remove(x);
         }
@@ -1181,7 +1193,7 @@ public class Shen {
         public void KL_do(boolean tail, Type returnType, Object... xs) throws Throwable {
             for (int i = 0; i < xs.length; i++) {
                 boolean last = i == xs.length - 1;
-                compile(xs[i], last  && tail);
+                compile(xs[i], last ? returnType : getType(Object.class), last && tail);
                 if (!last) popStack();
             }
         }
@@ -1219,7 +1231,7 @@ public class Shen {
                 box();
                 mv.arrayStore(getType(Object.class));
             }
-            topOfStack = getType(Object[].class);
+            topOfStack(Object[].class);
         }
 
         void push(Symbol kl) throws ReflectiveOperationException {
@@ -1251,10 +1263,11 @@ public class Shen {
                 List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
                 method(ACC_PUBLIC, intern(sam.getName()), toBytecodeName(sam.getName()), getType(sam.getReturnType()), types);
                 bytes = cw.toByteArray();
+                if (booleanProperty("*debug-asm*")) printASM(bytes, sam);
                 //noinspection unchecked
                 return (Class<T>) loader.loadClass(bytes);
             } catch (VerifyError e) {
-                printASM(bytes);
+                printASM(bytes, null);
                 throw e;
             }
         }
@@ -1266,7 +1279,7 @@ public class Shen {
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(shen);
-            if (!isPrimitive(returnType)) box();
+            if (isPrimitive(topOfStack)) box();
             mv.returnValue();
             mv.endMethod();
         }
@@ -1307,8 +1320,19 @@ public class Shen {
             topOfStack(MethodHandle.class);
         }
 
-        static void printASM(byte[] bytes) {
-            new ClassReader(bytes).accept(new TraceClassVisitor(null, new ASMifier(), new PrintWriter(System.out)), ClassReader.SKIP_DEBUG);
+        static void printASM(byte[] bytes, Method method) {
+            ASMifier asm = new ASMifier();
+            PrintWriter pw = new PrintWriter(System.err);
+            TraceClassVisitor printer = new TraceClassVisitor(null, asm, pw);
+            if (method == null)
+               new ClassReader(bytes).accept(printer, SKIP_DEBUG);
+            else {
+                ClassNode cn = new ClassNode();
+                new ClassReader(bytes).accept(cn, SKIP_DEBUG);
+                find(cn.methods.stream(), mn -> mn.name.equals(method.getName())).accept(printer);
+                asm.print(pw);
+                pw.flush();
+            }
         }
 
         static Unsafe unsafe() {

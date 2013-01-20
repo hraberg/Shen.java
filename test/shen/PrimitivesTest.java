@@ -45,6 +45,8 @@ public class PrimitivesTest {
         is(1.0, "(/ 1 1)");
         is(-1, "(trap-error (/ 1 0) (lambda E -1))");
         is(1.0, "(trap-error (/ 1 1) (lambda E -1))");
+        is(-1, "(if (trap-error (/ 1 0) (lambda E true)) -1 false)");
+        is(-1, "(if (trap-error (= 1 1) (lambda E false)) -1 false)");
         is("testError", "(trap-error (set newError (simple-error \"testError\")) (lambda E (error-to-string E)))");
     }
 
