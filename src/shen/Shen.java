@@ -714,14 +714,14 @@ public class Shen {
         }
 
         public static Object apply(Object target, Object... args) throws Throwable {
-            MethodHandle mh =  target instanceof Symbol ? function((Symbol) target) : (MethodHandle) target;
+            MethodHandle mh =  target.getClass() == Symbol.class ? function((Symbol) target) : (MethodHandle) target;
             if (isLambda(mh)) return uncurry(mh, args);
             if (mh.type().parameterCount() > args.length) return insertArguments(mh, 0, args);
             return mh.invokeWithArguments(args);
         }
 
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
-            return new ConstantCallSite(mh(RT.class, "apply").asCollector(Object[].class, type.parameterCount() - 1).asType(type));
+            return new ConstantCallSite(apply.asCollector(Object[].class, type.parameterCount() - 1).asType(type));
         }
 
         static void debug(String format, Object... args) {
