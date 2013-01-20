@@ -930,6 +930,10 @@ public class Shen {
         }
 
         Type compile(Object kl, boolean tail) {
+            return compile(kl, getType(Object.class), tail);
+        }
+
+        Type compile(Object kl, Type returnType, boolean tail) {
             try {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -943,8 +947,8 @@ public class Shen {
                         Object first = list.get(0);
                         if (first instanceof Symbol && !inScope((Symbol) first)) {
                             Symbol s = (Symbol) first;
-                            if (macros.containsKey(s)) macroExpand(s, tl(list), tail);
-                            else indy(s, tl(list), tail);
+                            if (macros.containsKey(s)) macroExpand(s, tl(list), returnType, tail);
+                            else indy(s, tl(list), returnType, tail);
 
                         } else {
                             compile(first, tail);
@@ -953,12 +957,17 @@ public class Shen {
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
+                if (isPrimitive(returnType) && !isPrimitive(topOfStack)) {
+                    mv.unbox(returnType);
+                    topOfStack = returnType;
+                } else if (!isPrimitive(returnType) && isPrimitive(topOfStack))
+                    box();
+                return topOfStack;
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
-            return topOfStack;
         }
 
         void lineNumber(List<Object> list) {
@@ -973,11 +982,11 @@ public class Shen {
             return (locals.containsKey(x) || args.contains(x));
         }
 
-        void macroExpand(Symbol s, List<Object> args, boolean tail) throws Throwable {
-            RT.bindTo(RT.bindTo(macros.get(s), this), tail).invokeWithArguments(args);
+        void macroExpand(Symbol s, List<Object> args, Type returnType, boolean tail) throws Throwable {
+            RT.bindTo(RT.bindTo(RT.bindTo(macros.get(s), this), tail), returnType).invokeWithArguments(args);
         }
 
-        void indy(Symbol s, List<Object> args, boolean tail) throws ReflectiveOperationException {
+        void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
             List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
 
             if (isSelfCall(s, args)) {
@@ -987,9 +996,6 @@ public class Shen {
                     return;
                 } else debug("can only recur from tail position: %s", s);
             }
-            Type returnType = s.fn.size() == 1
-                    ? getType(s.fn.get(0).type().returnType())
-                    : getType(Object.class);
             mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), handle(mh(RT.class, "invokeBSM")));
             topOfStack = returnType;
         }
@@ -1014,7 +1020,7 @@ public class Shen {
         }
 
         @Macro
-        public void trap_error(boolean tail, Object x, Object f) throws Throwable {
+        public void trap_error(boolean tail, Type returnType, Object x, Object f) throws Throwable {
             Label start = mv.newLabel();
             Label end = mv.newLabel();
             Label after = mv.newLabel();
@@ -1037,55 +1043,64 @@ public class Shen {
         }
 
         @Macro
-        public void KL_if(boolean tail, Object test, Object then, Object _else) throws Exception {
+        public void KL_if(boolean tail, Type returnType, Object test, Object then, Object _else) throws Exception {
             Label elseStart = mv.newLabel();
             Label end = mv.newLabel();
 
-            compile(test, false);
-            if (isPrimitive(topOfStack) && topOfStack != getType(boolean.class)) box();
-            if (!isPrimitive(topOfStack)) mv.unbox(getType(boolean.class));
+            compile(test, BOOLEAN_TYPE, false);
+            if (!BOOLEAN_TYPE.equals(topOfStack)) {
+                popStack();
+                mv.throwException(getType(IllegalArgumentException.class), "boolean expected");
+                return;
+            }
             mv.visitJumpInsn(IFEQ, elseStart);
 
-            compile(then, tail);
-            box();
+            compile(then, returnType, tail);
             Type typeOfThenBranch = topOfStack;
             mv.goTo(end);
 
             mv.visitLabel(elseStart);
-            compile(_else, tail);
-            box();
+            compile(_else, returnType, tail);
 
             mv.visitLabel(end);
             if (!typeOfThenBranch.equals(topOfStack))
-                topOfStack(Object.class);
+                topOfStack = returnType;
+        }
+
+        void popStack() {
+            if (topOfStack.getSize() == 1) mv.pop(); else mv.pop2();
         }
 
         @Macro
-        public void cond(boolean tail, List... clauses) throws Exception {
+        public void cond(boolean tail, Type returnType, List... clauses) throws Exception {
             if (clauses.length == 0)
                 mv.throwException(getType(IllegalArgumentException.class), "condition failure");
             else
-                KL_if(tail, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
+                KL_if(tail, returnType, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
         }
 
         @Macro
-        public void or(boolean tail, Object x, Object... clauses) throws Exception {
+        public void or(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
             if (clauses.length == 0)
                 bindTo(handle(RT.mh(RT.class, "or")), x);
-            else
-                KL_if(tail, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+            else {
+                KL_if(tail, BOOLEAN_TYPE, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
+                if (!isPrimitive(returnType)) mv.box(returnType);
+            }
         }
 
         @Macro
-        public void and(boolean tail, Object x, Object... clauses) throws Exception {
+        public void and(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
             if (clauses.length == 0)
                 bindTo(handle(RT.mh(RT.class, "and")), x);
-            else
-                KL_if(tail, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+            else {
+                KL_if(tail, BOOLEAN_TYPE, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
+                if (!isPrimitive(returnType)) mv.box(returnType);
+            }
         }
 
         @Macro
-        public void value(boolean tail, Object x) throws Throwable {
+        public void value(boolean tail, Type returnType, Object x) throws Throwable {
             compile(x, false);
             maybeCast(Symbol.class);
             mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
@@ -1098,17 +1113,17 @@ public class Shen {
         }
 
         @Macro
-        public void lambda(boolean tail, Symbol x, Object y) throws Throwable {
+        public void lambda(boolean tail, Type returnType, Symbol x, Object y) throws Throwable {
             fn("__lambda__", y, x);
         }
 
         @Macro
-        public void freeze(boolean tail, Object x) throws Throwable {
+        public void freeze(boolean tail, Type returnType, Object x) throws Throwable {
             fn("__freeze__", x);
         }
 
         @Macro
-        public void defun(boolean tail, Symbol name, final List<Symbol> args, Object body) throws Throwable {
+        public void defun(boolean tail, Type returnType, Symbol name, final List<Symbol> args, Object body) throws Throwable {
             push(name);
             debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
             fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
@@ -1152,7 +1167,7 @@ public class Shen {
         }
 
         @Macro
-        public void let(boolean tail, Symbol x, Object y, Object z) throws Throwable {
+        public void let(boolean tail, Type returnType, Symbol x, Object y, Object z) throws Throwable {
             compile(y, false);
             int let = mv.newLocal(topOfStack);
             mv.storeLocal(let);
@@ -1163,11 +1178,11 @@ public class Shen {
         }
 
         @Macro
-        public void KL_do(boolean tail, Object... xs) throws Throwable {
+        public void KL_do(boolean tail, Type returnType, Object... xs) throws Throwable {
             for (int i = 0; i < xs.length; i++) {
                 boolean last = i == xs.length - 1;
                 compile(xs[i], last  && tail);
-                if (!last) mv.pop();
+                if (!last) popStack();
             }
         }
 

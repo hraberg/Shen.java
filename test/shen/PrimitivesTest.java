@@ -104,7 +104,7 @@ public class PrimitivesTest {
     public void _if() {
         is(true, "(if true true false)");
         is(true, "(if false false true)");
-        is(-1, "(trap-error (if 5 true true) (lambda _ -1)");
+        is(-1, "(trap-error (if 5.0 true true) (lambda _ -1)");
     }
 
     @Test
