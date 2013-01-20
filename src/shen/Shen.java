@@ -705,15 +705,10 @@ public class Shen {
             return insertArguments(link, 0, site, name).asCollector(Object[].class, site.type().parameterCount());
         }
 
-        static Map<String, MethodHandle> relinkers = new HashMap<>();
-
         static MethodHandle relinker(String name, int arity) throws IllegalAccessException {
-            String key = name + "-" + arity;
-            if (!relinkers.containsKey(key)) relinkers.put(key, linker(new MutableCallSite(genericMethodType(arity)) {
-                public void setTarget(MethodHandle newTarget) {
-                }
-            }, name));
-            return relinkers.get(key);
+            return linker(new MutableCallSite(genericMethodType(arity)) {
+                public void setTarget(MethodHandle newTarget) {}
+            }, name);
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
