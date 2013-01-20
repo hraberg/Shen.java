@@ -94,6 +94,7 @@ The tests suite has 146 tests, so there are 30 to go. It's close to 10x slower t
 * Simple Java inter-op (based on Clojure's syntax).
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
+* Pre-compilation of the `kl` to `.class` files.
 
 
 ### Road Map
@@ -105,7 +106,6 @@ This is bound to change as we go:
 * Saner choice of target method.
 * Different bootstrap methods for invoke, apply and value/set.
 * Proper arithmetic.
-* Pre-compilation of the `kl` to `.class` files.
 * Ad-herence to Shen types when compiling typed Shen.
 * Performance.
 
