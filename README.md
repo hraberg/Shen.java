@@ -103,7 +103,7 @@ It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) r
 * The REPL.
 * Pre-compilation of the `kl` to `.class` files.
 * The Shen test suite, passes except for `interpreter.shen` which blows the stack.
-* Different bootstrap methods for invoke, apply and value. This isn't necessary
+* Different bootstrap methods for invoke, apply and value. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
 
 
