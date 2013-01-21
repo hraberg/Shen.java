@@ -546,6 +546,7 @@ public class Shen {
     public static class RT {
         static Lookup lookup = lookup();
         static Map<Symbol, MethodHandle> overrides = new HashMap<>();
+        static Map<String, CallSite> sites = new HashMap<>();
 
         static MethodHandle
                 link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"), hasTag = mh(Symbol.class, "hasTag"),
@@ -723,13 +724,15 @@ public class Shen {
             }, name);
         }
 
-        static Map<String, CallSite> sites = new HashMap<>();
-
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
-            if (intern(toSourceName(name)).fn.size() > 1) return invokeCallSite(name, type);
+            if (isOverloadedInternalFunction(name) > 1) return invokeCallSite(name, type);
             String key = name + type;
             if (!sites.containsKey(key)) sites.put(key, invokeCallSite(name, type));
             return sites.get(key);
+        }
+
+        static int isOverloadedInternalFunction(String name) {
+            return intern(toSourceName(name)).fn.size();
         }
 
         static CallSite invokeCallSite(String name, MethodType type) throws IllegalAccessException {
@@ -743,6 +746,16 @@ public class Shen {
         }
 
         public static CallSite valueBSM(Lookup lookup, String name, MethodType type) throws Exception {
+            String[] parts = name.split(":");
+            if (parts.length == 2)  {
+                String key = name + type;
+                if (!sites.containsKey(key)) sites.put(key, valueCallSite(type));
+                return sites.get(key);
+            }
+            return valueCallSite(type);
+        }
+
+        private static MutableCallSite valueCallSite(MethodType type) {
             MutableCallSite site = new MutableCallSite(type);
             site.setTarget(mh(RT.class, "value").bindTo(site).asType(type));
             return site;
@@ -1138,8 +1151,10 @@ public class Shen {
 
             public void value(boolean tail, Type returnType, Object x) throws Throwable {
                 compile(x, false);
+                String name = "__value__";
+                if (x instanceof Symbol && topOfStack.equals(getType(Symbol.class))) name += ":" + x;
                 maybeCast(Symbol.class);
-                mv.invokeDynamic("__value__", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
+                mv.invokeDynamic(name, desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
                 topOfStack(Object.class);
             }
 
