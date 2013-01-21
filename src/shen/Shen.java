@@ -399,11 +399,11 @@ public class Shen {
             return new Compiler(kl).load("__eval__", Callable.class).newInstance().call();
         }
 
-        public static boolean or(boolean x, boolean y) throws Exception {
+        public static boolean or(boolean x, boolean y) {
             return x || y;
         }
 
-        public static boolean and(boolean x, boolean y) throws Exception {
+        public static boolean and(boolean x, boolean y) {
             return x && y;
         }
     }
