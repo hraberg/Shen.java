@@ -17,16 +17,14 @@ See also: [shen.clj](https://github.com/hraberg/shen.clj)
 
 ## This Java Port
 
-Is a work in progress - it really doesn't work yet. The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
+**Shen.java is an [invokedynamic](http://www.slideshare.net/CharlesNutter/jax-2012-invoke-dynamic-keynote) based [K Lambda](http://www.shenlanguage.org/documentation/shendoc.htm) compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go. All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java). It now passes the Shen test suite except for one test (see below).
 
-**Shen.java is an [invokedynamic](http://www.slideshare.net/CharlesNutter/jax-2012-invoke-dynamic-keynote) based [K Lambda](http://www.shenlanguage.org/documentation/shendoc.htm) compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go.
-All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java).
+The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
 
-It's loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure.
-Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/2359095c59435597e5761c72dbe9f0246fad0864/src/shen/Shen.java) using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive.
-This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff.
+This port is loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure.
+Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/2359095c59435597e5761c72dbe9f0246fad0864/src/shen/Shen.java) using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive. It's currently 2x slower than `shen.clj`.
 
-There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
+This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff. There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
 
 
 ### To run the REPL:
@@ -73,11 +71,9 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 
 Is now close to passing. Functionaly it seems to work, but one test blows the stack. It is run at the end of the build:
 
-    ./build
-
+    ./build   # or ./tests if the jar already exists.
 
     [... loads of output ...]
-
     passed ... 145
     failed ...0
     pass rate ...100.0%
@@ -111,10 +107,10 @@ It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) r
 
 This is bound to change as we go:
 
-* Saner choice of target method.
-* Proper arithmetic.
-* Ad-herence to Shen types when compiling typed Shen.
-* Performance.
+* Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to ClassCastException. It's really only used for builtins.
+* Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
+* Ad-herence to Shen types when compiling typed Shen to Java.
+* Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
 
 
 ## References
