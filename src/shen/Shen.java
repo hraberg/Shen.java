@@ -420,6 +420,19 @@ public class Shen {
         public static Object[] ATp(Object x, Object y) {
             return new Object[] {intern("shen-tuple"), x, y};
         }
+
+        public static boolean elementP(Object x, Collection z) {
+            return z.contains(x);
+        }
+
+        public static boolean elementP(Object x, Cons z) {
+            while (z != null) {
+                if (z.car.equals(x) || z.cdr.equals(x)) return true;
+                if (z.cdr instanceof Cons) z = (Cons) z.cdr;
+                else return false;
+            }
+            return false;
+        }
     }
 
     static boolean isDebug() {
@@ -533,7 +546,7 @@ public class Shen {
 
     public static class RT {
         static Lookup lookup = lookup();
-        static Map<Symbol, MethodHandle> overrides = new HashMap<>();
+        static Set<Symbol> overrides = new HashSet<>();
         static Map<String, CallSite> sites = new HashMap<>();
 
         static MethodHandle
@@ -833,8 +846,7 @@ public class Shen {
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
-            if (overrides.containsKey(name))
-                fn = overrides.get(name);
+            if (overrides.contains(name)) return name;
             synchronized (name.symbol) {
                 SwitchPoint guard = name.fnGuard;
                 name.fn.clear();
@@ -854,11 +866,7 @@ public class Shen {
         }
 
         static void override(Method m) {
-            try {
-                overrides.put(intern(unscramble(m.getName())), lookup.unreflect(m));
-            } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
-            }
+            overrides.add(defun(m));
         }
 
         static Symbol defun(Method m) {
