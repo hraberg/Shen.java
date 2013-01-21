@@ -31,7 +31,6 @@ import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
 import static java.lang.invoke.MethodHandles.*;
-import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.genericMethodType;
 import static java.lang.invoke.MethodType.methodType;
@@ -583,7 +582,8 @@ public class Shen {
                 booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
                 intValue = explicitCastArguments(primVar, methodType(int.class, Symbol.class)),
                 doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")),
-                apply = mh(RT.class, "apply"), function = mh(RT.class, "function");
+                apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
+                checkClass2 = mh(RT.class, "checkClass2");
 
         @SafeVarargs
         public static <T> List<T> list(T... elements) {
@@ -633,15 +633,46 @@ public class Shen {
             }
 
             MethodHandle match = find(symbol.fn.stream(), f -> f.type().wrap().parameterList().equals(actualTypes));
-            if (match == null)
-                match = symbol.fn.stream()
-                    .filter(f -> canCast(actualTypes, f.type().parameterList()))
-                    .min((x, y) -> without(y.type().parameterList(), Object.class).size()
-                            - without(x.type().parameterList(), Object.class).size()).get();
-            debug("selected: %s", match);
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(site.type());
-            site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(match, fallback), fallback));
+            List<MethodHandle> candidates = toList(symbol.fn.stream()
+                    .filter(f -> canCast(actualTypes, f.type().parameterList()))
+                    .sorted((x, y) -> without(y.type().parameterList(), Object.class).size()
+                            - without(x.type().parameterList(), Object.class).size()));
+            if (match == null) match = candidates.get(0);
+            if (symbol.fn.size() >  1) {
+                MethodHandle test = null;
+                List<Class<?>> types = new ArrayList<>(match.type().parameterList());
+                types.removeAll(candidates.size() > 1 ? candidates.get(1).type().parameterList() : asList());
+                if (types.size() == 1) {
+                    int firstDifferent = match.type().parameterList().indexOf(types.get(0));
+                    debug("switching %s on %d argument type %s", name, firstDifferent, types.get(0));
+                    List<Class<?>> toDrop = site.type().dropParameterTypes(firstDifferent, arity).parameterList();
+                    test = checkClass.bindTo(match.type().parameterType(firstDifferent));
+                    test = dropArguments(test, 0, toDrop);
+                    test = test.asType(test.type().changeParameterType(firstDifferent, site.type().parameterType(firstDifferent)));
+                } else if (match.type().parameterCount() == 2) {
+                    List<Class<?>> firstTwo = match.type().parameterList().subList(0, 2);
+                    debug("switching %s on first two argument types %s", name, firstTwo);
+                    test = insertArguments(checkClass2, 0, firstTwo.toArray());
+                    test = test.asType(test.type().changeParameterType(0, site.type().parameterType(0)).changeParameterType(1, site.type().parameterType(1)));
+                } else {
+                    debug("falling back to exception guard for %s", name);
+                    match = relinkOnClassCast(match, fallback);
+                }
+                if (test != null)
+                    match = guardWithTest(test, match.asType(site.type()), site.getTarget());
+            }
+            debug("selected: %s", match);
+            site.setTarget(symbol.fnGuard.guardWithTest(match.asType(site.type()), fallback));
             return match.invokeWithArguments(args);
+        }
+
+        public static boolean checkClass(Class<?> xClass, Object x) {
+            return canCast(x.getClass(), xClass);
+        }
+
+        public static boolean checkClass2(Class<?> xClass, Class<?> yClass, Object x, Object y) {
+            return canCast(x.getClass(), xClass) && canCast(y.getClass(), yClass);
         }
 
         static MethodHandle relinkOnClassCast(MethodHandle fn, MethodHandle fallback) {
