@@ -579,20 +579,21 @@ public class Shen {
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
-            debug("LINKING: %s%s %s", name, site.type(), args);
+            MethodType type = site.type();
+            debug("LINKING: %s%s %s", name, type, args);
             List<Class<?>> actualTypes = toList(stream(args).map(Object::getClass));
             debug("actual types: %s", actualTypes);
             Symbol symbol = intern(name);
             debug("candidates: %s", symbol.fn);
 
             if (symbol.fn.isEmpty()) {
-                MethodHandle java = javaCall(site, name, site.type(), args);
+                MethodHandle java = javaCall(site, name, type, args);
                 if (java != null) {
                     debug("calling java: %s", java);
-                    site.setTarget(java.asType(site.type()));
+                    site.setTarget(java.asType(type));
                     return java.invokeWithArguments(args);
                 }
-                throw new NoSuchMethodException("undefined function " + name + site.type()
+                throw new NoSuchMethodException("undefined function " + name + type
                         + (symbol.fn.isEmpty() ?  "" : " in " + toList(symbol.fn.stream().map(MethodHandle::type))));
             }
 
@@ -603,8 +604,8 @@ public class Shen {
                 return partial;
             }
 
+            MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             MethodHandle match = find(symbol.fn.stream(), f -> f.type().wrap().parameterList().equals(actualTypes));
-            MethodHandle fallback = linker(site, toBytecodeName(name)).asType(site.type());
             List<MethodHandle> candidates = toList(symbol.fn.stream()
                     .filter(f -> canCast(actualTypes, f.type().parameterList()))
                     .sorted((x, y) -> without(y.type().parameterList(), Object.class).size()
@@ -617,24 +618,24 @@ public class Shen {
                 if (types.size() == 1) {
                     int firstDifferent = match.type().parameterList().indexOf(types.get(0));
                     debug("switching %s on %d argument type %s", name, firstDifferent, types.get(0));
-                    List<Class<?>> toDrop = site.type().dropParameterTypes(firstDifferent, arity).parameterList();
                     test = checkClass.bindTo(match.type().parameterType(firstDifferent));
-                    test = dropArguments(test, 0, toDrop);
-                    test = test.asType(test.type().changeParameterType(firstDifferent, site.type().parameterType(firstDifferent)));
-                } else if (match.type().parameterCount() == 2) {
+                    test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, arity).parameterList());
+                    test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
+                } else if (arity == 2) {
                     List<Class<?>> firstTwo = match.type().parameterList().subList(0, 2);
                     debug("switching %s on first two argument types %s", name, firstTwo);
                     test = insertArguments(checkClass2, 0, firstTwo.toArray());
-                    test = test.asType(test.type().changeParameterType(0, site.type().parameterType(0)).changeParameterType(1, site.type().parameterType(1)));
-                } else {
+                    test = test.asType(test.type().changeParameterType(0, type.parameterType(0)).changeParameterType(1, type.parameterType(1)));
+                }
+                if (test != null)
+                    match = guardWithTest(test, match.asType(type), site.getTarget());
+                else  {
                     debug("falling back to exception guard for %s", name);
                     match = relinkOnClassCast(match, fallback);
                 }
-                if (test != null)
-                    match = guardWithTest(test, match.asType(site.type()), site.getTarget());
             }
             debug("selected: %s", match);
-            site.setTarget(symbol.fnGuard.guardWithTest(match.asType(site.type()), fallback));
+            site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
             return match.invokeWithArguments(args);
         }
 
@@ -717,7 +718,8 @@ public class Shen {
 
         static MethodHandle relinker(String name, int arity) throws IllegalAccessException {
             return linker(new MutableCallSite(genericMethodType(arity)) {
-                public void setTarget(MethodHandle newTarget) {}
+                public void setTarget(MethodHandle newTarget) {
+                }
             }, name);
         }
 
