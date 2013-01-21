@@ -71,18 +71,25 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 
 ### The Shen Test Suite
 
-Is very slow, and throws `OutOfMemoryError`. It is run at the end of the build:
+Is starting to look better, a few typed tests fail a few blows the stack. It is run at the end of the build:
 
     ./build
 
 
     [... loads of output ...]
-    passed ... 116
-    failed ...0
-    pass rate ...100.0%
+
+    passed ... 129
+    failed ...11
+    pass rate ...92.14285714285714%
+
+    ok
+    0
+
+    run time: 28.0 secs
 
 
-The tests suite has 146 tests, so there are 30 to go. It's close to 10x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) running all 146 tests.
+The tests suite has 146 tests, above I've commented out the ones that blows the stack to get to the end.
+It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) running all 146 tests.
 
 
 ### What works?
