@@ -71,24 +71,24 @@ There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/i
 
 ### The Shen Test Suite
 
-Is starting to look better, a few typed tests fail a few blows the stack. It is run at the end of the build:
+Is now close to passing. Functionaly it seems to work, but one test blows the stack. It is run at the end of the build:
 
     ./build
 
 
     [... loads of output ...]
 
-    passed ... 129
-    failed ...11
-    pass rate ...92.14285714285714%
+    passed ... 145
+    failed ...0
+    pass rate ...100.0%
 
     ok
     0
 
-    run time: 28.0 secs
+    run time: 40.0 secs
 
 
-The tests suite has 146 tests, above I've commented out the ones that blows the stack to get to the end.
+The tests suite has 146 tests, above I've commented out the one that blows the stack to get to the end.
 It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) running all 146 tests.
 
 
