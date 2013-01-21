@@ -398,6 +398,14 @@ public class Shen {
         public static Object eval_kl(Object kl) throws Throwable {
             return new Compiler(kl).load("__eval__", Callable.class).newInstance().call();
         }
+
+        public static boolean or(boolean x, boolean y) throws Exception {
+            return x || y;
+        }
+
+        public static boolean and(boolean x, boolean y) throws Exception {
+            return x && y;
+        }
     }
 
     public static class Overrides {
@@ -607,6 +615,7 @@ public class Shen {
                     test = insertArguments(checkClass2, 0, firstTwo.toArray());
                     test = test.asType(test.type().changeParameterType(0, type.parameterType(0)).changeParameterType(1, type.parameterType(1)));
                 }
+                debug("selected: %s", match);
                 if (test != null)
                     match = guardWithTest(test, match.asType(type), site.getTarget());
                 else  {
@@ -614,7 +623,6 @@ public class Shen {
                     match = relinkOnClassCast(match, fallback);
                 }
             }
-            debug("selected: %s", match);
             synchronized (symbol.symbol) {
                 site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
             }
@@ -709,7 +717,7 @@ public class Shen {
             return linker(new MutableCallSite(genericMethodType(arity)) {
                 public void setTarget(MethodHandle newTarget) {
                 }
-            }, name);
+            }, toBytecodeName(name));
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
@@ -877,18 +885,6 @@ public class Shen {
             return fn.isVarargsCollector() ?
                     insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
                     insertArguments(fn, 0, arg);
-        }
-
-        public static boolean or(boolean x, boolean... clauses) throws Exception {
-            if (x) return true;
-            for (boolean b : clauses) if (b) return true;
-            return false;
-        }
-
-        public static boolean and(boolean x, boolean... clauses) throws Exception {
-            if (!x) return false;
-            for (boolean b : clauses) if (!b) return false;
-            return true;
         }
 
         static String unscramble(String s) {
@@ -1124,7 +1120,7 @@ public class Shen {
 
             public void or(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
                 if (clauses.length == 0)
-                    bindTo(handle(RT.mh(RT.class, "or")), x);
+                    bindTo(handle(RT.mh(Primitives.class, "or")), x);
                 else {
                     KL_if(tail, BOOLEAN_TYPE, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
                     if (!isPrimitive(returnType)) mv.box(returnType);
@@ -1133,7 +1129,7 @@ public class Shen {
 
             public void and(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
                 if (clauses.length == 0)
-                    bindTo(handle(RT.mh(RT.class, "and")), x);
+                    bindTo(handle(RT.mh(Primitives.class, "and")), x);
                 else {
                     KL_if(tail, BOOLEAN_TYPE, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
                     if (!isPrimitive(returnType)) mv.box(returnType);

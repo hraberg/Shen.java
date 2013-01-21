@@ -327,6 +327,11 @@ public class PrimitivesTest {
         is(new Cons(1L, 2L), "((cons 1) 2)");
         is(new Cons(1L, 2L), "(((cons) 1) 2)");
         is(new Cons(1L, 2L), "((cons) 1 2)");
+        is(true, "((> 50) 10)");
+        is(true, "(let test or (test true false))");
+        is(false, "(let test and (test true false))");
+        is(MethodHandle.class, "(let test or (test true))");
+        is(true, "(let test or ((test true) false))");
     }
 
     @Test

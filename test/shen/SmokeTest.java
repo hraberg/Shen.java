@@ -2,15 +2,12 @@ package shen;
 
 import org.junit.Test;
 
-import java.lang.invoke.MethodHandle;
 import java.util.LinkedList;
 
 import static java.lang.System.out;
 import static java.util.Arrays.asList;
-import static shen.Shen.*;
-import static shen.Shen.Primitives.eval_kl;
-import static shen.Shen.Primitives.intern;
-import static shen.Shen.Primitives.str;
+import static shen.Shen.Primitives.*;
+import static shen.Shen.eval;
 
 // These are the main methods from the interpreter and compiler, no structure or niceness.
 // Tests lots of random stuff, written while developing, most this should be covered in PrimitivesTest.
@@ -24,7 +21,6 @@ public class SmokeTest {
         out.println(eval("(or false true)"));
         out.println(eval("(or false false false)"));
         out.println(eval("((or false) true)"));
-        out.println(eval("((and true) true true)"));
         out.println(eval("()"));
         out.println(eval("(cons 2 3)"));
 
@@ -71,7 +67,6 @@ public class SmokeTest {
         out.println(eval("(cond (false 1) (true 2))"));
         out.println(eval("(cond (false 1) ((or true false) 3))"));
         out.println(eval("(or false)"));
-        out.println(((MethodHandle) eval("(or false)")).invokeWithArguments(false, true));
         out.println(eval("((or false) false)"));
         out.println(eval("(or false false)"));
         out.println(eval("(or false true false)"));
