@@ -85,7 +85,7 @@ Is now close to passing. Functionaly it seems to work, but one test blows the st
     ok
     0
 
-    run time: 40.0 secs
+    run time: 34.0 secs
 
 
 The tests suite has 146 tests, above I've commented out the one that blows the stack to get to the end.
