@@ -218,7 +218,7 @@ public class Shen {
         }
 
         public static Object simple_error(String s) {
-            throw new RuntimeException(s);
+            throw new RuntimeException(s, null, false, false) {};
         }
 
         public static String error_to_string(Exception e) {
@@ -431,35 +431,6 @@ public class Shen {
         public static Object[] ATp(Object x, Object y) {
             return new Object[] {intern("shen-tuple"), x, y};
         }
-
-/*
-        public static Object shen_compose(List fs, Object x) throws Throwable {
-            for (Object f : fs)
-                x = apply(f, x);
-            return x;
-        }
-*/
-
-/*
-        public static Object shen_walk(Object x, Object y) throws Throwable {
-            if (y instanceof List)
-                //noinspection unchecked
-                return apply(x, toList(((List<Object>) y).stream().map((Object z) -> {
-                    try {
-                        return shen_walk(x, z);
-                    } catch (Throwable t) {
-                        throw new RuntimeException(t);
-                    }
-                })));
-            return apply(x, y);
-        }
-
-        public static Object macroexpand(Object x) throws Throwable {
-            Object y = shen_compose((List) intern("*macros*").value(), x);
-            if (x.equals(y)) return x;
-            return shen_walk(intern("macroexpand"), y);
-        }
-*/
     }
 
     static boolean isDebug() {
