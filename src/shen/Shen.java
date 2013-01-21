@@ -723,7 +723,16 @@ public class Shen {
             }, name);
         }
 
+        static Map<String, CallSite> sites = new HashMap<>();
+
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
+            if (intern(toSourceName(name)).fn.size() > 1) return invokeCallSite(name, type);
+            String key = name + type;
+            if (!sites.containsKey(key)) sites.put(key, invokeCallSite(name, type));
+            return sites.get(key);
+        }
+
+        static CallSite invokeCallSite(String name, MethodType type) throws IllegalAccessException {
             MutableCallSite site = new MutableCallSite(type);
             site.setTarget(linker(site, name).asType(type));
             return site;
@@ -740,6 +749,12 @@ public class Shen {
         }
 
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
+            String key = name + type;
+            if (!sites.containsKey(key)) sites.put(key, applyCallSite(type));
+            return sites.get(key);
+        }
+
+        static CallSite applyCallSite(MethodType type) {
             MutableCallSite site = new MutableCallSite(type);
             site.setTarget(apply.bindTo(site).asCollector(Object[].class, type.parameterCount() - 1).asType(type));
             return site;
@@ -1045,7 +1060,7 @@ public class Shen {
         void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
             List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
             argumentTypes.add(0, getType(Object.class));
-            mv.invokeDynamic("apply", desc(returnType, argumentTypes), handle(mh(RT.class, "applyBSM")));
+            mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), handle(mh(RT.class, "applyBSM")));
             topOfStack = returnType;
         }
 
@@ -1124,7 +1139,7 @@ public class Shen {
             public void value(boolean tail, Type returnType, Object x) throws Throwable {
                 compile(x, false);
                 maybeCast(Symbol.class);
-                mv.invokeDynamic("value", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
+                mv.invokeDynamic("__value__", desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
                 topOfStack(Object.class);
             }
 

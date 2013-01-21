@@ -9,5 +9,5 @@ mvn package -DskipTests=true
 
 test_classpath="target/test-classes:`find . -name shen.java-*-standalone.jar`"
 
-yes | java $JAVA_OPTS -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log
+time yes | java $JAVA_OPTS -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log
 grep -q "failed; continue? (y/n)" test.log && exit 1
