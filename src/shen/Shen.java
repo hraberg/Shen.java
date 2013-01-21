@@ -406,11 +406,7 @@ public class Shen {
         }
 
         public static boolean booleanP(Object x) {
-            return x instanceof Boolean;
-        }
-
-        public static boolean elementP(Object x, Collection z) {
-            return z.contains(x);
+            return x instanceof Boolean || intern("true").equals(x) || intern("false").equals(x);
         }
 
         public static Object[] ATp(Object x, Object y) {
@@ -619,7 +615,9 @@ public class Shen {
                 }
             }
             debug("selected: %s", match);
-            site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
+            synchronized (symbol.symbol) {
+                site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
+            }
             return match.invokeWithArguments(args);
         }
 
@@ -828,12 +826,15 @@ public class Shen {
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
             if (overrides.containsKey(name))
-                fn  = overrides.get(name);
-            name.fn.clear();
-            name.fn.add(fn);
-            invalidateAll(new SwitchPoint[] {name.fnGuard});
-            name.fnGuard = new SwitchPoint();
-            return name;
+                fn = overrides.get(name);
+            synchronized (name.symbol) {
+                SwitchPoint guard = name.fnGuard;
+                name.fn.clear();
+                name.fn.add(fn);
+                name.fnGuard = new SwitchPoint();
+                invalidateAll(new SwitchPoint[] {guard});
+                return name;
+            }
         }
 
         static void op(String name, Object... op) {
@@ -1074,7 +1075,7 @@ public class Shen {
                 Label after = mv.newLabel();
 
                 mv.visitLabel(start);
-                compile(x, returnType, false);
+                compile(x, returnType, tail);
                 mv.goTo(after);
                 mv.visitLabel(end);
 
