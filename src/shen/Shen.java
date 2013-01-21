@@ -635,7 +635,7 @@ public class Shen {
             debug("selected: %s", match);
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(site.type());
             site.setTarget(symbol.fnGuard.guardWithTest(relinkOnClassCast(match, fallback), fallback));
-            return insertArguments(match.asType(match.type().changeReturnType(Object.class)), 0, args).invokeExact();
+            return match.invokeWithArguments(args);
         }
 
         static MethodHandle relinkOnClassCast(MethodHandle fn, MethodHandle fallback) {

@@ -140,6 +140,8 @@ This is bound to change as we go:
 
 [Invokedynamic and JRuby](http://vimeo.com/27207224) Ola Bini, 2011 - Last time I met Ola he said that he considered to go back to C for his next language VM.
 
+[Dynamate: A Framework for Method Dispatch using invokedynamic](http://www.ec-spride.tu-darmstadt.de/media/ec_spride/secure_software_engineering/theses_1/kamil_erhard_master_thesis.pdf) Kamil Erhard, 2012
+
 
 ## License
 
