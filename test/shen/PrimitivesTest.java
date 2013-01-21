@@ -173,7 +173,7 @@ public class PrimitivesTest {
         is(false, "(absvector? v)");
         is(false, "(absvector? 2)");
         is(false, "(absvector? \"foo\")");
-        absvector[2] = 5;
+        absvector[2] = 5L;
         is(absvector, "(address-> (value v) 2 5)");
         is(5, "(<-address (value v) 2)");
         is(-1, "(trap-error (<-address (value v) 5) (lambda E -1))");
@@ -287,8 +287,8 @@ public class PrimitivesTest {
         is(-1, "(trap-error (hd 5) (lambda E -1))");
         is(-1, "(trap-error (tl 5) (lambda E -1))");
         is(1, "(hd (cons 1 (cons 2 (cons 3 ()))))");
-        is(asList(2, 3), "(tl (cons 1 (cons 2 (cons 3 ()))))");
-        is(new Cons(5, 10), "(cons 5 10)");
+        is(asList(2L, 3L), "(tl (cons 1 (cons 2 (cons 3 ()))))");
+        is(new Cons(5L, 10L), "(cons 5 10)");
     }
 
     @Test
@@ -313,7 +313,7 @@ public class PrimitivesTest {
 
     @Test
     public void parse_numbers() {
-        is(Integer.class, "1");
+        is(Long.class, "1");
         is(Double.class, "1.1");
         is(Long.class, "10000000000");
     }
@@ -323,16 +323,16 @@ public class PrimitivesTest {
         is(MethodHandle.class, "(cons 1)");
         is(MethodHandle.class, "(cons)");
         is(MethodHandle.class, "((cons) 1)");
-        is(asList(1), "((cons 1) ())");
-        is(new Cons(1, 2), "((cons 1) 2)");
-        is(new Cons(1, 2), "(((cons) 1) 2)");
-        is(new Cons(1, 2), "((cons) 1 2)");
+        is(asList(1L), "((cons 1) ())");
+        is(new Cons(1L, 2L), "((cons 1) 2)");
+        is(new Cons(1L, 2L), "(((cons) 1) 2)");
+        is(new Cons(1L, 2L), "((cons) 1 2)");
     }
 
     @Test
     public void uncurry() {
-        is(asList(1, 2), "((lambda x (lambda y (cons x (cons y ())))) 1 2)");
-        is(new Cons(1, 2), "(((cons) 1) 2)");
+        is(asList(1L, 2L), "((lambda x (lambda y (cons x (cons y ())))) 1 2)");
+        is(new Cons(1L, 2L), "(((cons) 1) 2)");
     }
 
     @Test
@@ -353,8 +353,8 @@ public class PrimitivesTest {
     @Test
     public void rebind() {
         is(intern("fun"), "(defun fun (x) (cons 1 x)");
-        is(asList(1), "(fun ())");
-        is(new Cons(1, 2), "(fun 2)");
+        is(asList(1L), "(fun ())");
+        is(new Cons(1L, 2L), "(fun 2)");
         is(intern("fun2"), "(defun fun2 (x) (+ 2 x))");
         is(3, "(fun2 1)");
         is(3.0, "(fun2 1.0)");
@@ -384,13 +384,14 @@ public class PrimitivesTest {
         is("Oracle Corporation", "(System/getProperty \"java.vendor\")");
         is(1.4142135623730951, "(Math/sqrt 2)");
         is(Class.class, "(import java.util.Arrays)");
-        is(asList(1, 2), "(Arrays/asList 1 2)");
+        is(asList(1L, 2L), "(Arrays/asList 1 2)");
         is(Class.class, "(import java.util.ArrayList)");
         is(Class.class, "(value ArrayList)");
+        is(0, "(.size ()))");
         is(ArrayList.class, "(ArrayList.)");
-        is(asList(1), "(ArrayList. (cons 1 ())");
-        is(1, "(.size (ArrayList. (cons 1 ()))");
-        is(asList(2), "(tl (ArrayList. (cons 1 (cons 2 ())))");
+        is(asList(1L), "(ArrayList. (cons 1 ())");
+        is(Long.class, "(.size (ArrayList. (cons 1 ()))");
+        is(asList(2L), "(tl (ArrayList. (cons 1 (cons 2 ())))");
         is("HELLO", "(.toUpperCase \"Hello\")");
         is(intern("up"), "(defun up (x) (.toUpperCase x))");
         is("UP", "(up \"up\")");
@@ -418,6 +419,7 @@ public class PrimitivesTest {
         is(intern("size"), "(defun size (x) (.size x))");
         is(1, "(size (ArrayList. (cons 1 ()))");
         is(1, "(size (LinkedList. (cons 1 ()))");
+        is(0, "(size ())");
         is(Class.class, "(import java.util.BitSet)");
         is(new BitSet().size(), "(size (BitSet.))");
     }
@@ -439,6 +441,8 @@ public class PrimitivesTest {
     void is(Object expected, String actual) {
         if (expected instanceof Class)
             assertThat(神(actual), instanceOf((Class<?>) expected));
+        else if (expected instanceof Integer)
+            assertThat(((Number) 神(actual)).longValue(), equalTo(((Integer) expected).longValue()));
         else
             assertThat(神(actual), equalTo(expected));
     }

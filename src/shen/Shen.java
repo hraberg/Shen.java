@@ -78,40 +78,31 @@ public class Shen {
         register(Overrides.class, RT::override);
 
         op("=", (BiPredicate) Objects::equals,
-                (IIPredicate) (left, right) -> left == right,
                 (LLPredicate) (left, right) -> left == right,
                 (DDPredicate) (left, right) -> left == right);
-        op("+", (IntBinaryOperator) (left, right) -> left + right,
-                (LongBinaryOperator) (left, right) -> left + right,
+        op("+", (LongBinaryOperator) (left, right) -> left + right,
                 (DoubleBinaryOperator) (left, right) -> left + right);
-        op("-", (IntBinaryOperator) (left, right) -> left - right,
-                (LongBinaryOperator) (left, right) -> left - right,
+        op("-", (LongBinaryOperator) (left, right) -> left - right,
                 (DoubleBinaryOperator) (left, right) -> left - right);
-        op("*", (IntBinaryOperator) (left, right) -> left * right,
-                (LongBinaryOperator) (left, right) -> left * right,
+        op("*", (LongBinaryOperator) (left, right) -> left * right,
                 (DoubleBinaryOperator) (left, right) -> left * right);
         op("/", (DoubleBinaryOperator) (left, right) -> {
             if (right == 0) throw new ArithmeticException("Division by zero");
             return left / right;
         });
 
-        op("<", (IIPredicate) (left, right) -> left < right,
-                (LLPredicate) (left, right) -> left < right,
+        op("<", (LLPredicate) (left, right) -> left < right,
                 (DDPredicate) (left, right) -> left < right);
-        op("<=", (IIPredicate) (left, right) -> left <= right,
-                (LLPredicate) (left, right) -> left <= right,
+        op("<=",(LLPredicate) (left, right) -> left <= right,
                 (DDPredicate) (left, right) -> left <= right);
-        op(">", (IIPredicate) (left, right) -> left > right,
-                (LLPredicate) (left, right) -> left > right,
+        op(">", (LLPredicate) (left, right) -> left > right,
                 (DDPredicate) (left, right) -> left > right);
-        op(">=", (IIPredicate) (left, right) -> left >= right,
-                (LLPredicate) (left, right) -> left >= right,
+        op(">=",(LLPredicate) (left, right) -> left >= right,
                 (DDPredicate) (left, right) -> left >= right);
 
         asList(Math.class, System.class).forEach(Primitives::KL_import);
     }
 
-    interface IIPredicate { boolean test(int a, int b); }
     interface LLPredicate { boolean test(long a, long b); }
     interface DDPredicate { boolean test(double a, double b); }
 
@@ -255,12 +246,12 @@ public class Shen {
 
         public static String str(Object x) {
             if (consP(x)) throw new IllegalArgumentException(x + " is not an atom; str cannot convert it to a string.");
-            if (x != null && x.getClass() == Object[].class) return deepToString((Object[]) x);
+            if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
             return String.valueOf(x);
         }
 
-        public static String pos(String x, int n) {
-            return str(x.charAt(n));
+        public static String pos(String x, long n) {
+            return str(x.charAt((int) n));
         }
 
         public static String tlstr(String x) {
@@ -271,8 +262,8 @@ public class Shen {
             return x.getClass();
         }
 
-        public static Object[] absvector(int n) {
-            Object[] objects = new Object[n];
+        public static Object[] absvector(long n) {
+            Object[] objects = new Object[(int) n];
             fill(objects, intern("fail!"));
             return objects;
         }
@@ -281,12 +272,12 @@ public class Shen {
             return x != null && x.getClass() == Object[].class;
         }
 
-        public static Object LT_address(Object[] vector, int n) {
-            return vector[n];
+        public static Object LT_address(Object[] vector, long n) {
+            return vector[((int) n)];
         }
 
-        public static Object[] address_GT(Object[] vector, int n, Object value) {
-            vector[n] = value;
+        public static Object[] address_GT(Object[] vector, long n, Object value) {
+            vector[((int) n)] = value;
             return vector;
         }
 
@@ -298,7 +289,7 @@ public class Shen {
             return x instanceof String;
         }
 
-        public static String n_GTstring(int n) {
+        public static String n_GTstring(long n) {
             if (n < 0) throw new IllegalArgumentException();
             return Character.toString((char) n);
         }
@@ -307,15 +298,15 @@ public class Shen {
             return n_GTstring(n);
         }
 
-        public static int string_GTn(String s) {
+        public static long string_GTn(String s) {
             return (int) s.charAt(0);
         }
 
-        public static int read_byte(InputStream s) throws IOException {
+        public static long read_byte(InputStream s) throws IOException {
             return s.read();
         }
 
-        public static int read_byte(Reader s) throws IOException {
+        public static long read_byte(Reader s) throws IOException {
             return s.read();
         }
 
@@ -371,12 +362,6 @@ public class Shen {
         public static boolean set(Symbol x, boolean y) {
             x.tag(Type.BOOLEAN);
             x.primVar = y ? 1 : 0;
-            return y;
-        }
-
-        public static int set(Symbol x, int y) {
-            x.tag(Type.INT);
-            x.primVar = y;
             return y;
         }
 
@@ -509,7 +494,6 @@ public class Shen {
             if (find(sc, "\"")) return nextString(sc);
             if (find(sc, "\\)")) return null;
             if (sc.hasNextBoolean()) return sc.nextBoolean();
-            if (sc.hasNextInt()) return sc.nextInt();
             if (sc.hasNextLong()) return sc.nextLong();
             if (sc.hasNextDouble()) return sc.nextDouble();
             if (sc.hasNext()) return intern(sc.next());
@@ -555,7 +539,7 @@ public class Shen {
                 intValue = explicitCastArguments(primVar, methodType(int.class, Symbol.class)),
                 doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")),
                 apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
-                checkClass2 = mh(RT.class, "checkClass2");
+                checkClass2 = mh(RT.class, "checkClass2"), toIntExact = mh(Math.class, "toIntExact");
 
         @SafeVarargs
         public static <T> List<T> list(T... elements) {
@@ -571,7 +555,6 @@ public class Shen {
         static MethodHandle value(Symbol symbol) throws Exception {
             switch (symbol.tag) {
                 case Type.BOOLEAN: return booleanValue;
-                case Type.INT: return intValue;
                 case Type.LONG: return primVar;
                 case Type.DOUBLE: return doubleValue;
             }
@@ -679,12 +662,17 @@ public class Shen {
              return null;
         }
 
-        static MethodHandle convertMethodHandles(MethodHandle method) throws IllegalAccessException {
+        static MethodHandle filterJavaTypes(MethodHandle method) throws IllegalAccessException {
             MethodHandle[] filters = new MethodHandle[method.type().parameterCount()];
             for (int i = 0; i < method.type().parameterCount() - (method.isVarargsCollector() ? 1 : 0); i++)
                 if (isSAM(method.type().parameterType(i)))
                     filters[i] = proxy.bindTo(findSAM(method.type().parameterType(i)))
                             .asType(methodType(method.type().parameterType(i), Object.class));
+                else  if (canCast(method.type().parameterType(i), int.class))
+                    filters[i] = toIntExact.asType(methodType(method.type().parameterType(i), Object.class));
+            if (canCast(method.type().returnType(), int.class))
+                method = method.asType(method.type()
+                        .changeReturnType(method.type().returnType().isPrimitive() ? long.class : Long.class));
             return filterArguments(method, 0, filters);
         }
 
@@ -692,9 +680,11 @@ public class Shen {
             return some(stream(methods), m -> {
                 try {
                     if (m.getName().equals(method)) {
+                        m.setAccessible(true);
                         MethodHandle mh = (m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m);
-                        mh.asType(type);
-                        return convertMethodHandles(mh);
+                        mh.asType(methodType(type.returnType(), toList(type.parameterList().stream()
+                                .map(c -> c.equals(Long.class) ? Integer.class : c))));
+                        return filterJavaTypes(mh);
                     }
                 } catch (Exception ignore) {
                 }
@@ -725,14 +715,14 @@ public class Shen {
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
-            if (isOverloadedInternalFunction(name) > 1) return invokeCallSite(name, type);
+            if (isOverloadedInternalFunction(name)) return invokeCallSite(name, type);
             String key = name + type;
             if (!sites.containsKey(key)) sites.put(key, invokeCallSite(name, type));
             return sites.get(key);
         }
 
-        static int isOverloadedInternalFunction(String name) {
-            return intern(toSourceName(name)).fn.size();
+        static boolean isOverloadedInternalFunction(String name) {
+            return intern(toSourceName(name)).fn.size() > 1;
         }
 
         static CallSite invokeCallSite(String name, MethodType type) throws IllegalAccessException {
