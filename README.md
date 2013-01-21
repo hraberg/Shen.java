@@ -102,16 +102,16 @@ It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) r
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
 * Pre-compilation of the `kl` to `.class` files.
+* The Shen test suite, passes except for `interpreter.shen` which blows the stack.
+* Different bootstrap methods for invoke, apply and value. This isn't necessary
+* SwitchPoints for symbols - used when redefining functions.
 
 
 ### Road Map
 
 This is bound to change as we go:
 
-* The Shen test suite.
-* SwitchPoints for symbols.
 * Saner choice of target method.
-* Different bootstrap methods for invoke, apply and value/set.
 * Proper arithmetic.
 * Ad-herence to Shen types when compiling typed Shen.
 * Performance.
