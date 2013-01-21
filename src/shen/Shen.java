@@ -1191,6 +1191,13 @@ public class Shen {
                     if (!last) popStack();
                 }
             }
+
+            public void thaw(boolean tail, Type returnType, Object f) throws Throwable {
+                compile(f, false);
+                maybeCast(MethodHandle.class);
+                mv.invokeVirtual(getType(MethodHandle.class), method("invokeExact", desc(Object.class)));
+                topOfStack(Object.class);
+            }
         }
 
         void fn(String name, Object kl, Symbol... args) throws Throwable {

@@ -188,6 +188,7 @@ public class PrimitivesTest {
         is(MethodHandle.class, "(freeze (+ 2 2)");
         is(MethodHandle.class, "(freeze (/ 2 0))");
         is(4, "((freeze (+ 2 2)))");
+        is(4, "(thaw (freeze (+ 2 2)))");
     }
 
     @Test
