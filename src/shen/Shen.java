@@ -31,6 +31,7 @@ import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
 import static java.lang.invoke.MethodHandles.*;
+import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.genericMethodType;
 import static java.lang.invoke.MethodType.methodType;
@@ -432,12 +433,15 @@ public class Shen {
             return new Object[] {intern("shen-tuple"), x, y};
         }
 
+/*
         public static Object shen_compose(List fs, Object x) throws Throwable {
             for (Object f : fs)
                 x = apply(f, x);
             return x;
         }
+*/
 
+/*
         public static Object shen_walk(Object x, Object y) throws Throwable {
             if (y instanceof List)
                 //noinspection unchecked
@@ -456,6 +460,7 @@ public class Shen {
             if (x.equals(y)) return x;
             return shen_walk(intern("macroexpand"), y);
         }
+*/
     }
 
     static boolean isDebug() {
@@ -577,7 +582,8 @@ public class Shen {
                 value = mh(Symbol.class, "value"), primVar = field(Symbol.class, "primVar"),
                 booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
                 intValue = explicitCastArguments(primVar, methodType(int.class, Symbol.class)),
-                doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")), apply = mh(RT.class, "apply");
+                doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")),
+                apply = mh(RT.class, "apply"), function = mh(RT.class, "function");
 
         @SafeVarargs
         public static <T> List<T> list(T... elements) {
@@ -692,11 +698,15 @@ public class Shen {
             });
         }
 
-        public static Object apply(Object target, Object... args) throws Throwable {
-            MethodHandle mh =  target.getClass() == Symbol.class ? function((Symbol) target) : (MethodHandle) target;
+        public static Object apply(MutableCallSite site, Object target, Object... args) throws Throwable {
+            MethodHandle mh = function(target);
             if (isLambda(mh)) return uncurry(mh, args);
             if (mh.type().parameterCount() > args.length) return insertArguments(mh, 0, args);
             return mh.invokeWithArguments(args);
+        }
+
+        public static MethodHandle function(Object target) throws IllegalAccessException {
+            return target.getClass() == Symbol.class ? Primitives.function((Symbol) target) : (MethodHandle) target;
         }
 
         static MethodHandle linker(MutableCallSite site, String name) throws IllegalAccessException {
@@ -726,7 +736,9 @@ public class Shen {
         }
 
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
-            return new ConstantCallSite(apply.asCollector(Object[].class, type.parameterCount() - 1).asType(type));
+            MutableCallSite site = new MutableCallSite(type);
+            site.setTarget(apply.bindTo(site).asCollector(Object[].class, type.parameterCount() - 1).asType(type));
+            return site;
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) {
