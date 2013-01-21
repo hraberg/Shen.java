@@ -107,10 +107,11 @@ It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) r
 
 This is bound to change as we go:
 
-* Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to ClassCastException. It's really only used for builtins.
+* Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for builtins.
 * Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
 * Ad-herence to Shen types when compiling typed Shen to Java.
 * Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
+* Proper Java inter-op. Potentially using [Dynalink](https://github.com/szegedi/dynalink).
 
 
 ## References
