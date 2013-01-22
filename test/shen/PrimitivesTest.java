@@ -89,6 +89,27 @@ public class PrimitivesTest {
     }
 
     @Test
+    public void arithmetic() {
+        is(2L, "(+ 1 1)");
+        is(2.0, "(+ 1 1.0)");
+        is(2.0, "(+ 1.0 1)");
+        is(2.0, "(let x 1 (+ 1.0 x)");
+        is(2L, "(let x 1 (+ 1 x)");
+        is(2.0, "(let x 1.0 (+ 1 x)");
+        is(2.0, "(let x 1.0 (+ x 1)");
+        is(1.0, "(set x 1.0)");
+        is(2.0, "(+ (value x) 1)");
+        is(0.0, "(- (value x) 1)");
+        is(3.0, "(* (value x) 3)");
+        is(1.5, "(let x 2.0 (let y 0.5  (- x y)))");
+        is(1.5, "(let x 2 (let y 0.5  (- x y)))");
+        is(true, "(= (value x) 1)");
+        is(intern("fun"), "(defun fun (x y) (- x y)))");
+        is(1.5, "(fun 2 0.5)");
+        is(1.5, "(fun 2.5 1)");
+    }
+
+    @Test
     public void greater_than() {
         is(true, "(> 3 2)");
         is(false, "(> 4 4)");

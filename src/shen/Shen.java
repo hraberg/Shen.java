@@ -109,7 +109,7 @@ public class Shen {
     public static class Symbol {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
-        public SwitchPoint fnGuard = new SwitchPoint();
+        public SwitchPoint fnGuard;
         public Object var;
         public long primVar;
         public int tag = Type.OBJECT;
@@ -338,7 +338,7 @@ public class Shen {
         static long startTime = System.currentTimeMillis();
         public static double get_time(Symbol time) {
             switch (time.symbol) {
-                case "run": return (currentTimeMillis() - startTime) / 1000;
+                case "run": return (currentTimeMillis() - startTime) / 1000.0;
                 case "unix": return currentTimeMillis() / 1000;
             }
             throw new IllegalArgumentException("get-time does not understand the parameter " + time);
@@ -604,14 +604,16 @@ public class Shen {
                 return partial;
             }
 
-            MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             MethodHandle match = find(symbol.fn.stream(), f -> f.type().wrap().parameterList().equals(actualTypes));
             List<MethodHandle> candidates = toList(symbol.fn.stream()
                     .filter(f -> canCast(actualTypes, f.type().parameterList()))
-                    .sorted((x, y) -> without(y.type().parameterList(), Object.class).size()
-                            - without(x.type().parameterList(), Object.class).size()));
+                    .sorted((x, y) -> canCast(y.type().parameterList(), x.type().parameterList()) ? 1 : -1));
             if (match == null && !candidates.isEmpty()) match = candidates.get(0);
             if (match == null) throw new NoSuchMethodException("undefined function " + name + type);
+
+            if (isRelinker(site)) return match.invokeWithArguments(args);
+
+            MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
                 MethodHandle test = null;
                 List<Class<?>> types = new ArrayList<>(match.type().parameterList());
@@ -637,9 +639,14 @@ public class Shen {
                 }
             }
             synchronized (symbol.symbol) {
+                if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
                 site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
             }
             return match.invokeWithArguments(args);
+        }
+
+        static boolean isRelinker(MutableCallSite site) {
+            return site.getClass() != MutableCallSite.class;
         }
 
         public static boolean checkClass(Class<?> xClass, Object x) {
@@ -852,7 +859,7 @@ public class Shen {
                 name.fn.clear();
                 name.fn.add(fn);
                 name.fnGuard = new SwitchPoint();
-                invalidateAll(new SwitchPoint[] {guard});
+                if (guard != null) invalidateAll(new SwitchPoint[] {guard});
                 return name;
             }
         }
