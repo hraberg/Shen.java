@@ -81,7 +81,7 @@ Is now close to passing. Functionally it seems to work, but one test blows the s
     ok
     0
 
-    run time: 38.0 secs
+    run time: 35.889 secs
 
 
 It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
@@ -97,7 +97,7 @@ It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
 * Pre-compilation of the `kl` to `.class` files.
-* The Shen test suite, passes except for `interpreter.shen` which blows the stack. The `shen-timer-macro` picks integer subtraction for some reason.
+* The Shen test suite, passes except for `interpreter.shen` which blows the stack.
 * Different bootstrap methods for invoke, apply and value. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
 
