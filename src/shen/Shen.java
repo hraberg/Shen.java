@@ -212,8 +212,8 @@ public class Shen {
             throw new RuntimeException(s, null, false, false) {};
         }
 
-        public static String error_to_string(Exception e) {
-            return e.getMessage();
+       public static String error_to_string(Throwable e) {
+            return e.getMessage() == null ? e.toString() : e.getMessage();
         }
 
         public static Object hd(List list) {
@@ -610,7 +610,8 @@ public class Shen {
                     .filter(f -> canCast(actualTypes, f.type().parameterList()))
                     .sorted((x, y) -> without(y.type().parameterList(), Object.class).size()
                             - without(x.type().parameterList(), Object.class).size()));
-            if (match == null) match = candidates.get(0);
+            if (match == null && !candidates.isEmpty()) match = candidates.get(0);
+            if (match == null) throw new NoSuchMethodException("undefined function " + name + type);
             if (symbol.fn.size() >  1) {
                 MethodHandle test = null;
                 List<Class<?>> types = new ArrayList<>(match.type().parameterList());
@@ -1082,7 +1083,7 @@ public class Shen {
                 mv.goTo(after);
                 mv.visitLabel(end);
 
-                mv.catchException(start, end, getType(Exception.class));
+                mv.catchException(start, end, getType(Throwable.class));
                 compile(f, false);
                 maybeCast(MethodHandle.class);
                 mv.swap();

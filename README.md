@@ -69,23 +69,22 @@ This is pretty experimental, and this entire project acts as a playground for va
 
 ### The Shen Test Suite
 
-Is now close to passing. Functionaly it seems to work, but one test blows the stack. It is run at the end of the build:
+Is now close to passing. Functionally it seems to work, but one test blows the stack. It is run at the end of the build:
 
     ./build   # or ./tests if the jar already exists.
 
     [... loads of output ...]
     passed ... 145
-    failed ...0
-    pass rate ...100.0%
+    failed ...1
+    pass rate ...99.31506849315068%
 
     ok
     0
 
-    run time: 34.0 secs
+    run time: 38.0 secs
 
 
-The tests suite has 146 tests, above I've commented out the one that blows the stack to get to the end.
-It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) running all 146 tests.
+It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
 
 
 ### What works?
@@ -98,7 +97,7 @@ It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj) r
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
 * Pre-compilation of the `kl` to `.class` files.
-* The Shen test suite, passes except for `interpreter.shen` which blows the stack.
+* The Shen test suite, passes except for `interpreter.shen` which blows the stack. The `shen-timer-macro` picks integer subtraction for some reason.
 * Different bootstrap methods for invoke, apply and value. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
 
@@ -109,7 +108,7 @@ This is bound to change as we go:
 
 * Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for builtins.
 * Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
-* Ad-herence to Shen types when compiling typed Shen to Java.
+* Adherence to Shen types when compiling typed Shen to Java.
 * Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
 * Proper Java inter-op. Potentially using [Dynalink](https://github.com/szegedi/dynalink).
 
