@@ -616,11 +616,11 @@ public class Shen {
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
                 MethodHandle test = null;
-                List<Class<?>> types = new ArrayList<>(match.type().parameterList());
-                types.removeAll(candidates.size() > 1 ? candidates.get(1).type().parameterList() : asList());
-                if (types.size() == 1) {
-                    int firstDifferent = match.type().parameterList().indexOf(types.get(0));
-                    debug("switching %s on %d argument type %s", name, firstDifferent, types.get(0));
+                List<Class<?>> differentTypes = new ArrayList<>(match.type().parameterList());
+                differentTypes.removeAll(candidates.size() > 1 ? candidates.get(1).type().parameterList() : asList());
+                if (differentTypes.size() == 1) {
+                    int firstDifferent = match.type().parameterList().indexOf(differentTypes.get(0));
+                    debug("switching %s on %d argument type %s", name, firstDifferent, differentTypes.get(0));
                     test = checkClass.bindTo(match.type().parameterType(firstDifferent));
                     test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, arity).parameterList());
                     test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
