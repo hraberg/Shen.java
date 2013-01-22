@@ -9,6 +9,13 @@
     <name>Shen.java</name>
     <url>https://github.com/hraberg/Shen.java/</url>
     <description>Shen is a portable functional programming language by Mark Tarver</description>
+    <developers>
+        <developer>
+            <name>Håkan Råberg</name>
+            <email>hakan.raberg@gmail.com</email>
+            <timezone>0</timezone>
+        </developer>
+    </developers>
     <scm>
         <connection>scm:git:git://github.com/hraberg/Shen.java.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/hraberg/Shen.java.git</developerConnection>
@@ -55,14 +62,14 @@
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <createDependencyReducedPom>true</createDependencyReducedPom>
                             <!-- Think this is broken due to class file version 52 / JDK8 -->
-<!--
-                            <relocations>
-                                <relocation>
-                                    <pattern>org.ow2.asm</pattern>
-                                    <shadedPattern>shen.asm</shadedPattern>
-                                </relocation>
-                            </relocations>
--->
+                            <!--
+                                                        <relocations>
+                                                            <relocation>
+                                                                <pattern>org.ow2.asm</pattern>
+                                                                <shadedPattern>shen.asm</shadedPattern>
+                                                            </relocation>
+                                                        </relocations>
+                            -->
                             <filters>
                                 <filter>
                                     <artifact>org.ow2.asm:asm-debug-all</artifact>
