@@ -557,11 +557,6 @@ public class Shen {
                 apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
                 checkClass2 = mh(RT.class, "checkClass2"), toIntExact = mh(Math.class, "toIntExact");
 
-        @SafeVarargs
-        public static <T> List<T> list(T... elements) {
-            return new ArrayList<>(asList(elements));
-        }
-
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
             MethodHandle hasTag = insertArguments(RT.hasTag, 1, symbol.tag);
             site.setTarget(guardWithTest(hasTag, value(symbol).asType(site.type()), site.getTarget()));
@@ -1402,6 +1397,11 @@ public class Shen {
     static void debug(String format, Object... args) {
         if (isDebug()) System.err.println(format(format,
                 stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
+    }
+
+    @SafeVarargs
+    static <T> List<T> list(T... elements) {
+        return new ArrayList<>(asList(elements));
     }
 
     @SuppressWarnings("unchecked")
