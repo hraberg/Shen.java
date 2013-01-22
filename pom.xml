@@ -16,11 +16,23 @@
             <timezone>0</timezone>
         </developer>
     </developers>
+    <licenses>
+        <license>
+            <name>Shen License</name>
+            <url>http://www.shenlanguage.org/license.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
     <scm>
         <connection>scm:git:git://github.com/hraberg/Shen.java.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/hraberg/Shen.java.git</developerConnection>
         <url>https://github.com/hraberg/Shen.java</url>
     </scm>
+    <parent>
+        <groupId>org.sonatype.oss</groupId>
+        <artifactId>oss-parent</artifactId>
+        <version>7</version>
+    </parent>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
