@@ -37,6 +37,7 @@ import static java.lang.invoke.MethodType.methodType;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
+import static java.util.Collections.EMPTY_LIST;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
@@ -290,11 +291,11 @@ public class Shen {
         }
 
         public static String n_GTstring(long n) {
-            if (n < 0) throw new IllegalArgumentException();
+            if (n < 0) throw new IllegalArgumentException(n + " is not a valid character");
             return Character.toString((char) n);
         }
 
-        public static String byte_GTstring(byte n) {
+        public static String byte_GTstring(long n) {
             return n_GTstring(n);
         }
 
@@ -332,7 +333,7 @@ public class Shen {
 
         public static Object close(Closeable stream) throws IOException {
             stream.close();
-            return list();
+            return EMPTY_LIST;
         }
 
         static long startTime = System.currentTimeMillis();
@@ -1424,9 +1425,5 @@ public class Shen {
 
     static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
         return toList(Streams.concat(a.stream(), b.stream()));
-    }
-
-    static <T> List<T> without(Collection<T> x, T y) {
-        return toList(x.stream().filter(isEqual(y).negate()));
     }
 }
