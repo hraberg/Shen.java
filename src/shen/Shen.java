@@ -469,7 +469,7 @@ public class Shen {
             Compiler compiler = new Compiler(null, file, cons(intern("do"), read(in)));
             File compilePath = new File((String) intern("*compile-path*").value());
             File classFile = new File(compilePath, file + ".class");
-            if (!compilePath.isDirectory() || compilePath.mkdirs()) throw new IOException("could not make directory: " + compilePath);
+            if (!(compilePath.mkdirs() || compilePath.isDirectory())) throw new IOException("could not make directory: " + compilePath);
             try {
                 return compiler.load(classFile.getName().replaceAll(".class$", ".kl"), aClass);
             } finally {
@@ -553,7 +553,6 @@ public class Shen {
                 link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"), hasTag = mh(Symbol.class, "hasTag"),
                 value = mh(Symbol.class, "value"), primVar = field(Symbol.class, "primVar"),
                 booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
-                intValue = explicitCastArguments(primVar, methodType(int.class, Symbol.class)),
                 doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")),
                 apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
                 checkClass2 = mh(RT.class, "checkClass2"), toIntExact = mh(Math.class, "toIntExact");
