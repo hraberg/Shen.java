@@ -70,7 +70,7 @@ public class Shen {
 
     static {
         set("*language*", "Java");
-        set("*implementation*", format("[jvm %s]", getProperty("java.version")));
+        set("*implementation*", format("%s (build %s)", getProperty("java.runtime.name"), getProperty("java.runtime.version")));
         set("*porters*", "Håkan Råberg");
         set("*port*", version());
         set("*stinput*", in);
