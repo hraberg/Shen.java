@@ -15,6 +15,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -37,6 +39,7 @@ import static java.lang.invoke.MethodType.genericMethodType;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
+import static java.nio.file.Files.readAllBytes;
 import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
 import static java.util.Objects.deepEquals;
@@ -452,15 +455,21 @@ public class Shen {
         }
 
         public static List<String> shen_explode_string(String s) {
-            List<String> result = new ArrayList<>(s.length());
-            for (char c : s.toCharArray())
-                result.add(String.valueOf(c));
-            return result;
+            return new ArrayList<>(asList(s.split("(?!^)")));
         }
 
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
             fill(vector, (int) counter, (int) n + 1, x);
             return vector;
+        }
+
+        public static List<Long> read_file_as_bytelist(String file) throws IOException {
+            FileSystem fs = FileSystems.getDefault();
+            byte[] bytes = readAllBytes(fs.getPath((String) intern("*home-directory*").value(), file));
+            Long[] result = new Long[bytes.length];
+            for (int i = 0; i < bytes.length; i++)
+                result[i] = (long) bytes[i];
+            return new ArrayList<>(asList(result));
         }
     }
 

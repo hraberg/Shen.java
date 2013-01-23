@@ -1,4 +1,4 @@
-test.log
+*.log
 target
 .idea
 *Spike.java
