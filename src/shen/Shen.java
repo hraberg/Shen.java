@@ -743,7 +743,7 @@ public class Shen {
                         m.setAccessible(true);
                         MethodHandle mh = (m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m);
                         mh.asType(methodType(type.returnType(), toList(type.parameterList().stream()
-                                .map(c -> c.equals(Long.class) ? Integer.class : c))));
+                                .map(c -> c.equals(Long.class) ? Integer.class : c.equals(long.class) ? int.class : c))));
                         return filterJavaTypes(mh);
                     }
                 } catch (Exception ignore) {
@@ -1037,6 +1037,10 @@ public class Shen {
         }
 
         Type compile(Object kl, Type returnType, boolean tail) {
+            return compile(kl, returnType, true, tail);
+        }
+
+        Type compile(Object kl, Type returnType, boolean handlePrimitives, boolean tail) {
             try {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -1060,7 +1064,7 @@ public class Shen {
                     }
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
-                handlePrimitives(returnType);
+                if (handlePrimitives) handlePrimitives(returnType);
                 return topOfStack;
             } catch (RuntimeException | Error e) {
                 throw e;
@@ -1091,7 +1095,7 @@ public class Shen {
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
-            List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
+            List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, getType(Object.class), false, false)));
 
             if (isSelfCall(s, args)) {
                 if (tail) {
