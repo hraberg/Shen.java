@@ -1256,7 +1256,7 @@ public class Shen {
 
         void fn(String name, Object kl, Symbol... args) throws Throwable {
             String bytecodeName = toBytecodeName(name) + "_" + id++;
-            List<Symbol> scope = closesOver(new HashSet<>(asList(args)), kl);
+            List<Symbol> scope = toList(closesOver(new HashSet<>(asList(args)), kl).stream().uniqueElements());
             scope.retainAll(concat(locals.keySet(), this.args));
 
             List<Type> types = toList(scope.stream().map(this::typeOf));
