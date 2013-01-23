@@ -27,6 +27,7 @@ import java.util.stream.Streams;
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
+import static java.lang.Math.floorMod;
 import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
@@ -39,7 +40,8 @@ import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
 import static java.util.Objects.deepEquals;
-import static java.util.function.Predicates.*;
+import static java.util.function.Predicates.isSame;
+import static java.util.function.Predicates.nonNull;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
@@ -107,7 +109,7 @@ public class Shen {
     interface LLPredicate { boolean test(long a, long b); }
     interface DDPredicate { boolean test(double a, double b); }
 
-    public static class Symbol {
+    public final static class Symbol {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
@@ -151,7 +153,7 @@ public class Shen {
         }
     }
 
-    public static class Cons {
+    public final static class Cons {
         public final Object car, cdr;
 
         public Cons(Object car, Object cdr) {
@@ -411,15 +413,15 @@ public class Shen {
 
     public static class Overrides {
         public static boolean variableP(Object x) {
-            return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
+            return x.getClass() == Symbol.class && isUpperCase(((Symbol) x).symbol.charAt(0));
         }
 
         public static boolean booleanP(Object x) {
-            return x instanceof Boolean || intern("true").equals(x) || intern("false").equals(x);
+            return x.getClass() == Boolean.class || intern("true").equals(x) || intern("false").equals(x);
         }
 
-        public static Object[] ATp(Object x, Object y) {
-            return new Object[] {intern("shen-tuple"), x, y};
+        public static boolean symbolP(Object x) {
+            return x.getClass() == Symbol.class && !booleanP(x);
         }
 
         public static boolean elementP(Object x, Collection z) {
@@ -433,6 +435,16 @@ public class Shen {
                 else return false;
             }
             return false;
+        }
+
+        public static Object[] ATp(Object x, Object y) {
+            return new Object[] {intern("shen-tuple"), x, y};
+        }
+
+        public static long hash(Object s, long limit) {
+            long hash = s.hashCode();
+            if (hash == 0) return 1;
+            return floorMod(hash, limit);
         }
     }
 
@@ -810,9 +822,13 @@ public class Shen {
             return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
         }
 
-        static Handle handle(MethodHandle handle) throws ReflectiveOperationException {
-            MethodHandleInfo info = new MethodHandleInfo(handle);
-            return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
+        static Handle handle(MethodHandle handle) {
+            try {
+                MethodHandleInfo info = new MethodHandleInfo(handle);
+                return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         static Handle handle(String className, String name, String desc) {
@@ -926,6 +942,10 @@ public class Shen {
         static Map<Symbol, MethodHandle> macros = new HashMap<>();
         static List<Class<?>> literals =
                 asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
+        static Handle
+                applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
+                symbolBSM = handle(mh(RT.class, "symbolBSM")), valueBSM = handle(mh(RT.class, "valueBSM")),
+                or = handle(RT.mh(Primitives.class, "or")), and = handle(RT.mh(Primitives.class, "and"));
 
         static {
             register(Macros.class, Compiler::macro);
@@ -1052,7 +1072,7 @@ public class Shen {
                     return;
                 } else debug("can only recur from tail position: %s", s);
             }
-            mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), handle(mh(RT.class, "invokeBSM")));
+            mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), invokeBSM);
             topOfStack = returnType;
         }
 
@@ -1071,7 +1091,7 @@ public class Shen {
         void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
             List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
             argumentTypes.add(0, getType(Object.class));
-            mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), handle(mh(RT.class, "applyBSM")));
+            mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), applyBSM);
             topOfStack = returnType;
         }
 
@@ -1131,7 +1151,7 @@ public class Shen {
 
             public void or(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
                 if (clauses.length == 0)
-                    bindTo(handle(RT.mh(Primitives.class, "or")), x);
+                    bindTo(or, x);
                 else {
                     KL_if(tail, BOOLEAN_TYPE, x, true, (clauses.length > 1 ? cons(intern("or"), list(clauses)) : clauses[0]));
                     if (!isPrimitive(returnType)) mv.box(returnType);
@@ -1140,7 +1160,7 @@ public class Shen {
 
             public void and(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
                 if (clauses.length == 0)
-                    bindTo(handle(RT.mh(Primitives.class, "and")), x);
+                    bindTo(and, x);
                 else {
                     KL_if(tail, BOOLEAN_TYPE, x, (clauses.length > 1 ? cons(intern("and"), list(clauses)) : clauses[0]), false);
                     if (!isPrimitive(returnType)) mv.box(returnType);
@@ -1152,7 +1172,7 @@ public class Shen {
                 String name = "__value__";
                 if (x instanceof Symbol && topOfStack.equals(getType(Symbol.class))) name += ":" + x;
                 maybeCast(Symbol.class);
-                mv.invokeDynamic(name, desc(Object.class, Symbol.class), handle(mh(RT.class, "valueBSM")));
+                mv.invokeDynamic(name, desc(Object.class, Symbol.class), valueBSM);
                 topOfStack(Object.class);
             }
 
@@ -1269,8 +1289,8 @@ public class Shen {
             topOfStack(Object[].class);
         }
 
-        void push(Symbol kl) throws ReflectiveOperationException {
-            mv.invokeDynamic(toBytecodeName(kl.symbol), desc(Symbol.class), handle(mh(RT.class, "symbolBSM")));
+        void push(Symbol kl) {
+            mv.invokeDynamic(toBytecodeName(kl.symbol), desc(Symbol.class), symbolBSM);
             topOfStack(Symbol.class);
         }
 
