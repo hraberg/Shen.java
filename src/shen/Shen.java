@@ -446,6 +446,22 @@ public class Shen {
             if (hash == 0) return 1;
             return floorMod(hash, limit);
         }
+
+        public static boolean shen_digit_byteP(long x) {
+            return '0' <= x && x <= '9';
+        }
+
+        public static List<String> shen_explode_string(String s) {
+            List<String> result = new ArrayList<>(s.length());
+            for (char c : s.toCharArray())
+                result.add(String.valueOf(c));
+            return result;
+        }
+
+        public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
+            fill(vector, (int) counter, (int) n + 1, x);
+            return vector;
+        }
     }
 
     static boolean isDebug() {
@@ -461,8 +477,9 @@ public class Shen {
     }
 
     static void install() throws Throwable {
-        for (String file : asList("sys", "writer", "core", "prolog", "yacc", "declarations", "load",
-                "macros", "reader", "sequent", "toplevel", "track", "t-star", "types"))
+        set("shen-*installing-kl*", true);
+        for (String file : asList("toplevel", "core", "sys", "sequent", "yacc", "reader",
+                "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
     }
 
