@@ -87,6 +87,11 @@ Is now close to passing. Functionally it seems to work, but one test blows the s
 It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
 
 
+The benchmarks can be run via, they also blow the stack at the end:
+
+    ./benchmarks
+
+
 ### What works?
 
 * The K Lambda parser.
