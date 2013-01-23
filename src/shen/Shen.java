@@ -645,7 +645,7 @@ public class Shen {
             if (match == null && !candidates.isEmpty()) match = candidates.get(0);
             if (match == null) throw new NoSuchMethodException("undefined function " + name + type);
 
-            if (isRelinker(site)) return match.invokeWithArguments(args);
+            if (isReLinker(site)) return match.invokeWithArguments(args);
 
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
@@ -679,7 +679,7 @@ public class Shen {
             return match.invokeWithArguments(args);
         }
 
-        static boolean isRelinker(MutableCallSite site) {
+        static boolean isReLinker(MutableCallSite site) {
             return site.getClass() != MutableCallSite.class;
         }
 
@@ -1452,7 +1452,7 @@ public class Shen {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> List<T> toList(Stream<T> stream) {
+    static <T> List<T> toList(Stream<? extends T> stream) {
         return (List<T>) stream.collect(Collectors.toList());
     }
 
