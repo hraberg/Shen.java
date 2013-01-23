@@ -972,7 +972,6 @@ public class Shen {
                 applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
                 symbolBSM = handle(mh(RT.class, "symbolBSM")), valueBSM = handle(mh(RT.class, "valueBSM")),
                 or = handle(RT.mh(Primitives.class, "or")), and = handle(RT.mh(Primitives.class, "and"));
-
         static {
             register(Macros.class, Compiler::macro);
         }
@@ -980,12 +979,15 @@ public class Shen {
         static int id = 1;
 
         String className;
-        ClassWriter cw;
-        byte[] bytes;
 
+        ClassWriter cw;
+
+        byte[] bytes;
         GeneratorAdapter mv;
         Object kl;
+
         Symbol self;
+        org.objectweb.asm.commons.Method method;
         Map<Symbol, Integer> locals;
         List<Symbol> args;
         List<Type> argTypes;
@@ -1095,10 +1097,14 @@ public class Shen {
                 if (tail) {
                     debug("recur: %s", s);
                     recur(argumentTypes);
-                    return;
-                } else debug("can only recur from tail position: %s", s);
-            }
-            mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), invokeBSM);
+                } else {
+                    debug("can only recur from tail position: %s", s);
+                    mv.invokeStatic(getType(className), method);
+                    topOfStack = method.getReturnType();
+                    handlePrimitives(returnType);
+                }
+            } else
+                mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), invokeBSM);
             topOfStack = returnType;
         }
 
@@ -1376,7 +1382,8 @@ public class Shen {
         void method(int modifiers, Symbol name, String bytecodeName, Type returnType, List<Type> argumentTypes) {
             this.self = name;
             this.argTypes = argumentTypes;
-            mv = generator(modifiers, method(bytecodeName, desc(returnType, argumentTypes)));
+            this.method = method(bytecodeName, desc(returnType, argumentTypes));
+            mv = generator(modifiers, method);
             recur = mv.newLabel();
             mv.visitLabel(recur);
             compile(kl);
