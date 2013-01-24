@@ -111,6 +111,7 @@ The benchmarks can be run via:
 
 This is bound to change as we go:
 
+* = is broken in a non-deterministic way.
 * Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for builtins.
 * Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
 * Adherence to Shen types when compiling typed Shen to Java.
