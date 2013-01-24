@@ -656,10 +656,7 @@ public class Shen {
         static MethodHandle guard(String name, MethodType type, List<MethodHandle> candidates) {
             List key = asList(name, type, candidates);
             if (guards.containsKey(key)) return guards.get(key);
-
-            candidates = toList(candidates.stream()
-                    .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
-                    .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
+            candidates = bestMatchingMethods(type, candidates);
             debug("applicable candidates: %s", candidates);
 
             MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
@@ -677,6 +674,12 @@ public class Shen {
             }
             guards.put(key, match);
             return match;
+        }
+
+        static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
+            return toList(candidates.stream()
+                    .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
+                    .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
         }
 
         static Class<?> firstDifferentType(List<Class<?>> as, List<Class<?>> bs) {
