@@ -433,15 +433,6 @@ public class Shen {
             return z.contains(x);
         }
 
-        public static boolean elementP(Object x, Cons z) {
-            while (z != null) {
-                if (z.car.equals(x) || z.cdr.equals(x)) return true;
-                if (z.cdr instanceof Cons) z = (Cons) z.cdr;
-                else return false;
-            }
-            return false;
-        }
-
         public static Object[] ATp(Object x, Object y) {
             return new Object[] {intern("shen-tuple"), x, y};
         }

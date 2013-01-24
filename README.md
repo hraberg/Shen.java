@@ -69,22 +69,22 @@ This is pretty experimental, and this entire project acts as a playground for va
 
 ### The Shen Test Suite
 
-Is now close to passing. Functionally it seems to work, but one test blows the stack. It is run at the end of the build:
+Now passes. It is run at the end of the build:
 
     ./build   # or ./tests if the jar already exists.
 
     [... loads of output ...]
-    passed ... 145
-    failed ...1
-    pass rate ...99.31506849315068%
+    passed ... 146
+    failed ...0
+    pass rate ...100.0%
 
     ok
     0
 
-    run time: 35.889 secs
+    run time: 40.622 secs
 
 
-It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
+It's about to 2-3x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
 
 
 The benchmarks can be run via:
@@ -102,7 +102,7 @@ The benchmarks can be run via:
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
 * Pre-compilation of the `kl` to `.class` files.
-* The Shen test suite, passes except for `interpreter.shen` which blows the stack.
+* The Shen test suite passes.
 * Different bootstrap methods for invoke, apply and value. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
 

@@ -381,6 +381,9 @@ public class PrimitivesTest {
         is(intern("fun"), "(defun fun (x) (cons 1 x)");
         is(asList(1L), "(fun ())");
         is(new Cons(1L, 2L), "(fun 2)");
+        is(intern("fun"), "(defun fun (x) (cons 1 x)");
+        is(new Cons(1L, 2L), "(fun 2)");
+        is(asList(1L), "(fun ())");
         is(intern("fun2"), "(defun fun2 (x) (+ 2 x))");
         is(3L, "(fun2 1)");
         is(3.0, "(fun2 1.0)");
