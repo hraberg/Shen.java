@@ -634,6 +634,7 @@ public class Shen {
             debug("match based on argument types: %s", match);
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
+                // TODO: This optimization breaks = in a non-deterministic way
                 if (match.type().hasPrimitives()) {
                     debug("falling back to exception guard for %s", name);
                     match = relinkOnClassCast(match, fallback);
