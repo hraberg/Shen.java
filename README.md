@@ -81,10 +81,10 @@ Now passes. It is run at the end of the build:
     ok
     0
 
-    run time: 40.622 secs
+    run time: 29.073 secs
 
 
-It's about to 2-3x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
+It's about to 2x slower than [`shen.clj`](https://github.com/hraberg/shen.clj).
 
 
 The benchmarks can be run via:
@@ -112,7 +112,7 @@ The benchmarks can be run via:
 This is bound to change as we go:
 
 * = is broken in a non-deterministic way.
-* Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for builtins.
+* Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for built-ins.
 * Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
 * Adherence to Shen types when compiling typed Shen to Java.
 * Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
