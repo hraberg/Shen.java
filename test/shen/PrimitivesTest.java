@@ -9,16 +9,19 @@ import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.List;
 import java.util.concurrent.FutureTask;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.EMPTY_LIST;
+import static junit.framework.TestCase.assertFalse;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static shen.Shen.*;
 import static shen.Shen.Primitives.intern;
+import static shen.Shen.RT.canCast;
 
 public class PrimitivesTest {
     @Test
@@ -465,6 +468,27 @@ public class PrimitivesTest {
         is(intern("fun"), "(defun fun (x y) (+ x y))");
         is(3L, "(fun 1 2)");
         is(3L, "(fun2)");
+    }
+
+    @Test
+    public void casts() {
+        assertTrue(canCast(Long.class, Object.class));
+        assertTrue(canCast(Object.class, Long.class));
+        assertTrue(canCast(Long.class, Double.class));
+        assertFalse(canCast(Double.class, Long.class));
+        assertTrue(canCast(long.class, double.class));
+        assertFalse(canCast(double.class, long.class));
+        assertTrue(canCast(long.class, Double.class));
+        assertFalse(canCast(Double.class, Long.class));
+        assertTrue(canCast(long.class, Object.class));
+        assertTrue(canCast(Object.class, long.class));
+        assertTrue(canCast(Long.class, long.class));
+        assertTrue(canCast(long.class, Long.class));
+        assertTrue(canCast(long.class, long.class));
+        assertTrue(canCast(Object.class, Object.class));
+        assertTrue(canCast(String.class, Object.class));
+        assertTrue(canCast(Object.class, String.class));
+        assertFalse(canCast(Long.class, List.class));
     }
 
     void is(Object expected, String actual) {

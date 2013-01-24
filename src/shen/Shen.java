@@ -197,8 +197,6 @@ public class Shen {
         }
 
         public static Object cons(Object x, Object y) {
-            if (y instanceof List) //noinspection unchecked
-                return cons(x, (List) y);
             return new Cons(x, y);
         }
 
@@ -587,7 +585,7 @@ public class Shen {
                 booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
                 doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")),
                 apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
-                checkClass2 = mh(RT.class, "checkClass2"), toIntExact = mh(Math.class, "toIntExact");
+                toIntExact = mh(Math.class, "toIntExact");
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
             MethodHandle hasTag = insertArguments(RT.hasTag, 1, symbol.tag);
@@ -631,40 +629,21 @@ public class Shen {
                 return partial;
             }
 
-            MethodHandle match = find(symbol.fn.stream(), f -> f.type().wrap().parameterList().equals(actualTypes));
-            List<MethodHandle> candidates = toList(symbol.fn.stream()
-                    .filter(f -> canCast(actualTypes, f.type().parameterList()))
-                    .sorted((x, y) -> canCast(y.type().parameterList(), x.type().parameterList()) ? 1 : -1));
-            if (match == null && !candidates.isEmpty()) match = candidates.get(0);
+            MethodHandle match = find(symbol.fn.stream(), f -> all(actualTypes, f.type().parameterList(), RT::canCastStrict));
             if (match == null) throw new NoSuchMethodException("undefined function " + name + type);
-
-            if (isReLinker(site)) return match.invokeWithArguments(args);
-
+            debug("match based on argument types: %s", match);
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
-                MethodHandle test = null;
-                List<Class<?>> differentTypes = new ArrayList<>(match.type().parameterList());
-                differentTypes.removeAll(candidates.size() > 1 ? candidates.get(1).type().parameterList() : asList());
-                if (differentTypes.size() == 1) {
-                    int firstDifferent = match.type().parameterList().indexOf(differentTypes.get(0));
-                    debug("switching %s on %d argument type %s", name, firstDifferent, differentTypes.get(0));
-                    test = checkClass.bindTo(match.type().parameterType(firstDifferent));
-                    test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, arity).parameterList());
-                    test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
-                } else if (arity == 2) {
-                    List<Class<?>> firstTwo = match.type().parameterList().subList(0, 2);
-                    debug("switching %s on first two argument types %s", name, firstTwo);
-                    test = insertArguments(checkClass2, 0, firstTwo.toArray());
-                    test = test.asType(test.type().changeParameterType(0, type.parameterType(0)).changeParameterType(1, type.parameterType(1)));
-                }
-                debug("selected: %s", match);
-                if (test != null)
-                    match = guardWithTest(test, match.asType(type), site.getTarget());
-                else  {
+                if (match.type().hasPrimitives()) {
                     debug("falling back to exception guard for %s", name);
                     match = relinkOnClassCast(match, fallback);
+                } else {
+                    match = guard(name, type, symbol.fn);
                 }
+                debug("selected: %s", match);
             }
+            if (isReLinker(site)) return match.invokeWithArguments(args);
+
             synchronized (symbol.symbol) {
                 if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
                 site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
@@ -672,16 +651,46 @@ public class Shen {
             return match.invokeWithArguments(args);
         }
 
+        static Map<List, MethodHandle> guards = new HashMap<>();
+
+        static MethodHandle guard(String name, MethodType type, List<MethodHandle> candidates) {
+            List key = asList(name, type, candidates);
+            if (guards.containsKey(key)) return guards.get(key);
+
+            candidates = toList(candidates.stream()
+                    .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
+                    .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
+            debug("applicable candidates: %s", candidates);
+
+            MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
+            for (int i = candidates.size() - 1; i > 0; i--) {
+                MethodHandle fallback = candidates.get(i);
+                MethodHandle target = candidates.get(i - 1);
+                Class<?> differentType = firstDifferentType(target.type().parameterList(), fallback.type().parameterList());
+                int firstDifferent = target.type().parameterList().indexOf(differentType);
+                debug("switching %s on %d argument type %s", name, firstDifferent, differentType);
+                debug("target: %s ; fallback: %s", target, fallback);
+                MethodHandle test = checkClass.bindTo(differentType);
+                test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, type.parameterCount()).parameterList());
+                test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
+                match = guardWithTest(test, target.asType(type), match);
+            }
+            guards.put(key, match);
+            return match;
+        }
+
+        static Class<?> firstDifferentType(List<Class<?>> as, List<Class<?>> bs) {
+            List<Class<?>> differentTypes = new ArrayList<>(as);
+            differentTypes.removeAll(bs);
+            return differentTypes.get(0);
+        }
+
         static boolean isReLinker(MutableCallSite site) {
             return site.getClass() != MutableCallSite.class;
         }
 
         public static boolean checkClass(Class<?> xClass, Object x) {
-            return canCast(x.getClass(), xClass);
-        }
-
-        public static boolean checkClass2(Class<?> xClass, Class<?> yClass, Object x, Object y) {
-            return canCast(x.getClass(), xClass) && canCast(y.getClass(), yClass);
+            return canCastStrict(x.getClass(), xClass);
         }
 
         static MethodHandle relinkOnClassCast(MethodHandle fn, MethodHandle fallback) {
@@ -798,7 +807,7 @@ public class Shen {
             return valueCallSite(type);
         }
 
-        private static MutableCallSite valueCallSite(MethodType type) {
+        static MutableCallSite valueCallSite(MethodType type) {
             MutableCallSite site = new MutableCallSite(type);
             site.setTarget(mh(RT.class, "value").bindTo(site).asType(type));
             return site;
@@ -864,6 +873,10 @@ public class Shen {
         }
 
         static boolean canCast(Class<?> a, Class<?> b) {
+            return a == Object.class  || b == Object.class || canCastStrict(a, b);
+        }
+
+        static boolean canCastStrict(Class<?> a, Class<?> b) {
             return a == b || b.isAssignableFrom(a) || canWiden(a, b);
         }
 
@@ -874,13 +887,7 @@ public class Shen {
         static Wrapper wrapper(Class<?> type) {
             if (isPrimitiveType(type)) return forPrimitiveType(type);
             if (isWrapperType(type)) return forWrapperType(type);
-            return Wrapper.OBJECT;
-        }
-
-        static boolean canCast(List<Class<?>> as, List<Class<?>> bs) {
-            for (int i = 0; i < as.size(); i++)
-                if (!canCast(as.get(i), bs.get(i))) return false;
-            return true;
+            return Wrapper.forBasicType(type);
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
@@ -1421,7 +1428,7 @@ public class Shen {
 
         static void printASM(byte[] bytes, Method method) {
             ASMifier asm = new ASMifier();
-            PrintWriter pw = new PrintWriter(System.err);
+            PrintWriter pw = new PrintWriter(err);
             TraceClassVisitor printer = new TraceClassVisitor(null, asm, pw);
             if (method == null)
                new ClassReader(bytes).accept(printer, SKIP_DEBUG);
@@ -1446,7 +1453,7 @@ public class Shen {
     }
 
     static void debug(String format, Object... args) {
-        if (isDebug()) System.err.println(format(format,
+        if (isDebug()) err.println(format(format,
                 stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
     }
 
@@ -1475,5 +1482,11 @@ public class Shen {
 
     static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
         return toList(Streams.concat(a.stream(), b.stream()));
+    }
+
+    static <T> boolean all(List<T> as, List<T> bs, BiPredicate<T, T> predicate) {
+        for (int i = 0; i < as.size(); i++)
+            if (!predicate.test(as.get(i), bs.get(i))) return false;
+        return true;
     }
 }
