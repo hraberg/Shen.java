@@ -2,5 +2,5 @@
 
 test_classpath="target/test-classes:`find . -name shen.java-*-standalone.jar`"
 
-time yes | java $JAVA_OPTS -Xss6m -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log
+time yes | java $JAVA_OPTS -Xss4m -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log
 grep -q "failed; continue? (y/n)" test.log && exit 1

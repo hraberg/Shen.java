@@ -35,6 +35,8 @@ public class MicroBench {
         bench("(= 1 1)", times);        // Not for performance, but these easily break
         bench("(= 1 1.0)", times);
 
+        eval("(defun map (f x) (if (cons? x) (cons (f (hd x)) (map f (tl x))) ()))");
+        bench("(map (+ 1) (cons 1 (cons 2 (cons 3 ()))))", times);
     }
 
 

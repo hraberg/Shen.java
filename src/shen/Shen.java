@@ -356,9 +356,9 @@ public class Shen {
         }
 
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
-            if (x.fn.isEmpty()) return relinker(x.symbol, 0);
+            if (x.fn.isEmpty()) return reLinker(x.symbol, 0);
             MethodHandle fn = x.fn.get(0);
-            if (x.fn.size() > 1) return relinker(x.symbol, fn.type().parameterCount());
+            if (x.fn.size() > 1) return reLinker(x.symbol, fn.type().parameterCount());
             return fn;
         }
 
@@ -571,7 +571,7 @@ public class Shen {
 
             int arity = symbol.fn.get(0).type().parameterCount();
             if (arity > args.length) {
-                MethodHandle partial = insertArguments(relinker(name, arity), 0, args);
+                MethodHandle partial = insertArguments(reLinker(name, arity), 0, args);
                 debug("partial: %s", partial);
                 return partial;
             }
@@ -583,12 +583,11 @@ public class Shen {
             if (symbol.fn.size() >  1) {
                 if (match.type().changeReturnType(Object.class).hasPrimitives()) {
                     debug("falling back to exception guard for %s", name);
-                    match = relinkOnClassCast(match, fallback);
+                    match = relinkOn(ClassCastException.class, match, fallback);
                 } else
                     match = guard(name, type, symbol.fn);
                 debug("selected: %s", match);
             }
-            if (isReLinker(site)) return match.invokeWithArguments(args);
 
             synchronized (symbol.symbol) {
                 if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
@@ -635,16 +634,12 @@ public class Shen {
             return differentTypes.get(0);
         }
 
-        static boolean isReLinker(MutableCallSite site) {
-            return site.getClass() != MutableCallSite.class;
-        }
-
         public static boolean checkClass(Class<?> xClass, Object x) {
             return canCastStrict(x.getClass(), xClass);
         }
 
-        static MethodHandle relinkOnClassCast(MethodHandle fn, MethodHandle fallback) {
-            return catchException(fn.asType(fallback.type()), ClassCastException.class, dropArguments(fallback, 0, Exception.class));
+        static MethodHandle relinkOn(Class<? extends Throwable> exception, MethodHandle fn, MethodHandle fallback) {
+            return catchException(fn.asType(fallback.type()), exception, dropArguments(fallback, 0, Exception.class));
         }
 
         static MethodHandle javaCall(MutableCallSite site, String name, MethodType type, Object... args) throws Exception {
@@ -654,7 +649,7 @@ public class Shen {
                     return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
             if (name.startsWith("."))
-                return relinkOnClassCast(findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()),
+                return relinkOn(ClassCastException.class, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()),
                         linker(site, toBytecodeName(name)));
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && intern(classAndMethod[0]).var instanceof Class)
@@ -719,11 +714,9 @@ public class Shen {
             return insertArguments(link, 0, site, name).asCollector(Object[].class, site.type().parameterCount());
         }
 
-        static MethodHandle relinker(String name, int arity) throws IllegalAccessException {
-            return linker(new MutableCallSite(genericMethodType(arity)) {
-                public void setTarget(MethodHandle newTarget) {
-                }
-            }, toBytecodeName(name));
+        static MethodHandle reLinker(String name, int arity) throws IllegalAccessException {
+            MutableCallSite reLinker = new MutableCallSite(genericMethodType(arity));
+            return relinkOn(IllegalStateException.class, reLinker.dynamicInvoker(), linker(reLinker, toBytecodeName(name)));
         }
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
@@ -942,7 +935,7 @@ public class Shen {
 
         static ClassWriter classWriter(String name, Class<?> anInterface) {
             ClassWriter cw = new ClassWriter(COMPUTE_FRAMES);
-            cw.visit(V1_7, ACC_PUBLIC, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
+            cw.visit(V1_7, ACC_PUBLIC | ACC_FINAL, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
             return cw;
         }
 
@@ -1082,7 +1075,7 @@ public class Shen {
                 mv.swap();
                 bindTo();
 
-                mv.invokeVirtual(getType(MethodHandle.class), method("invoke", desc(Object.class)));
+                mv.invokeVirtual(getType(MethodHandle.class), method("invokeExact", desc(Object.class)));
                 if (isPrimitive(returnType)) unbox(returnType);
                 else topOfStack(Object.class);
                 mv.visitLabel(after);
@@ -1199,7 +1192,7 @@ public class Shen {
 
             scope.addAll(asList(args));
             Compiler fn = new Compiler(cw, className, kl, scope.toArray(new Symbol[scope.size()]));
-            fn.method(ACC_PUBLIC | ACC_STATIC, intern(name), bytecodeName, getType(Object.class), types);
+            fn.method(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, intern(name), bytecodeName, getType(Object.class), types);
         }
 
         @SuppressWarnings({"unchecked"})
