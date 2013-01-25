@@ -107,7 +107,7 @@ public class PrimitivesTest {
         is(3.0, "(* (value x) 3)");
         is(1.5, "(let x 2.0 (let y 0.5  (- x y)))");
         is(1.5, "(let x 2 (let y 0.5  (- x y)))");
-//        is(true, "(= (value x) 1)");  // TODO: Fix long == double
+        is(true, "(= (value x) 1)");
         is(intern("fun"), "(defun fun (x y) (- x y)))");
         is(1.5, "(fun 2 0.5)");
         is(1.5, "(fun 2.5 1)");
@@ -331,7 +331,7 @@ public class PrimitivesTest {
     @Test
     public void number() {
         is(1000.0, "10e2");
-//        is(true, "(= 1.0 1)"); // TODO: Fix long == double
+        is(true, "(= 1.0 1)");
 //        is(true, "(--3 3)");
 //        is(true, "(---5 5.0)");
     }

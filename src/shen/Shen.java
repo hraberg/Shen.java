@@ -82,9 +82,6 @@ public class Shen {
         register(Primitives.class, RT::defun);
         register(Overrides.class, RT::override);
 
-        op("=", //(LLPredicate) (left, right) -> left == right,
-                //(DDPredicate) (left, right) -> left == right,
-                (BiPredicate) Objects::equals); // TODO: Quicker to avoid guards, but breaks long == double
         op("+", (LongBinaryOperator) (left, right) -> left + right,
                 (DoubleBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right,
@@ -168,6 +165,11 @@ public class Shen {
     }
 
     public static class Primitives {
+        public static boolean EQ(Object x, Object y) {
+            return Objects.equals(x, y) || x instanceof Number && y instanceof Number
+                    && ((Number) x).doubleValue() == ((Number) y).doubleValue();
+        }
+
         public static Class KL_import(Symbol s) throws ClassNotFoundException {
             Class aClass = Class.forName(s.symbol);
             return set(intern(aClass.getSimpleName()), aClass);
@@ -623,6 +625,7 @@ public class Shen {
         static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
             return toList(candidates.stream()
                     .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
+                    .sorted((x, y) -> y.type().equals(y.type().erase()) ? -1 : 1)
                     .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
         }
 
@@ -872,7 +875,7 @@ public class Shen {
         }
 
         static String unscramble(String s) {
-            return toSourceName(s).replaceAll("_", "-").replaceAll("^KL-", "") .replaceAll("GT", ">")
+            return toSourceName(s).replaceAll("_", "-").replaceAll("^KL-", "") .replaceAll("GT", ">").replaceAll("EQ", "=")
                     .replaceAll("LT", "<").replaceAll("EX$", "!").replaceAll("P$", "?").replaceAll("^AT", "@");
         }
 
