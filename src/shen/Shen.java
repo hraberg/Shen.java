@@ -74,8 +74,8 @@ public class Shen {
         set("*port*", version());
         set("*stinput*", in);
         set("*stoutput*", out);
-        set("*debug*", Boolean.valueOf(getProperty("shen.debug", "false")));
-        set("*debug-asm*", Boolean.valueOf(getProperty("shen.debug.asm", "false")));
+        set("*debug*", Boolean.getBoolean("shen.debug"));
+        set("*debug-asm*", Boolean.getBoolean("shen.debug.asm"));
         set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
