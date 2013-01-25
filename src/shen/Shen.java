@@ -28,7 +28,6 @@ import java.util.stream.Streams;
 
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
-import static java.lang.Double.doubleToLongBits;
 import static java.lang.Math.floorMod;
 import static java.lang.String.format;
 import static java.lang.System.*;
@@ -117,8 +116,6 @@ public class Shen {
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
         public Object var;
-        public long primVar;
-        public int tag = Type.OBJECT;
 
         Symbol(String symbol) {
             this.symbol = symbol.intern();
@@ -132,18 +129,6 @@ public class Shen {
             if (var == null) throw new IllegalArgumentException("variable " + this + " has no value");
             //noinspection unchecked
             return (T) var;
-        }
-
-        public void tag(int tag) {
-            if (this.tag != tag) {
-                debug("retagging %s from %s to %s", this, this.tag,  tag);
-                this.tag = tag;
-                if (tag != Type.OBJECT) var = null;
-            }
-        }
-
-        public boolean hasTag(int tag) {
-            return this.tag == tag;
         }
 
         public boolean equals(Object o) {
@@ -361,33 +346,11 @@ public class Shen {
 
         @SuppressWarnings("unchecked")
         public static <T> T set(Symbol x, T y) {
-            x.tag(Type.OBJECT);
             return (T) (x.var = y);
-        }
-
-        public static boolean set(Symbol x, boolean y) {
-            x.tag(Type.BOOLEAN);
-            x.primVar = y ? 1 : 0;
-            return y;
-        }
-
-        public static long set(Symbol x, long y) {
-            x.tag(Type.LONG);
-            return x.primVar = y;
-        }
-
-        public static double set(Symbol x, double y) {
-            x.tag(Type.DOUBLE);
-            x.primVar = doubleToLongBits(y);
-            return y;
         }
 
         static <T> T set(String x, T y) {
             return set(intern(x), y);
-        }
-
-        static Boolean set(String x, Boolean y) {
-            return set(intern(x), (boolean) y);
         }
 
         public static MethodHandle function(Symbol x) throws IllegalAccessException {
@@ -469,7 +432,7 @@ public class Shen {
     }
 
     static boolean booleanProperty(String property) {
-        return intern(property).primVar == 1;
+        return intern(property).var == Boolean.TRUE;
     }
 
     public static Object eval(String kl) throws Throwable {
@@ -580,26 +543,13 @@ public class Shen {
         static Map<String, CallSite> sites = new HashMap<>();
 
         static MethodHandle
-                link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"), hasTag = mh(Symbol.class, "hasTag"),
-                value = mh(Symbol.class, "value"), primVar = field(Symbol.class, "primVar"),
-                booleanValue = explicitCastArguments(primVar, methodType(boolean.class, Symbol.class)),
-                doubleValue = filterReturnValue(primVar, mh(Double.class, "longBitsToDouble")),
+                link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"), value = mh(Symbol.class, "value"),
                 apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
                 toIntExact = mh(Math.class, "toIntExact");
 
         public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
-            MethodHandle hasTag = insertArguments(RT.hasTag, 1, symbol.tag);
-            site.setTarget(guardWithTest(hasTag, value(symbol).asType(site.type()), site.getTarget()));
+            site.setTarget(value.asType(site.type()));
             return site.getTarget().invoke(symbol);
-        }
-
-        static MethodHandle value(Symbol symbol) throws Exception {
-            switch (symbol.tag) {
-                case Type.BOOLEAN: return booleanValue;
-                case Type.LONG: return primVar;
-                case Type.DOUBLE: return doubleValue;
-            }
-            return value;
         }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
