@@ -83,9 +83,9 @@ public class Shen {
         register(Primitives.class, RT::defun);
         register(Overrides.class, RT::override);
 
-        op("=", (BiPredicate) Objects::equals,
-                (LLPredicate) (left, right) -> left == right,
-                (DDPredicate) (left, right) -> left == right);
+        op("=", (LLPredicate) (left, right) -> left == right,
+                (DDPredicate) (left, right) -> left == right,
+                (BiPredicate) Objects::equals);
         op("+", (LongBinaryOperator) (left, right) -> left + right,
                 (DoubleBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right,
@@ -634,13 +634,11 @@ public class Shen {
             debug("match based on argument types: %s", match);
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
-                // TODO: This optimization breaks = in a non-deterministic way
-                if (match.type().hasPrimitives()) {
+                if (match.type().changeReturnType(Object.class).hasPrimitives()) {
                     debug("falling back to exception guard for %s", name);
                     match = relinkOnClassCast(match, fallback);
-                } else {
+                } else
                     match = guard(name, type, symbol.fn);
-                }
                 debug("selected: %s", match);
             }
             if (isReLinker(site)) return match.invokeWithArguments(args);
