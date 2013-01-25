@@ -603,12 +603,11 @@ public class Shen {
             if (guards.containsKey(key)) return guards.get(key);
             candidates = bestMatchingMethods(type, candidates);
             debug("applicable candidates: %s", candidates);
-
             MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
             for (int i = candidates.size() - 1; i > 0; i--) {
                 MethodHandle fallback = candidates.get(i);
                 MethodHandle target = candidates.get(i - 1);
-                Class<?> differentType = firstDifferentType(target.type().parameterList(), fallback.type().parameterList());
+                Class<?> differentType = find(target.type().parameterList(), fallback.type().parameterList(), (x, y) -> !x.equals(y));
                 int firstDifferent = target.type().parameterList().indexOf(differentType);
                 debug("switching %s on %d argument type %s", name, firstDifferent, differentType);
                 debug("target: %s ; fallback: %s", target, fallback);
@@ -626,12 +625,6 @@ public class Shen {
                     .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
                     .sorted((x, y) -> y.type().equals(y.type().erase()) ? -1 : 1)
                     .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
-        }
-
-        static Class<?> firstDifferentType(List<Class<?>> as, List<Class<?>> bs) {
-            List<Class<?>> differentTypes = new ArrayList<>(as);
-            differentTypes.removeAll(bs);
-            return differentTypes.get(0);
         }
 
         public static boolean checkClass(Class<?> xClass, Object x) {
@@ -1413,5 +1406,12 @@ public class Shen {
         for (int i = 0; i < as.size(); i++)
             if (!predicate.test(as.get(i), bs.get(i))) return false;
         return true;
+    }
+
+    static <T> T find(List<T> as, List<T> bs, BiPredicate<T, T> predicate) {
+        for (int i = 0; i < as.size(); i++)
+            if (predicate.test(as.get(i), bs.get(i)))
+                return as.get(i);
+        return null;
     }
 }
