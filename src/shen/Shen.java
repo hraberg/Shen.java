@@ -381,15 +381,15 @@ public class Shen {
 
     public static class Overrides {
         public static boolean variableP(Object x) {
-            return x.getClass() == Symbol.class && isUpperCase(((Symbol) x).symbol.charAt(0));
+            return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
         }
 
         public static boolean booleanP(Object x) {
-            return x.getClass() == Boolean.class || intern("true").equals(x) || intern("false").equals(x);
+            return x instanceof Boolean || intern("true").equals(x) || intern("false").equals(x);
         }
 
         public static boolean symbolP(Object x) {
-            return x.getClass() == Symbol.class && !booleanP(x);
+            return x instanceof Symbol && !booleanP(x);
         }
 
         public static boolean elementP(Object x, Collection z) {
@@ -700,7 +700,7 @@ public class Shen {
         }
 
         public static MethodHandle function(Object target) throws IllegalAccessException {
-            return target.getClass() == Symbol.class ? Primitives.function((Symbol) target) : (MethodHandle) target;
+            return target instanceof Symbol ? Primitives.function((Symbol) target) : (MethodHandle) target;
         }
 
         static MethodHandle linker(MutableCallSite site, String name) throws IllegalAccessException {
