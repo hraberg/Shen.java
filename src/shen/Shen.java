@@ -543,14 +543,9 @@ public class Shen {
         static Map<String, CallSite> sites = new HashMap<>();
 
         static MethodHandle
-                link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"), value = mh(Symbol.class, "value"),
+                link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"),
                 apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
                 toIntExact = mh(Math.class, "toIntExact");
-
-        public static Object value(MutableCallSite site, Symbol symbol) throws Throwable {
-            site.setTarget(value.asType(site.type()));
-            return site.getTarget().invoke(symbol);
-        }
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
@@ -749,22 +744,6 @@ public class Shen {
             return new ConstantCallSite(constant(Symbol.class, intern(toSourceName(name))));
         }
 
-        public static CallSite valueBSM(Lookup lookup, String name, MethodType type) throws Exception {
-            String[] parts = name.split(":");
-            if (parts.length == 2)  {
-                String key = name + type;
-                if (!sites.containsKey(key)) sites.put(key, valueCallSite(type));
-                return sites.get(key);
-            }
-            return valueCallSite(type);
-        }
-
-        static MutableCallSite valueCallSite(MethodType type) {
-            MutableCallSite site = new MutableCallSite(type);
-            site.setTarget(mh(RT.class, "value").bindTo(site).asType(type));
-            return site;
-        }
-
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
             String key = name + type;
             if (!sites.containsKey(key)) sites.put(key, applyCallSite(type));
@@ -922,8 +901,8 @@ public class Shen {
                 asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
         static Handle
                 applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
-                symbolBSM = handle(mh(RT.class, "symbolBSM")), valueBSM = handle(mh(RT.class, "valueBSM")),
-                or = handle(RT.mh(Primitives.class, "or")), and = handle(RT.mh(Primitives.class, "and"));
+                symbolBSM = handle(mh(RT.class, "symbolBSM")), or = handle(RT.mh(Primitives.class, "or")),
+                and = handle(RT.mh(Primitives.class, "and"));
         static {
             register(Macros.class, Compiler::macro);
         }
@@ -1157,10 +1136,8 @@ public class Shen {
 
             public void value(boolean tail, Type returnType, Object x) throws Throwable {
                 compile(x, false);
-                String name = "__value__";
-                if (x instanceof Symbol && topOfStack.equals(getType(Symbol.class))) name += ":" + x;
                 maybeCast(Symbol.class);
-                mv.invokeDynamic(name, desc(Object.class, Symbol.class), valueBSM);
+                mv.invokeVirtual(getType(Symbol.class), method("value", desc(Object.class)));
                 topOfStack(Object.class);
             }
 
