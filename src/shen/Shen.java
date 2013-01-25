@@ -83,9 +83,9 @@ public class Shen {
         register(Primitives.class, RT::defun);
         register(Overrides.class, RT::override);
 
-        op("=", (LLPredicate) (left, right) -> left == right,
-                (DDPredicate) (left, right) -> left == right,
-                (BiPredicate) Objects::equals);
+        op("=", //(LLPredicate) (left, right) -> left == right,
+                //(DDPredicate) (left, right) -> left == right,
+                (BiPredicate) Objects::equals); // TODO: Quicker to avoid guards, but breaks long == double
         op("+", (LongBinaryOperator) (left, right) -> left + right,
                 (DoubleBinaryOperator) (left, right) -> left + right);
         op("-", (LongBinaryOperator) (left, right) -> left - right,
