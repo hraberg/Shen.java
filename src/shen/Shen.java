@@ -22,9 +22,9 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.*;
 import java.util.jar.Manifest;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.Streams;
 
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
@@ -41,10 +41,13 @@ import static java.lang.reflect.Modifier.isPublic;
 import static java.nio.file.Files.readAllBytes;
 import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
+import static java.util.Collections.singleton;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.isSame;
 import static java.util.function.Predicates.nonNull;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
+import static java.util.stream.Streams.concat;
+import static java.util.stream.Streams.emptyStream;
 import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.Type.*;
@@ -1006,7 +1009,7 @@ public class Shen {
         }
 
         void macroExpand(Symbol s, List<Object> args, Type returnType, boolean tail) throws Throwable {
-            macros.get(s).invokeWithArguments(concat(asList(new Macros(), tail, returnType), args));
+            macros.get(s).invokeWithArguments(into(asList(new Macros(), tail, returnType), args));
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
@@ -1171,8 +1174,8 @@ public class Shen {
 
         void fn(String name, Object kl, Symbol... args) throws Throwable {
             String bytecodeName = toBytecodeName(name) + "_" + id++;
-            List<Symbol> scope = toList(closesOver(new HashSet<>(asList(args)), kl).stream().uniqueElements());
-            scope.retainAll(concat(locals.keySet(), this.args));
+            List<Symbol> scope = toList(closesOver(new HashSet<>(asList(args)), kl).uniqueElements());
+            scope.retainAll(into(locals.keySet(), this.args));
 
             List<Type> types = toList(scope.stream().map(this::typeOf));
             for (Symbol ignore : args) types.add(getType(Object.class));
@@ -1186,22 +1189,20 @@ public class Shen {
         }
 
         @SuppressWarnings({"unchecked"})
-        List<Symbol> closesOver(Set<Symbol> scope, Object kl) {
+        Stream<Symbol> closesOver(Set<Symbol> scope, Object kl) {
             if (kl instanceof Symbol && !scope.contains(kl))
-                return list((Symbol) kl);
+                return singleton((Symbol) kl).stream();
             if (kl instanceof List) {
                 List<Object> list = (List) kl;
                 if (!list.isEmpty())
-                    if (intern("let").equals(hd(list)))
-                        return concat(closesOver(new HashSet<>(scope), list.get(2)),
-                                closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)), list.get(3)));
-                    if (intern("lambda").equals(hd(list)))
-                        return closesOver(new HashSet<>(concat(asList((Symbol) list.get(1)), scope)), list.get(2));
-                    if (intern("defun").equals(hd(list)))
-                        return closesOver(new HashSet<>(concat((List<Symbol>) list.get(2), scope)), list.get(3));
-                    return toList(mapcat(list.stream(), o -> closesOver(scope, o)));
+                    switch (hd(list).toString()) {
+                        case "let": return concat(closesOver(scope, list.get(2)), closesOver(conj(scope, list.get(2)), list.get(3)));
+                        case "lambda": return closesOver(conj(scope, list.get(2)), list.get(2));
+                        case "defun": return closesOver(into(scope, (List) list.get(2)), list.get(3));
+                    }
+                    return mapcat(list.stream(), o -> closesOver(scope, o));
             }
-            return list();
+            return emptyStream();
         }
 
         void emptyList() {
@@ -1390,13 +1391,19 @@ public class Shen {
         return stream.map(mapper).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
     }
 
-    static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Collection<R>> mapper) {
-        //noinspection Convert2MethodRef
-        return source.map(mapper).reduce(new ArrayList<R>(), (x, y) -> concat(x, y)).stream();
+    static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Stream<R>> mapper) {
+        return source.explode((Stream.Downstream<R> downstream, T x) ->  downstream.send(mapper.apply(x)));
     }
 
-    static <T> List<T> concat(Collection<? extends T> a, Collection<? extends T> b) {
-        return toList(Streams.concat(a.stream(), b.stream()));
+    static <T, C extends Collection<T>> C into(C a, Collection<? extends T> b) {
+        Collector<Object,? extends Collection<Object>> collector = a instanceof Set ? Collectors.toSet() : Collectors.toList();
+        //noinspection unchecked
+        return (C) concat(a.stream(), b.stream()).collect(collector);
+    }
+
+    static <T, C extends Collection<T>> C conj(C c, Object x) {
+        //noinspection unchecked
+        return into(c, singleton((T) x));
     }
 
     static <T> boolean all(List<T> as, List<T> bs, BiPredicate<T, T> predicate) {
