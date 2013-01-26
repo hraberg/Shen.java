@@ -188,9 +188,10 @@ public class Shen {
         }
 
         public static List<Object> cons(Object x, List<Object> y) {
-            y = new ArrayList<Object>(y);
-            y.add(0, x);
-            return y;
+            List<Object> result = new ArrayList<>(y.size() + 1);
+            result.add(x);
+            result.addAll(y);
+            return result;
         }
 
         public static boolean consP(Object x) {
