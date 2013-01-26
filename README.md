@@ -101,9 +101,9 @@ The benchmarks can be run via:
 * Simple Java inter-op (based on Clojure's syntax).
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
-* Pre-compilation of the `kl` to `.class` files.
+* Pre-compilation of the `.kl` to `.class` files.
 * The Shen test suite passes.
-* Different bootstrap methods for invoke, apply and value. Evolving.
+* Different bootstrap methods for invoke, apply and symbols. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
 
 
@@ -111,17 +111,21 @@ The benchmarks can be run via:
 
 This is bound to change as we go:
 
-* = is broken in a non-deterministic way.
 * Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for built-ins.
 * Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
 * Adherence to Shen types when compiling typed Shen to Java.
 * Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
+* Revisit how call sites are built and cached, see above.
 * Proper Java inter-op. Potentially using [Dynalink](https://github.com/szegedi/dynalink).
+* Reader macros/extension for [`edn`](https://github.com/edn-format/edn) to support embedded Clojure-like maps/sets.
+* Persistent collections.
 
 
 ## References
 
 [The Book of Shen](http://www.shenlanguage.org/tbos.html) Mark Tarver, 2012
+
+[LISP in Small Pieces]() Christian Queinnec, 1996 "The aim of this book is to cover, in widest possible scope, the semantics and implementations of interpreters and compilers for applicative languages."
 
 [Asm 4.0](http://asm.ow2.org/index.html) Eric Bruneton, 2007-12 -"A Java bytecode engineering library"
 
