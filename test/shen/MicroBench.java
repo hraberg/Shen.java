@@ -37,6 +37,9 @@ public class MicroBench {
 
         eval("(defun map (f x) (if (cons? x) (cons (f (hd x)) (map f (tl x))) ()))");
         bench("(map (+ 1) (cons 1 (cons 2 (cons 3 ()))))", times);
+
+        eval("(defun inc (x) (+ 1 x))");
+        bench("(map inc (cons 1 (cons 2 (cons 3 ()))))", times);
     }
 
 

@@ -546,8 +546,8 @@ public class Shen {
 
         static MethodHandle
                 link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"),
-                apply = mh(RT.class, "apply"), checkClass = mh(RT.class, "checkClass"),
-                toIntExact = mh(Math.class, "toIntExact");
+                checkClass = mh(RT.class, "checkClass"), toIntExact = mh(Math.class, "toIntExact"),
+                partial = mh(RT.class, "partial"), arityCheck = mh(RT.class, "arityCheck");
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
@@ -659,7 +659,7 @@ public class Shen {
                 if (arity > actual) target = dropArguments(target, actual, asList(sam.getParameterTypes()).subList(actual, arity));
                 return asInterfaceInstance(sam.getDeclaringClass(), target);
             }
-             return null;
+            return null;
         }
 
         static MethodHandle filterJavaTypes(MethodHandle method) throws IllegalAccessException {
@@ -690,13 +690,6 @@ public class Shen {
                 }
                 return null;
             });
-        }
-
-        public static Object apply(MutableCallSite site, Object target, Object... args) throws Throwable {
-            MethodHandle mh = function(target);
-            if (isLambda(mh)) return uncurry(mh, args);
-            if (mh.type().parameterCount() > args.length) return insertArguments(mh, 0, args);
-            return mh.invokeWithArguments(args);
         }
 
         public static MethodHandle function(Object target) throws IllegalAccessException {
@@ -739,10 +732,19 @@ public class Shen {
             return sites.get(key);
         }
 
+        public static Object partial(MethodHandle target, Object... args) throws Throwable {
+            if (args.length > target.type().parameterCount()) return uncurry(target, args);
+            return insertArguments(target, 0, args);
+        }
+
+        public static boolean arityCheck(int arity, MethodHandle target) throws Throwable {
+            return target.type().parameterCount() == arity;
+        }
+
         static CallSite applyCallSite(MethodType type) {
-            MutableCallSite site = new MutableCallSite(type);
-            site.setTarget(apply.bindTo(site).asCollector(Object[].class, type.parameterCount() - 1).asType(type));
-            return site;
+            MethodHandle apply = invoker(type.dropParameterTypes(0, 1));
+            MethodHandle test = insertArguments(arityCheck, 0, type.parameterCount() - 1);
+            return new ConstantCallSite(guardWithTest(test, apply, partial.asType(apply.type())).asType(type));
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) {
@@ -848,10 +850,6 @@ public class Shen {
             for (Object arg : args)
                 chain = ((MethodHandle) chain).invokeExact(arg);
             return chain;
-        }
-
-        static boolean isLambda(MethodHandle fn) {
-            return fn.type().parameterCount() == 1 && !fn.isVarargsCollector() && Object.class == fn.type().parameterType(0);
         }
 
         public static MethodHandle bindTo(MethodHandle fn, Object arg) {
@@ -1045,8 +1043,10 @@ public class Shen {
         }
 
         void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
+            if (!topOfStack.equals(getType(MethodHandle.class)))
+                mv.invokeStatic(getType(RT.class), method("function", desc(MethodHandle.class, Object.class)));
             List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
-            argumentTypes.add(0, getType(Object.class));
+            argumentTypes.add(0, getType(MethodHandle.class));
             mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), applyBSM);
             topOfStack = returnType;
         }
