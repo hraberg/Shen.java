@@ -496,7 +496,6 @@ public class Shen {
         static List<Object> read(Reader reader) throws Exception {
             lines.clear();
             currentLine = 1;
-            //noinspection unchecked
             return tokenizeAll(new Scanner(reader).useDelimiter("(\\s|\\)|\")"));
         }
 
@@ -530,7 +529,7 @@ public class Shen {
             return s.substring(0, s.length() - 1);
         }
 
-        static List tokenizeAll(Scanner sc) throws Exception {
+        static List<Object> tokenizeAll(Scanner sc) throws Exception {
             List<Object> list = list();
             lines.put(list, currentLine);
             Object x;
