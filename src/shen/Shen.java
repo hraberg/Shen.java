@@ -1413,6 +1413,6 @@ public class Shen {
 
     static <T> T find(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
         return zip(as.stream(), bs.stream(), (x, y) -> predicate.test(x, y) ? x : null)
-                .filter(negate(isNull())).findFirst().orElse((T) null);
+                .filter(nonNull()).findFirst().orElse((T) null);
     }
 }
