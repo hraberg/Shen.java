@@ -23,7 +23,6 @@ import java.util.concurrent.Callable;
 import java.util.function.*;
 import java.util.jar.Manifest;
 import java.util.stream.Collector;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.lang.Character.isUpperCase;
@@ -46,6 +45,8 @@ import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.isSame;
 import static java.util.function.Predicates.nonNull;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Streams.concat;
 import static java.util.stream.Streams.emptyStream;
 import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
@@ -553,7 +554,7 @@ public class Shen {
             name = toSourceName(name);
             MethodType type = site.type();
             debug("LINKING: %s%s %s", name, type, args);
-            List<Class<?>> actualTypes = toList(stream(args).map(Object::getClass));
+            List<Class<?>> actualTypes = vec(stream(args).map(Object::getClass));
             debug("actual types: %s", actualTypes);
             Symbol symbol = intern(name);
             debug("candidates: %s", symbol.fn);
@@ -566,7 +567,7 @@ public class Shen {
                     return java.invokeWithArguments(args);
                 }
                 throw new NoSuchMethodException("undefined function " + name + type
-                        + (symbol.fn.isEmpty() ?  "" : " in " + toList(symbol.fn.stream().map(MethodHandle::type))));
+                        + (symbol.fn.isEmpty() ?  "" : " in " + vec(symbol.fn.stream().map(MethodHandle::type))));
             }
 
             int arity = symbol.fn.get(0).type().parameterCount();
@@ -621,7 +622,7 @@ public class Shen {
         }
 
         static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
-            return toList(candidates.stream()
+            return vec(candidates.stream()
                     .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
                     .sorted((x, y) -> y.type().equals(y.type().erase()) ? -1 : 1)
                     .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
@@ -682,7 +683,7 @@ public class Shen {
                     if (m.getName().equals(method)) {
                         m.setAccessible(true);
                         MethodHandle mh = (m instanceof Method) ? lookup.unreflect((Method) m) : lookup.unreflectConstructor((Constructor) m);
-                        mh.asType(methodType(type.returnType(), toList(type.parameterList().stream()
+                        mh.asType(methodType(type.returnType(), vec(type.parameterList().stream()
                                 .map(c -> c.equals(Long.class) ? Integer.class : c.equals(long.class) ? int.class : c))));
                         return filterJavaTypes(mh);
                     }
@@ -825,7 +826,7 @@ public class Shen {
         }
 
         static void op(String name, Object... op) {
-            intern(name).fn.addAll(toList(stream(op).map(RT::findSAM)));
+            intern(name).fn.addAll(vec(stream(op).map(RT::findSAM)));
         }
 
         static void register(Class<?> aClass, Block<? super Method> hook) {
@@ -872,7 +873,7 @@ public class Shen {
         }
 
         static Method findSAM(Class<?> lambda) {
-            List<Method> methods = toList(stream(lambda.getDeclaredMethods()).filter(m -> !m.isSynthetic()));
+            List<Method> methods = vec(stream(lambda.getDeclaredMethods()).filter(m -> !m.isSynthetic()));
             return methods.size() == 1 ? methods.get(0) : null;
         }
 
@@ -1013,7 +1014,7 @@ public class Shen {
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
-            List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, getType(Object.class), false, false)));
+            List<Type> argumentTypes = vec(args.stream().map(o -> compile(o, getType(Object.class), false, false)));
 
             if (isSelfCall(s, args)) {
                 if (tail) {
@@ -1045,7 +1046,7 @@ public class Shen {
         void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
             if (!topOfStack.equals(getType(MethodHandle.class)))
                 mv.invokeStatic(getType(RT.class), method("function", desc(MethodHandle.class, Object.class)));
-            List<Type> argumentTypes = toList(args.stream().map(o -> compile(o, false)));
+            List<Type> argumentTypes = vec(args.stream().map(o -> compile(o, false)));
             argumentTypes.add(0, getType(MethodHandle.class));
             mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), applyBSM);
             topOfStack = returnType;
@@ -1174,10 +1175,10 @@ public class Shen {
 
         void fn(String name, Object kl, Symbol... args) throws Throwable {
             String bytecodeName = toBytecodeName(name) + "_" + id++;
-            List<Symbol> scope = toList(closesOver(new HashSet<>(asList(args)), kl).uniqueElements());
+            List<Symbol> scope = vec(closesOver(new HashSet<>(asList(args)), kl).uniqueElements());
             scope.retainAll(into(locals.keySet(), this.args));
 
-            List<Type> types = toList(scope.stream().map(this::typeOf));
+            List<Type> types = vec(scope.stream().map(this::typeOf));
             for (Symbol ignore : args) types.add(getType(Object.class));
 
             push(handle(className, bytecodeName, desc(getType(Object.class), types)));
@@ -1287,7 +1288,7 @@ public class Shen {
                 cw.visitSource(source, null);
                 constructor();
                 Method sam = findSAM(anInterface);
-                List<Type> types = toList(stream(sam.getParameterTypes()).map(Type::getType));
+                List<Type> types = vec(stream(sam.getParameterTypes()).map(Type::getType));
                 method(ACC_PUBLIC, intern(sam.getName()), toBytecodeName(sam.getName()), getType(sam.getReturnType()), types);
                 bytes = cw.toByteArray();
                 if (booleanProperty("*debug-asm*")) printASM(bytes, sam);
@@ -1379,8 +1380,8 @@ public class Shen {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> List<T> toList(Stream<? extends T> stream) {
-        return (List<T>) stream.collect(Collectors.toList());
+    static <T> List<T> vec(Stream<? extends T> stream) {
+        return (List<T>) stream.collect(toList());
     }
 
     static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
@@ -1396,7 +1397,7 @@ public class Shen {
     }
 
     static <T, C extends Collection<T>> C into(C a, Collection<? extends T> b) {
-        Collector<Object,? extends Collection<Object>> collector = a instanceof Set ? Collectors.toSet() : Collectors.toList();
+        Collector<Object,? extends Collection<Object>> collector = a instanceof Set ? toSet() : toList();
         //noinspection unchecked
         return (C) concat(a.stream(), b.stream()).collect(collector);
     }
