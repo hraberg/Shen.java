@@ -42,13 +42,13 @@ import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
 import static java.util.Collections.singleton;
 import static java.util.Objects.deepEquals;
-import static java.util.function.Predicates.isSame;
-import static java.util.function.Predicates.nonNull;
+import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Streams.concat;
 import static java.util.stream.Streams.emptyStream;
+import static java.util.stream.Streams.zip;
 import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.Type.*;
@@ -1407,16 +1407,12 @@ public class Shen {
         return into(c, singleton((T) x));
     }
 
-    static <T> boolean all(List<T> as, List<T> bs, BiPredicate<T, T> predicate) {
-        for (int i = 0; i < as.size(); i++)
-            if (!predicate.test(as.get(i), bs.get(i))) return false;
-        return true;
+    static <T> boolean all(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
+        return zip(as.stream(), bs.stream(), predicate::test).allMatch(isEqual(true));
     }
 
-    static <T> T find(List<T> as, List<T> bs, BiPredicate<T, T> predicate) {
-        for (int i = 0; i < as.size(); i++)
-            if (predicate.test(as.get(i), bs.get(i)))
-                return as.get(i);
-        return null;
+    static <T> T find(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
+        return zip(as.stream(), bs.stream(), (x, y) -> predicate.test(x, y) ? x : null)
+                .filter(negate(isNull())).findFirst().orElse((T) null);
     }
 }
