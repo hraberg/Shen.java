@@ -486,7 +486,7 @@ public class Shen {
         String version = null;
         try (InputStream manifest = getSystemClassLoader().getResourceAsStream("META-INF/MANIFEST.MF")) {
                 version = new Manifest(manifest).getMainAttributes().getValue(IMPLEMENTATION_VERSION);
-        } catch (Exception ignored) {
+        } catch (IOException ignored) {
         }
         return version != null ? version : "<unknown>";
     }
@@ -687,7 +687,7 @@ public class Shen {
                                 .map(c -> c.equals(Long.class) ? Integer.class : c.equals(long.class) ? int.class : c))));
                         return filterJavaTypes(mh);
                     }
-                } catch (Exception ignore) {
+                } catch (WrongMethodTypeException | IllegalAccessException ignored) {
                 }
                 return null;
             });
@@ -1179,7 +1179,7 @@ public class Shen {
             scope.retainAll(into(locals.keySet(), this.args));
 
             List<Type> types = vec(scope.stream().map(this::typeOf));
-            for (Symbol ignore : args) types.add(getType(Object.class));
+            for (Symbol ignored : args) types.add(getType(Object.class));
 
             push(handle(className, bytecodeName, desc(getType(Object.class), types)));
             insertArgs(0, scope);
