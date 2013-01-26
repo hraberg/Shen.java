@@ -214,10 +214,7 @@ public class Shen {
         }
 
         public static <T> List<T> tl(List<T> list) {
-            if (list.isEmpty()) return list;
-            list = new ArrayList<>(list);
-            list.remove(0);
-            return list;
+            return list.isEmpty() ? list : list.subList(1, list.size());
         }
 
         public static Object hd(Cons cons) {
