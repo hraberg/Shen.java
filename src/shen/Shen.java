@@ -167,7 +167,7 @@ public class Shen {
         }
     }
 
-    public static class Primitives {
+    public static final class Primitives {
         public static boolean EQ(Object x, Object y) {
             return Objects.equals(x, y) || x instanceof Number && y instanceof Number
                     && ((Number) x).doubleValue() == ((Number) y).doubleValue();
@@ -377,8 +377,8 @@ public class Shen {
         }
     }
 
-    public static class Overrides {
-        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen-tuple");
+    public static final class Overrides {
+        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen-tuple"), shen_failEX = intern("shen-fail!");
 
         public static boolean variableP(Object x) {
             return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
@@ -417,6 +417,10 @@ public class Shen {
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
             fill(vector, (int) counter, (int) n + 1, x);
             return vector;
+        }
+
+        public static Object shen_reassemble(Object i, Object o) {
+            return o.equals(shen_failEX) ? o : ATp(i, o);
         }
 
         public static List<Long> read_file_as_bytelist(String file) throws IOException {
@@ -578,6 +582,7 @@ public class Shen {
             MethodHandle match = find(symbol.fn.stream(), f -> all(actualTypes, f.type().parameterList(), RT::canCastStrict));
             if (match == null) throw new NoSuchMethodException("undefined function " + name + type);
             debug("match based on argument types: %s", match);
+
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
             if (symbol.fn.size() >  1) {
                 if (match.type().changeReturnType(Object.class).hasPrimitives()) {
@@ -743,7 +748,7 @@ public class Shen {
         static CallSite applyCallSite(MethodType type) {
             MethodHandle apply = invoker(type.dropParameterTypes(0, 1));
             MethodHandle test = insertArguments(arityCheck, 0, type.parameterCount() - 1);
-            return new ConstantCallSite(guardWithTest(test, apply, partial.asType(apply.type())).asType(type));
+            return new ConstantCallSite(guardWithTest(test, apply, partial.asType(type)).asType(type));
         }
 
         static MethodHandle mh(Class<?> aClass, String name, Class... types) {

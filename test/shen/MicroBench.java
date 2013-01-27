@@ -40,6 +40,13 @@ public class MicroBench {
 
         eval("(defun inc (x) (+ 1 x))");
         bench("(map inc (cons 1 (cons 2 (cons 3 ()))))", times);
+
+        times = 30;
+        bench("(cons 1 1.0)", times);
+        bench("((cons 1) 1.0)", times);
+
+        eval("(defun my-cons (x) ((cons 1) x))");
+        bench("(my-cons 1.0)", times);
     }
 
 
