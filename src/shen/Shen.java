@@ -25,6 +25,7 @@ import java.util.jar.Manifest;
 import java.util.stream.Collector;
 import java.util.stream.Stream;
 
+import static java.lang.Byte.toUnsignedLong;
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Math.floorMod;
@@ -423,7 +424,7 @@ public class Shen {
             byte[] bytes = readAllBytes(fs.getPath((String) intern("*home-directory*").value(), file));
             Long[] result = new Long[bytes.length];
             for (int i = 0; i < bytes.length; i++)
-                result[i] = (long) bytes[i];
+                result[i] = toUnsignedLong(bytes[i]);
             return new ArrayList<>(asList(result));
         }
     }
