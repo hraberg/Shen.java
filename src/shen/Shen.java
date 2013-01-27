@@ -637,7 +637,7 @@ public class Shen {
                     return findJavaMethod(type, aClass.getName(), aClass.getConstructors());
             }
             if (name.startsWith("."))
-                return relinkOn(ClassCastException.class, findJavaMethod(type, name.substring(1, name.length()), args[0].getClass().getMethods()),
+                return relinkOn(ClassCastException.class, findJavaMethod(type, name.substring(1), args[0].getClass().getMethods()),
                         linker(site, toBytecodeName(name)));
             String[] classAndMethod = name.split("/");
             if (classAndMethod.length == 2 && intern(classAndMethod[0]).var instanceof Class)
@@ -757,36 +757,6 @@ public class Shen {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }
-
-        static String desc(Class<?> returnType, Class<?>... argumentTypes) {
-            return methodType(returnType, argumentTypes).toMethodDescriptorString();
-        }
-
-        static String desc(Type returnType, List<Type> argumentTypes) {
-            return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
-        }
-
-        static Handle handle(MethodHandle handle) {
-            try {
-                MethodHandleInfo info = new MethodHandleInfo(handle);
-                return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        static Handle handle(String className, String name, String desc) {
-            return new Handle(Opcodes.H_INVOKESTATIC, className, name, desc);
-        }
-
-        static Type boxedType(Type type) {
-            if (!isPrimitive(type)) return type;
-            return getType(forBasicType(type.getDescriptor().charAt(0)).wrapperType());
-        }
-
-        static boolean isPrimitive(Type type) {
-            return type.getSort() < ARRAY;
         }
 
         static boolean canCast(Class<?> a, Class<?> b) {
@@ -927,6 +897,52 @@ public class Shen {
 
         static org.objectweb.asm.commons.Method method(String name, String desc) {
             return new org.objectweb.asm.commons.Method(name, desc);
+        }
+
+
+        static String desc(Class<?> returnType, Class<?>... argumentTypes) {
+            return methodType(returnType, argumentTypes).toMethodDescriptorString();
+        }
+
+        static String desc(Type returnType, List<Type> argumentTypes) {
+            return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
+        }
+
+        static Handle handle(MethodHandle handle) {
+            try {
+                MethodHandleInfo info = new MethodHandleInfo(handle);
+                return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        static Handle handle(String className, String name, String desc) {
+            return new Handle(Opcodes.H_INVOKESTATIC, className, name, desc);
+        }
+
+        static Type boxedType(Type type) {
+            if (!isPrimitive(type)) return type;
+            return getType(forBasicType(type.getDescriptor().charAt(0)).wrapperType());
+        }
+
+        static boolean isPrimitive(Type type) {
+            return type.getSort() < ARRAY;
+        }
+
+        static void printASM(byte[] bytes, Method method) {
+            ASMifier asm = new ASMifier();
+            PrintWriter pw = new PrintWriter(err);
+            TraceClassVisitor printer = new TraceClassVisitor(null, asm, pw);
+            if (method == null)
+               new ClassReader(bytes).accept(printer, SKIP_DEBUG);
+            else {
+                ClassNode cn = new ClassNode();
+                new ClassReader(bytes).accept(cn, SKIP_DEBUG);
+                find(cn.methods.stream(), mn -> mn.name.equals(method.getName())).accept(printer);
+                asm.print(pw);
+                pw.flush();
+            }
         }
 
         static void macro(Method m) {
@@ -1335,21 +1351,6 @@ public class Shen {
             mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
                     desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
             topOfStack(MethodHandle.class);
-        }
-
-        static void printASM(byte[] bytes, Method method) {
-            ASMifier asm = new ASMifier();
-            PrintWriter pw = new PrintWriter(err);
-            TraceClassVisitor printer = new TraceClassVisitor(null, asm, pw);
-            if (method == null)
-               new ClassReader(bytes).accept(printer, SKIP_DEBUG);
-            else {
-                ClassNode cn = new ClassNode();
-                new ClassReader(bytes).accept(cn, SKIP_DEBUG);
-                find(cn.methods.stream(), mn -> mn.name.equals(method.getName())).accept(printer);
-                asm.print(pw);
-                pw.flush();
-            }
         }
 
         static Unsafe unsafe() {
