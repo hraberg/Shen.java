@@ -190,7 +190,7 @@ public class Shen {
             return new Cons(x, y);
         }
 
-        public static <T> List<T> cons(T x, List<T> y) {
+        public static <T, E extends T> List<T> cons(E x, List<T> y) {
             Object[] result = new Object[y.size() + 1];
             result[0] = x;
             arraycopy(y.toArray(), 0, result, 1, y.size());
@@ -1374,7 +1374,7 @@ public class Shen {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> List<T> vec(Stream<? extends T> stream) {
+    static <T> List<T> vec(Stream<T> stream) {
         return (List<T>) stream.collect(toList());
     }
 
