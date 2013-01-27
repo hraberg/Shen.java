@@ -774,7 +774,7 @@ public class Shen {
         static Wrapper wrapper(Class<?> type) {
             if (isPrimitiveType(type)) return forPrimitiveType(type);
             if (isWrapperType(type)) return forWrapperType(type);
-            return Wrapper.forBasicType(type);
+            return forBasicType(type);
         }
 
         public static Symbol defun(Symbol name, MethodHandle fn) throws Throwable {
