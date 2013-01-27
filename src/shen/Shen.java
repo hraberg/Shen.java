@@ -1074,6 +1074,15 @@ public class Shen {
             }
 
             public void KL_if(boolean tail, Type returnType, Object test, Object then, Object _else) throws Exception {
+                if (test == Boolean.TRUE || test == intern("true")) {
+                    compile(then, returnType, tail);
+                    return;
+                }
+                if (test == Boolean.FALSE || test == intern("false")) {
+                    compile(_else, returnType, tail);
+                    return;
+                }
+
                 Label elseStart = mv.newLabel();
                 Label end = mv.newLabel();
 
