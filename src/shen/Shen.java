@@ -187,7 +187,7 @@ public class Shen {
             }
         }
 
-        public static Object cons(Object x, Object y) {
+        public static Cons cons(Object x, Object y) {
             return new Cons(x, y);
         }
 
@@ -620,7 +620,7 @@ public class Shen {
         static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
             return vec(candidates.stream()
                     .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
-                    .sorted((x, y) -> y.type().equals(y.type().erase()) ? -1 : 1)
+                    .sorted((x, y) -> y.type().parameterList().equals(y.type().erase().parameterList()) ? -1 : 1)
                     .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
         }
 
