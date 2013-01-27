@@ -202,10 +202,6 @@ public class Shen {
             return x instanceof Cons || x instanceof List && !((List) x).isEmpty();
         }
 
-        public static Object failEX() {
-            throw new AssertionError();
-        }
-
         public static Object simple_error(String s) {
             throw new RuntimeException(s, null, false, false) {};
         }
