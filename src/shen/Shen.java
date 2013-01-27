@@ -39,17 +39,15 @@ import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.nio.file.Files.readAllBytes;
 import static java.util.Arrays.*;
-import static java.util.Collections.EMPTY_LIST;
-import static java.util.Collections.nCopies;
-import static java.util.Collections.singleton;
+import static java.util.Arrays.fill;
+import static java.util.Arrays.stream;
+import static java.util.Collections.*;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
-import static java.util.stream.Streams.concat;
-import static java.util.stream.Streams.emptyStream;
-import static java.util.stream.Streams.zip;
+import static java.util.stream.Streams.*;
 import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.Type.*;
@@ -81,6 +79,7 @@ public class Shen {
         set("*stoutput*", out);
         set("*debug*", Boolean.getBoolean("shen.debug"));
         set("*debug-asm*", Boolean.getBoolean("shen.debug.asm"));
+        set("*can-redefine-internals?*", Boolean.getBoolean("shen.can.redefine.internals"));
         set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
@@ -378,7 +377,7 @@ public class Shen {
     }
 
     public static final class Overrides {
-        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen-tuple"), shen_failEX = intern("shen-fail!");
+        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen-tuple");
 
         public static boolean variableP(Object x) {
             return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
@@ -417,10 +416,6 @@ public class Shen {
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
             fill(vector, (int) counter, (int) n + 1, x);
             return vector;
-        }
-
-        public static Object shen_reassemble(Object i, Object o) {
-            return o.equals(shen_failEX) ? o : ATp(i, o);
         }
 
         public static List<Long> read_file_as_bytelist(String file) throws IOException {
@@ -552,6 +547,9 @@ public class Shen {
                 checkClass = mh(RT.class, "checkClass"), toIntExact = mh(Math.class, "toIntExact"),
                 partial = mh(RT.class, "partial"), arityCheck = mh(RT.class, "arityCheck");
 
+        static Set<Symbol> primitives = hashSet(concat(stream(Primitives.class.getMethods()),
+                stream(Overrides.class.getMethods())).map(Method::getName).map(RT::unscramble).map(Primitives::intern));
+
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
             MethodType type = site.type();
@@ -593,11 +591,19 @@ public class Shen {
                 debug("selected: %s", match);
             }
 
-            synchronized (symbol.symbol) {
-                if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
-                site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
-            }
+            if (isPossibleToRedefine(symbol)) {
+                synchronized (symbol.symbol) {
+                    if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
+                    site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
+                }
+            } else
+                site.setTarget(match.asType(type));
+
             return match.invokeWithArguments(args);
+        }
+
+        static boolean isPossibleToRedefine(Symbol symbol) {
+            return booleanProperty("*can-redefine-internals?*") || !(primitives.contains(symbol));
         }
 
         static Map<List, MethodHandle> guards = new HashMap<>();
@@ -1392,6 +1398,11 @@ public class Shen {
     @SuppressWarnings("unchecked")
     static <T> List<T> vec(Stream<T> stream) {
         return (List<T>) stream.collect(toList());
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> Set<T> hashSet(Stream<T> stream) {
+        return (Set<T>) stream.collect(toSet());
     }
 
     static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
