@@ -153,14 +153,12 @@ public class Shen {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-
             Cons cons = (Cons) o;
-            return !(car != null ? !car.equals(cons.car) : cons.car != null)
-                    && !(cdr != null ? !cdr.equals(cons.cdr) : cons.cdr != null);
+            return car.equals(cons.car) && cdr.equals(cons.cdr);
         }
 
         public int hashCode() {
-            return 31 * (car != null ? car.hashCode() : 0) + (cdr != null ? cdr.hashCode() : 0);
+            return 31 * car.hashCode() + cdr.hashCode();
         }
 
         public String toString() {
