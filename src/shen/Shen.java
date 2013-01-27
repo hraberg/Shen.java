@@ -70,7 +70,7 @@ public class Shen {
         eval("(shen-shen)");
     }
 
-    static Map<String, Symbol> symbols = new HashMap<>();
+    static final Map<String, Symbol> symbols = new HashMap<>();
 
     static {
         set("*language*", "Java");
@@ -378,12 +378,14 @@ public class Shen {
     }
 
     public static class Overrides {
+        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen-tuple");
+
         public static boolean variableP(Object x) {
             return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
         }
 
         public static boolean booleanP(Object x) {
-            return x instanceof Boolean || intern("true").equals(x) || intern("false").equals(x);
+            return x instanceof Boolean || _true == x || _false == x;
         }
 
         public static boolean symbolP(Object x) {
@@ -395,7 +397,7 @@ public class Shen {
         }
 
         public static Object[] ATp(Object x, Object y) {
-            return new Object[] {intern("shen-tuple"), x, y};
+            return new Object[] {shen_tuple, x, y};
         }
 
         public static long hash(Object s, long limit) {
@@ -537,11 +539,11 @@ public class Shen {
     }
 
     public static class RT {
-        static Lookup lookup = lookup();
-        static Set<Symbol> overrides = new HashSet<>();
-        static Map<String, CallSite> sites = new HashMap<>();
+        static final Lookup lookup = lookup();
+        static final Set<Symbol> overrides = new HashSet<>();
+        static final Map<String, CallSite> sites = new HashMap<>();
 
-        static MethodHandle
+        static final MethodHandle
                 link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"),
                 checkClass = mh(RT.class, "checkClass"), toIntExact = mh(Math.class, "toIntExact"),
                 partial = mh(RT.class, "partial"), arityCheck = mh(RT.class, "arityCheck");
@@ -849,11 +851,11 @@ public class Shen {
     }
 
     public static class Compiler implements Opcodes {
-        static AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), RT.class);
-        static Map<Symbol, MethodHandle> macros = new HashMap<>();
-        static List<Class<?>> literals =
+        static final AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), RT.class);
+        static final Map<Symbol, MethodHandle> macros = new HashMap<>();
+        static final List<Class<?>> literals =
                 asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
-        static Handle
+        static final Handle
                 applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
                 symbolBSM = handle(mh(RT.class, "symbolBSM")), or = handle(RT.mh(Primitives.class, "or")),
                 and = handle(RT.mh(Primitives.class, "and"));
