@@ -40,6 +40,7 @@ import static java.lang.reflect.Modifier.isPublic;
 import static java.nio.file.Files.readAllBytes;
 import static java.util.Arrays.*;
 import static java.util.Collections.EMPTY_LIST;
+import static java.util.Collections.nCopies;
 import static java.util.Collections.singleton;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
@@ -189,11 +190,12 @@ public class Shen {
             return new Cons(x, y);
         }
 
-        public static List<Object> cons(Object x, List<Object> y) {
+        public static <T> List<T> cons(T x, List<T> y) {
             Object[] result = new Object[y.size() + 1];
             result[0] = x;
             arraycopy(y.toArray(), 0, result, 1, y.size());
-            return asList(result);
+            //noinspection unchecked
+            return (List<T>) asList(result);
         }
 
         public static boolean consP(Object x) {
@@ -930,21 +932,6 @@ public class Shen {
             return type.getSort() < ARRAY;
         }
 
-        static void printASM(byte[] bytes, Method method) {
-            ASMifier asm = new ASMifier();
-            PrintWriter pw = new PrintWriter(err);
-            TraceClassVisitor printer = new TraceClassVisitor(null, asm, pw);
-            if (method == null)
-               new ClassReader(bytes).accept(printer, SKIP_DEBUG);
-            else {
-                ClassNode cn = new ClassNode();
-                new ClassReader(bytes).accept(cn, SKIP_DEBUG);
-                find(cn.methods.stream(), mn -> mn.name.equals(method.getName())).accept(printer);
-                asm.print(pw);
-                pw.flush();
-            }
-        }
-
         static void macro(Method m) {
             try {
                 macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
@@ -1056,8 +1043,7 @@ public class Shen {
         void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
             if (!topOfStack.equals(getType(MethodHandle.class)))
                 mv.invokeStatic(getType(RT.class), method("function", desc(MethodHandle.class, Object.class)));
-            List<Type> argumentTypes = vec(args.stream().map(o -> compile(o, false)));
-            argumentTypes.add(0, getType(MethodHandle.class));
+            List<Type> argumentTypes = cons(getType(MethodHandle.class), vec(args.stream().map(o -> compile(o, false))));
             mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), applyBSM);
             topOfStack = returnType;
         }
@@ -1188,9 +1174,7 @@ public class Shen {
             List<Symbol> scope = vec(closesOver(new HashSet<>(asList(args)), kl).uniqueElements());
             scope.retainAll(into(locals.keySet(), this.args));
 
-            List<Type> types = vec(scope.stream().map(this::typeOf));
-            for (Symbol ignored : args) types.add(getType(Object.class));
-
+            List<Type> types = into(vec(scope.stream().map(this::typeOf)), nCopies(args.length, getType(Object.class)));
             push(handle(className, bytecodeName, desc(getType(Object.class), types)));
             insertArgs(0, scope);
 
@@ -1351,6 +1335,21 @@ public class Shen {
             mv.invokeStatic(getType(MethodHandles.class), method("insertArguments",
                     desc(MethodHandle.class, MethodHandle.class, int.class, Object[].class)));
             topOfStack(MethodHandle.class);
+        }
+
+        static void printASM(byte[] bytes, Method method) {
+            ASMifier asm = new ASMifier();
+            PrintWriter pw = new PrintWriter(err);
+            TraceClassVisitor printer = new TraceClassVisitor(null, asm, pw);
+            if (method == null)
+               new ClassReader(bytes).accept(printer, SKIP_DEBUG);
+            else {
+                ClassNode cn = new ClassNode();
+                new ClassReader(bytes).accept(cn, SKIP_DEBUG);
+                find(cn.methods.stream(), mn -> mn.name.equals(method.getName())).accept(printer);
+                asm.print(pw);
+                pw.flush();
+            }
         }
 
         static Unsafe unsafe() {
