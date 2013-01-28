@@ -149,7 +149,7 @@ public class Shen {
 
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (o instanceof List && isList()) return super.equals(o);
+            if (o instanceof List && isList()) return toList().equals(o);
             if (o == null || getClass() != o.getClass()) return false;
             //noinspection ConstantConditions
             Cons cons = (Cons) o;
