@@ -216,7 +216,7 @@ public class Shen {
             try {
                 return KL_import(intern(type.getName()));
             } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
+                throw uncheck(e);
             }
         }
 
@@ -745,7 +745,7 @@ public class Shen {
                 return lookup.unreflect(find(stream(aClass.getMethods()), m -> m.getName().equals(name)
                         && (types.length == 0 || deepEquals(m.getParameterTypes(), types))));
             } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
+                throw uncheck(e);
             }
         }
 
@@ -753,7 +753,7 @@ public class Shen {
             try {
                 return lookup.unreflectGetter(aClass.getField(name));
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw uncheck(e);
             }
         }
 
@@ -911,7 +911,7 @@ public class Shen {
                 MethodHandleInfo info = new MethodHandleInfo(handle);
                 return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
             } catch (ReflectiveOperationException e) {
-                throw new RuntimeException(e);
+                throw uncheck(e);
             }
         }
 
@@ -932,7 +932,7 @@ public class Shen {
             try {
                 macros.put(intern(unscramble(m.getName())), lookup.unreflect(m));
             } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
+                throw uncheck(e);
             }
         }
 
@@ -981,7 +981,7 @@ public class Shen {
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable t) {
-                throw new RuntimeException(t);
+                throw uncheck(t);
             }
         }
 
@@ -1364,7 +1364,7 @@ public class Shen {
                 unsafe.setAccessible(true);
                 return (Unsafe) unsafe.get(null);
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw uncheck(e);
             }
         }
     }
@@ -1440,5 +1440,14 @@ public class Shen {
     static <T> T[] tl(T[] array) {
         if (array.length == 0) return array;
         return copyOfRange(array, 1, array.length);
+    }
+
+    static RuntimeException uncheck(Throwable t) {
+        return uncheckThrow(t);
+   }
+
+    static <T extends Throwable> T uncheckThrow(Throwable t) throws T {
+        //noinspection unchecked
+        throw (T) t;
     }
 }
