@@ -195,8 +195,7 @@ public class Shen {
                 try {
                     return cons.car;
                 } finally {
-                    cons = EMPTY_LIST.equals(cons.cdr) ? null :
-                            cons.cdr instanceof Cons ? (Cons) cons.cdr : new Cons(cons.cdr, EMPTY_LIST);
+                    cons = EMPTY_LIST.equals(cons.cdr) ? null : (Cons) cons.cdr;
                 }
             }
          }
