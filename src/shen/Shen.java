@@ -960,10 +960,9 @@ public class Shen {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
                 else if (kl instanceof Symbol) symbol((Symbol) kl);
-                else if (kl instanceof Cons) return compile(((Cons) kl).toList(), returnType, handlePrimitives, tail);
-                else if (kl instanceof List) {
+                else if (kl instanceof Collection) {
                     @SuppressWarnings("unchecked")
-                    List<Object> list = (List<Object>) kl;
+                    List<Object> list = new ArrayList<>((Collection<?>) kl);
                     lineNumber(list);
                     if (list.isEmpty()) emptyList();
                     else {
@@ -1197,9 +1196,8 @@ public class Shen {
         Stream<Symbol> closesOver(Set<Symbol> scope, Object kl) {
             if (kl instanceof Symbol && !scope.contains(kl))
                 return singleton((Symbol) kl).stream();
-            if (kl instanceof Cons) return closesOver(scope, ((Cons) kl).toList());
-            if (kl instanceof List) {
-                List<Object> list = (List) kl;
+            if (kl instanceof Collection) {
+                List<Object> list = new ArrayList<>((Collection<?>) kl);
                 if (!list.isEmpty())
                     switch (hd(list).toString()) {
                         case "let": return concat(closesOver(scope, list.get(2)), closesOver(conj(scope, list.get(2)), list.get(3)));
