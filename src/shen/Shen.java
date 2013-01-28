@@ -991,11 +991,8 @@ public class Shen {
         }
 
         void lineNumber(List<Object> list) {
-            if (lines.containsKey(list)) {
-                Label line = mv.newLabel();
-                mv.visitLabel(line);
-                mv.visitLineNumber(lines.get(list), line);
-            }
+            if (lines.containsKey(list))
+                mv.visitLineNumber(lines.get(list), mv.mark());
         }
 
         boolean inScope(Symbol x) {
@@ -1047,16 +1044,13 @@ public class Shen {
 
         class Macros {
             public void trap_error(boolean tail, Type returnType, Object x, Object f) throws Throwable {
-                Label start = mv.newLabel();
-                Label end = mv.newLabel();
                 Label after = mv.newLabel();
 
-                mv.visitLabel(start);
+                Label start = mv.mark();
                 compile(x, returnType, tail);
                 mv.goTo(after);
-                mv.visitLabel(end);
 
-                mv.catchException(start, end, getType(Throwable.class));
+                mv.catchException(start, mv.mark(), getType(Throwable.class));
                 compile(f, false);
                 maybeCast(MethodHandle.class);
                 mv.swap();
@@ -1150,13 +1144,18 @@ public class Shen {
             }
 
             public void let(boolean tail, Type returnType, Symbol x, Object y, Object z) throws Throwable {
+                Label start = mv.mark();
                 compile(y, false);
-                int let = mv.newLocal(topOfStack);
+                Integer hidden = locals.get(x);
+                int let = hidden != null && tail ? hidden : mv.newLocal(topOfStack);
                 mv.storeLocal(let);
-                Integer hidden = locals.put(x, let);
+                locals.put(x, let);
                 compile(z, returnType, tail);
                 if (hidden != null) locals.put(x, hidden);
-                else locals.remove(x);
+                else  locals.remove(x);
+                mv.push((String) null);
+                mv.storeLocal(let);
+                mv.visitLocalVariable(x.symbol, mv.getLocalType(let).getDescriptor(), null, start, mv.mark(), let);
             }
 
             public void KL_do(boolean tail, Type returnType, Object... xs) throws Throwable {
@@ -1305,8 +1304,7 @@ public class Shen {
             this.argTypes = argumentTypes;
             this.method = method(bytecodeName, desc(returnType, argumentTypes));
             mv = generator(modifiers, method);
-            recur = mv.newLabel();
-            mv.visitLabel(recur);
+            recur = mv.mark();
             compile(kl);
             if (isPrimitive(topOfStack)) box();
             mv.returnValue();
