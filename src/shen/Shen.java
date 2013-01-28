@@ -1204,7 +1204,7 @@ public class Shen {
                     switch (hd(list).toString()) {
                         case "let": return concat(closesOver(scope, list.get(2)), closesOver(conj(scope, list.get(2)), list.get(3)));
                         case "lambda": return closesOver(conj(scope, list.get(2)), list.get(2));
-                        case "defun": return closesOver(into(scope, (List) list.get(2)), list.get(3));
+                        case "defun": return closesOver(into(scope, (Collection) list.get(2)), list.get(3));
                     }
                     return mapcat(list.stream(), o -> closesOver(scope, o));
             }
