@@ -84,7 +84,7 @@ Now passes. It is run at the end of the build:
     run time: 9.882 secs
 
 
-It's about 2x faster than [`shen.clj`](https://github.com/hraberg/shen.clj).
+It's close to 2x faster than [`shen.clj`](https://github.com/hraberg/shen.clj).
 
 
 The benchmarks can be run via:
