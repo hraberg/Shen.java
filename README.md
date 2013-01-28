@@ -81,10 +81,10 @@ Now passes. It is run at the end of the build:
     ok
     0
 
-    run time: 17.303 secs
+    run time: 9.882 secs
 
 
-It's now at par with [`shen.clj`](https://github.com/hraberg/shen.clj) when not allowing primitives to be redefined.
+It's about 2x faster than [`shen.clj`](https://github.com/hraberg/shen.clj).
 
 
 The benchmarks can be run via:
@@ -105,6 +105,7 @@ The benchmarks can be run via:
 * The Shen test suite passes.
 * Different bootstrap methods for invoke, apply and symbols. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
+* Cons extending List.
 
 
 ### Road Map
@@ -118,7 +119,6 @@ This is bound to change as we go:
 * Revisit how call sites are built and cached, see above.
 * Proper Java inter-op. Potentially using [Dynalink](https://github.com/szegedi/dynalink).
 * Reader macros/extension for [`edn`](https://github.com/edn-format/edn) to support embedded Clojure-like maps/sets.
-* Persistent collections.
 
 
 ## References
