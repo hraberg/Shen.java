@@ -75,7 +75,6 @@ public class Shen {
         set("*stoutput*", out);
         set("*debug*", Boolean.getBoolean("shen.debug"));
         set("*debug-asm*", Boolean.getBoolean("shen.debug.asm"));
-        set("*can-redefine-internals?*", Boolean.getBoolean("shen.can.redefine.internals"));
         set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
@@ -577,19 +576,12 @@ public class Shen {
                 debug("selected: %s", match);
             }
 
-            if (isPossibleToRedefine(symbol)) {
-                synchronized (symbol.symbol) {
-                    if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
-                    site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
-                }
-            } else
-                site.setTarget(match.asType(type));
+            synchronized (symbol.symbol) {
+                if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
+                site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
+            }
 
             return match.invokeWithArguments(args);
-        }
-
-        static boolean isPossibleToRedefine(Symbol symbol) {
-            return booleanProperty("*can-redefine-internals?*") || !(primitives.contains(symbol));
         }
 
         static Map<List, MethodHandle> guards = new HashMap<>();
