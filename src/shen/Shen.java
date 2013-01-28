@@ -149,7 +149,7 @@ public class Shen {
 
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (o instanceof List && !(o instanceof Cons)) return toList().equals(o);
+            if (o instanceof List && (cdr instanceof Cons || EMPTY_LIST.equals(cdr))) return super.equals(o);
             if (o == null || getClass() != o.getClass()) return false;
             //noinspection ConstantConditions
             Cons cons = (Cons) o;
@@ -160,37 +160,52 @@ public class Shen {
             return 31 * car.hashCode() + cdr.hashCode();
         }
 
+        @SuppressWarnings("NullableProblems")
+        public ListIterator listIterator(int index) {
+            ListIterator iterator = new ConsIterator();
+            while (iterator.nextIndex() != index) iterator.next();
+            return iterator;
+        }
+
         public int size() {
             return size;
         }
 
         public String toString() {
             if (cdr instanceof Cons || EMPTY_LIST.equals(cdr))
-                return toList().toString();
+                return super.toString();
             return "[" + car + " | " + cdr + "]";
         }
 
-        @SuppressWarnings("NullableProblems")
-        public ListIterator listIterator(int index) {
-            return toList().listIterator(index);
-        }
+        class ConsIterator implements ListIterator {
+            Cons cons = Cons.this;
+            int idx;
 
-        List<Object> toList() {
-            Cons cons = this;
-            List<Object> result = new ArrayList<>(size);
-            while (true) {
-                result.add(cons.car);
-                if (EMPTY_LIST.equals(cons.cdr)) {
-                    break;
-                } else if (cons.cdr instanceof Cons) {
-                    cons = (Cons) cons.cdr;
-                } else {
-                    result.add(cons.cdr);
-                    break;
+            public boolean hasNext() {
+                return cons != null;
+            }
+
+            public int nextIndex() {
+                return idx;
+            }
+
+            public Object next() {
+                if (cons == null) throw new NoSuchElementException();
+                try {
+                    return cons.car;
+                } finally {
+                    cons = EMPTY_LIST.equals(cons.cdr) ? null :
+                            cons.cdr instanceof Cons ? (Cons) cons.cdr : new Cons(cons.cdr, EMPTY_LIST);
+                    idx++;
                 }
             }
-            return unmodifiableList(result);
-        }
+            public boolean hasPrevious() { throw new UnsupportedOperationException(); }
+            public Object previous() { throw new UnsupportedOperationException(); }
+            public int previousIndex() {throw new UnsupportedOperationException(); }
+            public void remove() { throw new UnsupportedOperationException(); }
+            public void set(Object o) { throw new UnsupportedOperationException(); }
+            public void add(Object o) { throw new UnsupportedOperationException(); }
+         }
     }
 
     public static final class Primitives {
