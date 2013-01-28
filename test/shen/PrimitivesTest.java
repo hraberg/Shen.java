@@ -195,8 +195,14 @@ public class PrimitivesTest {
     @SuppressWarnings({"unchecked", "RedundantCast"})
     @Test
     public void cons() {
+        // Nasty corner case of Cons pair vs List.
+        assertFalse(new Cons(1, 2).equals(asList(1, 2)));
+        assertTrue(asList(1, 2).equals(new Cons(1, 2)));
+
         assertEquals(new Cons(1, 2), new Cons(1, 2));
-//        assertFalse(asList(1, 2).equals(new Cons(1, 2)));
+        assertFalse(new Cons(1, new Cons(2, EMPTY_LIST)).equals(new Cons(1, 2)));
+        assertFalse(new Cons(1, 2).equals(new Cons(1, new Cons(2, EMPTY_LIST))));
+        assertEquals(new Cons(1, new Cons(2, EMPTY_LIST)), new Cons(1, new Cons(2, EMPTY_LIST)));
         Cons cons = new Cons(1, EMPTY_LIST);
         assertEquals(1, cons.get(0));
         assertEquals(1, cons.size);
