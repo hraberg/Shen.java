@@ -394,12 +394,10 @@ public class Shen {
             return x instanceof Symbol && !booleanP(x);
         }
 
-/*
-        public static boolean elementP(Object x, Collection z) {
-            return z.contains(x);
+        public static long length(Collection x) {
+            return x.size();
         }
 
-*/
         public static Object[] ATp(Object x, Object y) {
             return new Object[] {shen_tuple, x, y};
         }
@@ -408,10 +406,6 @@ public class Shen {
             long hash = s.hashCode();
             if (hash == 0) return 1;
             return floorMod(hash, limit);
-        }
-
-        public static boolean shen_digit_byteP(long x) {
-            return '0' <= x && x <= '9';
         }
 
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
