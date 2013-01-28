@@ -166,6 +166,7 @@ public class Shen {
 
         @SuppressWarnings("NullableProblems")
         public Iterator iterator() {
+            if (!isList()) throw new IllegalStateException("cons pair is not a list: " + this);
             return new ConsIterator();
         }
 
@@ -179,7 +180,6 @@ public class Shen {
         }
 
         public List toList() {
-            if (!isList()) throw new IllegalStateException("cons pair is not a list: " + this);
             return new ArrayList<Object>(this);
         }
 
