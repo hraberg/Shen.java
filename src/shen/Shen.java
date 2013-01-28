@@ -540,9 +540,6 @@ public class Shen {
                 checkClass = mh(RT.class, "checkClass"), toIntExact = mh(Math.class, "toIntExact"),
                 partial = mh(RT.class, "partial"), arityCheck = mh(RT.class, "arityCheck");
 
-        static Set<Symbol> primitives = hashSet(concat(stream(Primitives.class.getMethods()),
-                stream(Overrides.class.getMethods())).map(Method::getName).map(RT::unscramble).map(Primitives::intern));
-
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
             MethodType type = site.type();
