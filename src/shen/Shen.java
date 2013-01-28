@@ -178,7 +178,7 @@ public class Shen {
 
         List<Object> toList() {
             Cons cons = this;
-            List<Object> result = new ArrayList<>();
+            List<Object> result = new ArrayList<>(size);
             while (true) {
                 result.add(cons.car);
                 if (EMPTY_LIST.equals(cons.cdr)) {
