@@ -15,17 +15,15 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.util.ArrayList;
 import java.util.*;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.function.*;
 import java.util.jar.Manifest;
 import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.lang.Byte.toUnsignedLong;
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Math.floorMod;
@@ -38,7 +36,6 @@ import static java.lang.invoke.MethodType.genericMethodType;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
-import static java.nio.file.Files.readAllBytes;
 import static java.util.Arrays.*;
 import static java.util.Arrays.fill;
 import static java.util.Arrays.stream;
@@ -46,7 +43,6 @@ import static java.util.Collections.*;
 import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Streams.*;
 import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
@@ -54,7 +50,6 @@ import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.Type.*;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
-import static shen.Shen.Primitives.cons;
 import static shen.Shen.Primitives.*;
 import static shen.Shen.RT.*;
 import static shen.Shen.RT.lookup;
@@ -143,17 +138,21 @@ public class Shen {
         }
     }
 
-    public final static class Cons {
+    public final static class Cons extends AbstractSequentialList {
         public final Object car, cdr;
+        public final int size;
 
         public Cons(Object car, Object cdr) {
             this.car = car;
             this.cdr = cdr;
+            this.size = cdr instanceof Cons ? 1 + (((Cons) cdr).size) : EMPTY_LIST.equals(cdr) ? 1 : 2;
         }
 
         public boolean equals(Object o) {
             if (this == o) return true;
+            if (o instanceof List && !(o instanceof Cons)) return toList().equals(o);
             if (o == null || getClass() != o.getClass()) return false;
+            //noinspection ConstantConditions
             Cons cons = (Cons) o;
             return car.equals(cons.car) && cdr.equals(cons.cdr);
         }
@@ -162,8 +161,36 @@ public class Shen {
             return 31 * car.hashCode() + cdr.hashCode();
         }
 
+        public int size() {
+            return size;
+        }
+
         public String toString() {
+            if (cdr instanceof Cons || cdr.equals(EMPTY_LIST))
+                return toList().toString();
             return "[" + car + " | " + cdr + "]";
+        }
+
+        @SuppressWarnings("NullableProblems")
+        public ListIterator listIterator(int index) {
+            return toList().listIterator(index);
+        }
+
+        List<Object> toList() {
+            Cons cons = this;
+            List<Object> result = new ArrayList<>();
+            while (true) {
+                result.add(cons.car);
+                if (EMPTY_LIST.equals(cons.cdr)) {
+                    break;
+                } else if (cons.cdr instanceof Cons) {
+                    cons = (Cons) cons.cdr;
+                } else {
+                    result.add(cons.cdr);
+                    break;
+                }
+            }
+            return unmodifiableList(result);
         }
     }
 
@@ -190,16 +217,8 @@ public class Shen {
             return new Cons(x, y);
         }
 
-        public static <T, E extends T> List<T> cons(E x, List<T> y) {
-            Object[] result = new Object[y.size() + 1];
-            result[0] = x;
-            arraycopy(y.toArray(), 0, result, 1, y.size());
-            //noinspection unchecked
-            return (List<T>) asList(result);
-        }
-
         public static boolean consP(Object x) {
-            return x instanceof Cons || x instanceof List && !((List) x).isEmpty();
+            return x instanceof Cons;
         }
 
         public static Object simple_error(String s) {
@@ -210,29 +229,12 @@ public class Shen {
             return e.getMessage() == null ? e.toString() : e.getMessage();
         }
 
-        public static Object hd(List list) {
-            return list.isEmpty() ? list : list.get(0);
-        }
-
-        public static <T> List<T> tl(List<T> list) {
-            return list.isEmpty() ? list : list.subList(1, list.size());
-        }
-
         public static Object hd(Cons cons) {
             return cons.car;
         }
 
         public static Object tl(Cons cons) {
             return cons.cdr;
-        }
-
-        static <T> T hd(T[] array) {
-            return array[0];
-        }
-
-        static <T> T[] tl(T[] array) {
-            if (array.length == 0) return array;
-            return copyOfRange(array, 1, array.length);
         }
 
         public static String str(Object x) {
@@ -392,10 +394,12 @@ public class Shen {
             return x instanceof Symbol && !booleanP(x);
         }
 
+/*
         public static boolean elementP(Object x, Collection z) {
             return z.contains(x);
         }
 
+*/
         public static Object[] ATp(Object x, Object y) {
             return new Object[] {shen_tuple, x, y};
         }
@@ -410,22 +414,9 @@ public class Shen {
             return '0' <= x && x <= '9';
         }
 
-        public static List<String> shen_explode_string(String s) {
-            return new ArrayList<>(asList(s.split("(?!^)")));
-        }
-
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
             fill(vector, (int) counter, (int) n + 1, x);
             return vector;
-        }
-
-        public static List<Long> read_file_as_bytelist(String file) throws IOException {
-            FileSystem fs = FileSystems.getDefault();
-            byte[] bytes = readAllBytes(fs.getPath((String) intern("*home-directory*").value(), file));
-            Long[] result = new Long[bytes.length];
-            for (int i = 0; i < bytes.length; i++)
-                result[i] = toUnsignedLong(bytes[i]);
-            return new ArrayList<>(asList(result));
         }
     }
 
@@ -977,7 +968,7 @@ public class Shen {
                 else if (kl instanceof Symbol) symbol((Symbol) kl);
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
-                    List<Object> list = (List) kl;
+                    List<Object> list = (List<Object>) kl;
                     lineNumber(list);
                     if (list.isEmpty()) emptyList();
                     else {
@@ -1398,7 +1389,7 @@ public class Shen {
 
     @SuppressWarnings("unchecked")
     static <T> List<T> vec(Stream<T> stream) {
-        return (List<T>) stream.collect(toList());
+        return (List<T>) stream.collect(Collectors.toList());
     }
 
     @SuppressWarnings("unchecked")
@@ -1419,7 +1410,7 @@ public class Shen {
     }
 
     static <T, C extends Collection<T>> C into(C a, Collection<? extends T> b) {
-        Collector<Object,? extends Collection<Object>> collector = a instanceof Set ? toSet() : toList();
+        Collector<Object,? extends Collection<Object>> collector = a instanceof Set ? toSet() : Collectors.toList();
         //noinspection unchecked
         return (C) concat(a.stream(), b.stream()).collect(collector);
     }
@@ -1437,4 +1428,30 @@ public class Shen {
         return zip(as.stream(), bs.stream(), (x, y) -> predicate.test(x, y) ? x : null)
                 .filter(nonNull()).findFirst().orElse((T) null);
     }
+
+    static <T, E extends T> List<T> cons(E x, List<T> y) {
+        Object[] result = new Object[y.size() + 1];
+        result[0] = x;
+        arraycopy(y.toArray(), 0, result, 1, y.size());
+        //noinspection unchecked
+        return (List<T>) asList(result);
+    }
+
+    static Object hd(List list) {
+        return list.isEmpty() ? list : list.get(0);
+    }
+
+    static <T> List<T> tl(List<T> list) {
+        return list.isEmpty() ? list : list.subList(1, list.size());
+    }
+
+    static <T> T hd(T[] array) {
+        return array[0];
+    }
+
+    static <T> T[] tl(T[] array) {
+        if (array.length == 0) return array;
+        return copyOfRange(array, 1, array.length);
+    }
 }
+

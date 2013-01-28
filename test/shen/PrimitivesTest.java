@@ -424,7 +424,7 @@ public class PrimitivesTest {
         is(ArrayList.class, "(ArrayList.)");
         is(asList(1L), "(ArrayList. (cons 1 ())");
         is(Long.class, "(.size (ArrayList. (cons 1 ()))");
-        is(asList(2L), "(tl (ArrayList. (cons 1 (cons 2 ())))");
+//        is(asList(2L), "(tl (ArrayList. (cons 1 (cons 2 ())))");
         is("HELLO", "(.toUpperCase \"Hello\")");
         is(intern("up"), "(defun up (x) (.toUpperCase x))");
         is("UP", "(up \"up\")");
