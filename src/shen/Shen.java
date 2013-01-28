@@ -166,7 +166,7 @@ public class Shen {
         }
 
         public String toString() {
-            if (cdr instanceof Cons || cdr.equals(EMPTY_LIST))
+            if (cdr instanceof Cons || EMPTY_LIST.equals(cdr))
                 return toList().toString();
             return "[" + car + " | " + cdr + "]";
         }
@@ -1414,6 +1414,10 @@ public class Shen {
         return into(c, singleton((T) x));
     }
 
+    static <T> List<T> cons(T x, List<T> y) {
+        return into(singletonList(x), y);
+    }
+
     static <T> boolean all(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
         return zip(as.stream(), bs.stream(), predicate::test).allMatch(isEqual(true));
     }
@@ -1421,14 +1425,6 @@ public class Shen {
     static <T> T find(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
         return zip(as.stream(), bs.stream(), (x, y) -> predicate.test(x, y) ? x : null)
                 .filter(nonNull()).findFirst().orElse((T) null);
-    }
-
-    static <T, E extends T> List<T> cons(E x, List<T> y) {
-        Object[] result = new Object[y.size() + 1];
-        result[0] = x;
-        arraycopy(y.toArray(), 0, result, 1, y.size());
-        //noinspection unchecked
-        return (List<T>) asList(result);
     }
 
     static Object hd(List list) {
@@ -1448,4 +1444,3 @@ public class Shen {
         return copyOfRange(array, 1, array.length);
     }
 }
-
