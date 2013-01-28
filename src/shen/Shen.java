@@ -149,11 +149,15 @@ public class Shen {
 
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (o instanceof List && (cdr instanceof Cons || EMPTY_LIST.equals(cdr))) return super.equals(o);
+            if (o instanceof List && isList() && !(o instanceof Cons)) return super.equals(o);
             if (o == null || getClass() != o.getClass()) return false;
             //noinspection ConstantConditions
             Cons cons = (Cons) o;
             return car.equals(cons.car) && cdr.equals(cons.cdr);
+        }
+
+        boolean isList() {
+            return cdr instanceof Cons || EMPTY_LIST.equals(cdr);
         }
 
         public int hashCode() {
@@ -172,8 +176,7 @@ public class Shen {
         }
 
         public String toString() {
-            if (cdr instanceof Cons || EMPTY_LIST.equals(cdr))
-                return super.toString();
+            if (isList()) return super.toString();
             return "[" + car + " | " + cdr + "]";
         }
 
@@ -199,6 +202,7 @@ public class Shen {
                     idx++;
                 }
             }
+
             public boolean hasPrevious() { throw new UnsupportedOperationException(); }
             public Object previous() { throw new UnsupportedOperationException(); }
             public int previousIndex() {throw new UnsupportedOperationException(); }
