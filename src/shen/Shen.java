@@ -1443,10 +1443,10 @@ public class Shen {
     }
 
     static RuntimeException uncheck(Throwable t) {
-        return uncheckThrow(t);
+        return uncheckAndThrow(t);
    }
 
-    static <T extends Throwable> T uncheckThrow(Throwable t) throws T {
+    static <T extends Throwable> T uncheckAndThrow(Throwable t) throws T {
         //noinspection unchecked
         throw (T) t;
     }
