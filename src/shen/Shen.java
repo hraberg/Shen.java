@@ -137,7 +137,7 @@ public class Shen {
         }
     }
 
-    public final static class Cons extends AbstractSequentialList {
+    public final static class Cons extends AbstractCollection {
         public final Object car, cdr;
         public final int size;
 
@@ -149,7 +149,7 @@ public class Shen {
 
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (o instanceof List && isList() && !(o instanceof Cons)) return super.equals(o);
+            if (o instanceof List && isList()) return super.equals(o);
             if (o == null || getClass() != o.getClass()) return false;
             //noinspection ConstantConditions
             Cons cons = (Cons) o;
@@ -165,10 +165,8 @@ public class Shen {
         }
 
         @SuppressWarnings("NullableProblems")
-        public ListIterator listIterator(int index) {
-            ListIterator iterator = new ConsIterator();
-            while (iterator.nextIndex() != index) iterator.next();
-            return iterator;
+        public Iterator iterator() {
+            return new ConsIterator();
         }
 
         public int size() {
@@ -180,16 +178,16 @@ public class Shen {
             return "[" + car + " | " + cdr + "]";
         }
 
-        class ConsIterator implements ListIterator {
+        public List toList() {
+            if (!isList()) throw new IllegalStateException("cons pair is not a list: " + this);
+            return new ArrayList<Object>(this);
+        }
+
+        class ConsIterator implements Iterator {
             Cons cons = Cons.this;
-            int idx;
 
             public boolean hasNext() {
                 return cons != null;
-            }
-
-            public int nextIndex() {
-                return idx;
             }
 
             public Object next() {
@@ -199,16 +197,8 @@ public class Shen {
                 } finally {
                     cons = EMPTY_LIST.equals(cons.cdr) ? null :
                             cons.cdr instanceof Cons ? (Cons) cons.cdr : new Cons(cons.cdr, EMPTY_LIST);
-                    idx++;
                 }
             }
-
-            public boolean hasPrevious() { throw new UnsupportedOperationException(); }
-            public Object previous() { throw new UnsupportedOperationException(); }
-            public int previousIndex() {throw new UnsupportedOperationException(); }
-            public void remove() { throw new UnsupportedOperationException(); }
-            public void set(Object o) { throw new UnsupportedOperationException(); }
-            public void add(Object o) { throw new UnsupportedOperationException(); }
          }
     }
 
@@ -971,6 +961,7 @@ public class Shen {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
                 else if (kl instanceof Symbol) symbol((Symbol) kl);
+                else if (kl instanceof Cons) return compile(((Cons) kl).toList(), returnType, handlePrimitives, tail);
                 else if (kl instanceof List) {
                     @SuppressWarnings("unchecked")
                     List<Object> list = (List<Object>) kl;
@@ -1017,7 +1008,8 @@ public class Shen {
         }
 
         void macroExpand(Symbol s, List<Object> args, Type returnType, boolean tail) throws Throwable {
-            macros.get(s).invokeWithArguments(into(asList(new Macros(), tail, returnType), args));
+            macros.get(s).invokeWithArguments(into(asList(new Macros(), tail, returnType),
+                    vec(args.stream().map(x -> x instanceof Cons ? ((Cons) x).toList() : x))));
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
@@ -1206,6 +1198,7 @@ public class Shen {
         Stream<Symbol> closesOver(Set<Symbol> scope, Object kl) {
             if (kl instanceof Symbol && !scope.contains(kl))
                 return singleton((Symbol) kl).stream();
+            if (kl instanceof Cons) return closesOver(scope, ((Cons) kl).toList());
             if (kl instanceof List) {
                 List<Object> list = (List) kl;
                 if (!list.isEmpty())

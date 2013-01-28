@@ -10,18 +10,15 @@ import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.FutureTask;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.EMPTY_LIST;
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.fail;
-import static junit.framework.TestCase.assertFalse;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static shen.Shen.*;
 import static shen.Shen.Primitives.intern;
 import static shen.Shen.RT.canCast;
@@ -192,63 +189,37 @@ public class PrimitivesTest {
         is(1L, "(hd (tl (cons 2 (cons 1 (cons 1 ())))))");
     }
 
-    @SuppressWarnings({"unchecked", "RedundantCast"})
+    @SuppressWarnings({"unchecked", "RedundantCast", "EqualsBetweenInconvertibleTypes"})
     @Test
     public void cons() {
         // Nasty corner case of Cons pair vs List.
         assertFalse(new Cons(1, 2).equals(asList(1, 2)));
-        assertTrue(asList(1, 2).equals(new Cons(1, 2)));
+        assertFalse(asList(1, 2).equals(new Cons(1, 2)));
 
         assertEquals(new Cons(1, 2), new Cons(1, 2));
         assertFalse(new Cons(1, new Cons(2, EMPTY_LIST)).equals(new Cons(1, 2)));
         assertFalse(new Cons(1, 2).equals(new Cons(1, new Cons(2, EMPTY_LIST))));
         assertEquals(new Cons(1, new Cons(2, EMPTY_LIST)), new Cons(1, new Cons(2, EMPTY_LIST)));
         Cons cons = new Cons(1, EMPTY_LIST);
-        assertEquals(1, cons.get(0));
+        assertEquals(1, cons.iterator().next());
         assertEquals(1, cons.size);
-        assertEquals(EMPTY_LIST, cons.subList(1, 1));
         cons = new Cons(2, cons);
-        assertEquals(asList(2, 1), new Cons(2, 1));
-        assertEquals(2, cons.get(0));
-        assertEquals(1, cons.get(1));
+        Iterator iterator = cons.iterator();
+        assertEquals(2, iterator.next());
+        assertEquals(1, iterator.next());
         assertEquals(2, cons.size);
         assertEquals(new Cons(2, new Cons(1, EMPTY_LIST)), cons);
-        assertEquals(asList(2, 1), cons);
-        List cdr = cons.subList(1, 2);
-        assertEquals(1, cdr.size());
-        assertEquals(asList(1), cdr);
-        assertFalse(cdr instanceof Cons);
-        assertEquals(asList(1), cdr);
-        assertEquals(1, cdr.get(0));
-        try {
-            cdr.get(1);
-            fail();
-        } catch (IndexOutOfBoundsException ignore) {
-        }
-        assertEquals(EMPTY_LIST, cdr.subList(1, 1));
-        try {
-            cdr.subList(1, 2);
-            fail();
-        } catch (IndexOutOfBoundsException ignore) {
-        }
+        assertEquals(asList(2, 1), new ArrayList(cons));
         assertTrue(cons.contains(1));
         assertTrue(cons.contains(2));
         assertFalse(cons.contains(3));
         cons = new Cons(3, cons);
-        assertEquals(asList(3, 2, 1), cons);
-        assertFalse(cons.subList(0, 1) instanceof Cons);
-/*      // The mess of sub lists vs cons pairs which aren't really lists
-        cons = new Cons(2, cdr);
-        assertEquals(asList(2, 1), cons);
-        assertEquals(2, hd(cons));
-        assertEquals(asList(1), tl(cons));
-        assertSame(EMPTY_LIST, tl(tl(cons)));
-        assertTrue(cons.subList(1, cons.size()) instanceof Cons);
-        assertTrue(cons.subList(2, cons.size()) instanceof Cons);
-        assertFalse(cons.subList(1, cons.size() - 1) instanceof Cons);
-        cdr = cons.subList(2, 3);
-        assertTrue(cdr instanceof Cons);
-*/
+        assertEquals(asList(3, 2, 1), cons.toList());
+        try {
+            new Cons(1, 2).toList();
+            fail();
+        } catch (IllegalStateException expected) {
+        }
     }
 
     @Test
@@ -554,10 +525,12 @@ public class PrimitivesTest {
     }
 
     void is(Object expected, String actual) {
+        Object 神 = 神(actual);
         if (expected instanceof Class)
-            assertThat(神(actual), instanceOf((Class<?>) expected));
+            assertThat(神, instanceOf((Class<?>) expected));
         else
-            assertThat(神(actual), equalTo(expected));
+            assertThat(神 instanceof Cons && expected instanceof List
+                    ? ((Cons) 神).toList() : 神, equalTo(expected));
     }
 
     Object 神(String shen) {
