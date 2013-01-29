@@ -33,7 +33,7 @@ This is pretty experimental, and this entire project acts as a playground for va
     ./shen.java
 
     Shen 2010, copyright (C) 2010 Mark Tarver
-    www.shenlanguage.org, version 7.1
+    www.shenlanguage.org, version 8
     running under Java, implementation: [jvm 1.8.0-ea]
     port 0.1.0-SNAPSHOT ported by Håkan Råberg
 
@@ -121,7 +121,7 @@ This is bound to change as we go:
 * Reader macros/extension for [`edn`](https://github.com/edn-format/edn) to support embedded Clojure-like maps/sets.
 * Persistent collections for the above.
 * JSR-223 script engine
-* Investigate Clojure(Script) -> KLambda.
+* Investigate Clojure(Script) -> K Lambda.
 
 
 ## References
