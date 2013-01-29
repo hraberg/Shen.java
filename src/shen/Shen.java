@@ -577,7 +577,7 @@ public class Shen {
                     debug("falling back to exception guard for %s", name);
                     match = relinkOn(ClassCastException.class, match, fallback);
                 } else
-                    match = guards.computeIfAbsent(asList(name, type, symbol.fn), key -> guard(type, symbol.fn));
+                    match = guards.computeIfAbsent(asList(type, symbol.fn), key -> guard(type, symbol.fn));
                 debug("selected: %s", match);
             }
 
