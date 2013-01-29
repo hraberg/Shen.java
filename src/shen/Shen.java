@@ -842,6 +842,7 @@ public class Shen {
                 applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
                 symbolBSM = handle(mh(RT.class, "symbolBSM")), or = handle(RT.mh(Primitives.class, "or")),
                 and = handle(RT.mh(Primitives.class, "and"));
+        static final Map<Class, MethodHandle> push = new HashMap<>();
         static {
             register(Macros.class, Compiler::macro);
         }
@@ -849,7 +850,6 @@ public class Shen {
         static int id = 1;
 
         String className;
-
         ClassWriter cw;
 
         byte[] bytes;
@@ -1244,7 +1244,7 @@ public class Shen {
 
         void push(Class<?> aClass, Object kl) throws Throwable {
             aClass = asPrimitiveType(aClass);
-            mh(mv.getClass(), "push", aClass).invoke(mv, kl);
+            push.computeIfAbsent(aClass, c -> mh(mv.getClass(), "push", c)).invoke(mv, kl);
             topOfStack(aClass);
         }
 
