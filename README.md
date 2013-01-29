@@ -22,7 +22,7 @@ See also: [shen.clj](https://github.com/hraberg/shen.clj)
 The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
 
 This port is loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure.
-Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/2359095c59435597e5761c72dbe9f0246fad0864/src/shen/Shen.java) using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive. It's currently 2x slower than `shen.clj`.
+Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/2359095c59435597e5761c72dbe9f0246fad0864/src/shen/Shen.java) using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive. It's about 2x faster than `shen.clj`.
 
 This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff. There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
 
@@ -121,6 +121,7 @@ This is bound to change as we go:
 * Reader macros/extension for [`edn`](https://github.com/edn-format/edn) to support embedded Clojure-like maps/sets.
 * Persistent collections for the above.
 * JSR-223 script engine
+* Investigate Clojure(Script) -> KLambda.
 
 
 ## References
