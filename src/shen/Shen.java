@@ -348,9 +348,8 @@ public class Shen {
             return s1 + s2;
         }
 
-        public static Symbol intern(String string) {
-            if (!symbols.containsKey(string)) symbols.put(string, new Symbol(string));
-            return symbols.get(string);
+        public static Symbol intern(String name) {
+            return symbols.computeIfAbsent(name, Symbol::new);
         }
 
         @SuppressWarnings("unchecked")
@@ -533,7 +532,8 @@ public class Shen {
     public static class RT {
         static final Lookup lookup = lookup();
         static final Set<Symbol> overrides = new HashSet<>();
-        static final Map<String, CallSite> sites = new HashMap<>();
+        static final Map<Object, CallSite> sites = new HashMap<>();
+        static final Map<Object, MethodHandle> guards = new HashMap<>();
 
         static final MethodHandle
                 link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"),
@@ -585,32 +585,28 @@ public class Shen {
                 if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
                 site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
             }
-
             return match.invokeWithArguments(args);
         }
 
-        static Map<List, MethodHandle> guards = new HashMap<>();
-
-        static MethodHandle guard(String name, MethodType type, List<MethodHandle> candidates) {
-            List key = asList(name, type, candidates);
-            if (guards.containsKey(key)) return guards.get(key);
-            candidates = bestMatchingMethods(type, candidates);
-            debug("applicable candidates: %s", candidates);
-            MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
-            for (int i = candidates.size() - 1; i > 0; i--) {
-                MethodHandle fallback = candidates.get(i);
-                MethodHandle target = candidates.get(i - 1);
-                Class<?> differentType = find(target.type().parameterList(), fallback.type().parameterList(), (x, y) -> !x.equals(y));
-                int firstDifferent = target.type().parameterList().indexOf(differentType);
-                debug("switching %s on %d argument type %s", name, firstDifferent, differentType);
-                debug("target: %s ; fallback: %s", target, fallback);
-                MethodHandle test = checkClass.bindTo(differentType);
-                test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, type.parameterCount()).parameterList());
-                test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
-                match = guardWithTest(test, target.asType(type), match);
-            }
-            guards.put(key, match);
-            return match;
+        static MethodHandle guard(String name, MethodType type, List<MethodHandle> overloads) {
+            return guards.computeIfAbsent(asList(name, type, overloads), key -> {
+                List<MethodHandle> candidates = bestMatchingMethods(type, overloads);
+                debug("applicable candidates: %s", candidates);
+                MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
+                for (int i = candidates.size() - 1; i > 0; i--) {
+                    MethodHandle fallback = candidates.get(i);
+                    MethodHandle target = candidates.get(i - 1);
+                    Class<?> differentType = find(target.type().parameterList(), fallback.type().parameterList(), (x, y) -> !x.equals(y));
+                    int firstDifferent = target.type().parameterList().indexOf(differentType);
+                    debug("switching %s on %d argument type %s", name, firstDifferent, differentType);
+                    debug("target: %s ; fallback: %s", target, fallback);
+                    MethodHandle test = checkClass.bindTo(differentType);
+                    test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, type.parameterCount()).parameterList());
+                    test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
+                    match = guardWithTest(test, target.asType(type), match);
+                }
+                return match;
+            });
         }
 
         static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
@@ -689,7 +685,7 @@ public class Shen {
             return target instanceof Symbol ? Primitives.function((Symbol) target) : (MethodHandle) target;
         }
 
-        static MethodHandle linker(MutableCallSite site, String name) throws IllegalAccessException {
+        static MethodHandle linker(MutableCallSite site, String name) {
             return insertArguments(link, 0, site, name).asCollector(Object[].class, site.type().parameterCount());
         }
 
@@ -700,16 +696,14 @@ public class Shen {
 
         public static CallSite invokeBSM(Lookup lookup, String name, MethodType type) throws IllegalAccessException {
             if (isOverloadedInternalFunction(name)) return invokeCallSite(name, type);
-            String key = name + type;
-            if (!sites.containsKey(key)) sites.put(key, invokeCallSite(name, type));
-            return sites.get(key);
+            return sites.computeIfAbsent(name + type, key -> invokeCallSite(name, type));
         }
 
         static boolean isOverloadedInternalFunction(String name) {
             return intern(toSourceName(name)).fn.size() > 1;
         }
 
-        static CallSite invokeCallSite(String name, MethodType type) throws IllegalAccessException {
+        static CallSite invokeCallSite(String name, MethodType type) {
             MutableCallSite site = new MutableCallSite(type);
             site.setTarget(linker(site, name).asType(type));
             return site;
@@ -720,9 +714,7 @@ public class Shen {
         }
 
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
-            String key = name + type;
-            if (!sites.containsKey(key)) sites.put(key, applyCallSite(type));
-            return sites.get(key);
+            return sites.computeIfAbsent(name + type, key -> applyCallSite(type));
         }
 
         public static Object partial(MethodHandle target, Object... args) throws Throwable {
