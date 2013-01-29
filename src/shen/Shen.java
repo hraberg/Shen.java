@@ -127,8 +127,7 @@ public class Shen {
             return (T) var;
         }
 
-        public boolean equals(Object o) {
-            //noinspection StringEquality
+        public boolean equals(Object o) { //noinspection StringEquality
             return o instanceof Symbol && symbol == ((Symbol) o).symbol;
         }
 
@@ -567,7 +566,7 @@ public class Shen {
                 return partial;
             }
 
-            MethodHandle match = find(symbol.fn.stream(), f -> all(actualTypes, f.type().parameterList(), RT::canCastStrict));
+            MethodHandle match = find(symbol.fn.stream(), f -> every(actualTypes, f.type().parameterList(), RT::canCastStrict));
             if (match == null) throw new NoSuchMethodException("undefined function " + name + type);
             debug("match based on argument types: %s", match);
 
@@ -609,9 +608,9 @@ public class Shen {
 
         static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
             return vec(candidates.stream()
-                    .filter(f -> all(type.parameterList(), f.type().parameterList(), RT::canCast))
+                    .filter(f -> every(type.parameterList(), f.type().parameterList(), RT::canCast))
                     .sorted((x, y) -> y.type().changeReturnType(type.returnType()).equals(y.type().erase()) ? -1 : 1)
-                    .sorted((x, y) -> all(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
+                    .sorted((x, y) -> every(y.type().parameterList(), x.type().parameterList(), RT::canCast) ? -1 : 1));
         }
 
         public static boolean checkClass(Class<?> xClass, Object x) {
@@ -808,9 +807,7 @@ public class Shen {
         }
 
         public static MethodHandle bindTo(MethodHandle fn, Object arg) {
-            return fn.isVarargsCollector() ?
-                    insertArguments(fn, 0, arg).asVarargsCollector(fn.type().parameterType(fn.type().parameterCount() - 1)) :
-                    insertArguments(fn, 0, arg);
+            return insertArguments(fn, 0, arg);
         }
 
         static String unscramble(String s) {
@@ -958,12 +955,12 @@ public class Shen {
                         Object first = list.get(0);
                         if (first instanceof Symbol && !inScope((Symbol) first)) {
                             Symbol s = (Symbol) first;
-                            if (macros.containsKey(s)) macroExpand(s, tl(list), returnType, tail);
-                            else indy(s, tl(list), returnType, tail);
+                            if (macros.containsKey(s)) macroExpand(s, rest(list), returnType, tail);
+                            else indy(s, rest(list), returnType, tail);
 
                         } else {
                             compile(first, tail);
-                            apply(returnType, tl(list));
+                            apply(returnType, rest(list));
                         }
                     }
                 } else
@@ -1090,8 +1087,10 @@ public class Shen {
             public void cond(boolean tail, Type returnType, List... clauses) throws Exception {
                 if (clauses.length == 0)
                     mv.throwException(getType(IllegalArgumentException.class), "condition failure");
-                else
-                    KL_if(tail, returnType, hd(clauses).get(0), hd(clauses).get(1), cons(intern("cond"), list((Object[]) tl(clauses))));
+                else {
+                    List clause = clauses[0];
+                    KL_if(tail, returnType, clause.get(0), clause.get(1), cons(intern("cond"), rest(list((Object[]) clauses))));
+                }
             }
 
             public void or(boolean tail, Type returnType, Object x, Object... clauses) throws Exception {
@@ -1187,7 +1186,7 @@ public class Shen {
             if (kl instanceof Collection) {
                 List<Object> list = new ArrayList<>((Collection<?>) kl);
                 if (!list.isEmpty())
-                    switch (hd(list).toString()) {
+                    switch (list.get(0).toString()) {
                         case "let": return concat(closesOver(scope, list.get(2)), closesOver(conj(scope, list.get(2)), list.get(3)));
                         case "lambda": return closesOver(conj(scope, list.get(2)), list.get(2));
                         case "defun": return closesOver(into(scope, (Collection) list.get(2)), list.get(3));
@@ -1319,8 +1318,7 @@ public class Shen {
         }
 
         void bindTo() {
-            mv.invokeStatic(getType(RT.class), method("bindTo",
-                    desc(MethodHandle.class, MethodHandle.class, Object.class)));
+            mv.invokeStatic(getType(RT.class), method("bindTo",desc(MethodHandle.class, MethodHandle.class, Object.class)));
             topOfStack(MethodHandle.class);
         }
 
@@ -1365,79 +1363,59 @@ public class Shen {
     }
 
     @SafeVarargs
-    static <T> List<T> list(T... elements) {
-        return new ArrayList<>(asList(elements));
+    static <T> List<T> list(T... items) {
+        return new ArrayList<>(asList(items));
     }
 
     @SuppressWarnings("unchecked")
-    static <T> List<T> vec(Stream<T> stream) {
-        return (List<T>) stream.collect(Collectors.toList());
+    static <T> List<T> vec(Stream<T> coll) {
+        return (List<T>) coll.collect(Collectors.toList());
     }
 
-    @SuppressWarnings("unchecked")
-    static <T> Set<T> hashSet(Stream<T> stream) {
-        return (Set<T>) stream.collect(toSet());
+    static <T> T find(Stream<T> coll, Predicate<? super T> pred) {
+        return coll.filter(pred).findFirst().orElse((T) null);
     }
 
-    static <T> T find(Stream<T> stream, Predicate<? super T> predicate) {
-        return stream.filter(predicate).findFirst().orElse((T) null);
+    static <T, R> R some(Stream<T> coll, Function<? super T, ? extends R> pred) {
+        return coll.map(pred).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
     }
 
-    static <T, R> R some(Stream<T> stream, Function<? super T, ? extends R> mapper) {
-        return stream.map(mapper).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
+    static <T, R> Stream<R> mapcat(Stream<? extends T> coll, Function<? super T, ? extends Stream<R>> f) {
+        return coll.explode((Stream.Downstream<R> downstream, T x) -> downstream.send(f.apply(x)));
     }
 
-    static <T, R> Stream<R> mapcat(Stream<? extends T> source, Function<? super T, ? extends Stream<R>> mapper) {
-        return source.explode((Stream.Downstream<R> downstream, T x) ->  downstream.send(mapper.apply(x)));
-    }
-
-    static <T, C extends Collection<T>> C into(C a, Collection<? extends T> b) {
-        Collector<Object,? extends Collection<Object>> collector = a instanceof Set ? toSet() : Collectors.toList();
+    static <T, C extends Collection<T>> C into(C to, Collection<? extends T> from) {
+        Collector<Object,? extends Collection<Object>> collector = to instanceof Set ? toSet() : Collectors.toList();
         //noinspection unchecked
-        return (C) concat(a.stream(), b.stream()).collect(collector);
+        return (C) concat(to.stream(), from.stream()).collect(collector);
     }
 
-    static <T, C extends Collection<T>> C conj(C c, Object x) {
-        //noinspection unchecked
-        return into(c, singleton((T) x));
+    static <T, C extends Collection<T>> C conj(C coll, Object x) { //noinspection unchecked
+        return into(coll, singleton((T) x));
     }
 
-    static <T> List<T> cons(T x, List<T> y) {
-        return into(singletonList(x), y);
+    static <T> List<T> cons(T x, List<T> seq) {
+        return into(singletonList(x), seq);
     }
 
-    static <T> boolean all(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
-        return zip(as.stream(), bs.stream(), predicate::test).allMatch(isEqual(true));
+    static <T> boolean every(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
+        return zip(c1.stream(), c2.stream(), pred::test).allMatch(isEqual(true));
     }
 
-    static <T> T find(Collection<T> as, Collection<T> bs, BiPredicate<T, T> predicate) {
-        return zip(as.stream(), bs.stream(), (x, y) -> predicate.test(x, y) ? x : null)
+    static <T> T find(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
+        return zip(c1.stream(), c2.stream(), (x, y) -> pred.test(x, y) ? x : null)
                 .filter(nonNull()).findFirst().orElse((T) null);
     }
 
-    static Object hd(List list) {
-        return list.isEmpty() ? list : list.get(0);
-    }
-
-    static <T> List<T> tl(List<T> list) {
-        return list.isEmpty() ? list : list.subList(1, list.size());
-    }
-
-    static <T> T hd(T[] array) {
-        return array[0];
-    }
-
-    static <T> T[] tl(T[] array) {
-        if (array.length == 0) return array;
-        return copyOfRange(array, 1, array.length);
+    static <T> List<T> rest(List<T> coll) {
+        return coll.isEmpty() ? coll : coll.subList(1, coll.size());
     }
 
     static RuntimeException uncheck(Throwable t) {
         return uncheckAndThrow(t);
    }
 
-    static <T extends Throwable> T uncheckAndThrow(Throwable t) throws T {
-        //noinspection unchecked
+    static <T extends Throwable> T uncheckAndThrow(Throwable t) throws T { //noinspection unchecked
         throw (T) t;
     }
 }
