@@ -797,7 +797,7 @@ public class Shen {
                 name.fn.add(lookup.unreflect(m));
                 return name;
             } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
+                throw uncheck(e);
             }
         }
 
@@ -822,7 +822,7 @@ public class Shen {
             try {
                 return lookup.unreflect(findSAM(lambda.getClass())).bindTo(lambda);
             } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
+                throw uncheck(e);
             }
         }
 
