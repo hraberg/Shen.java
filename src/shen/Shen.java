@@ -771,8 +771,10 @@ public class Shen {
                 SwitchPoint guard = name.fnGuard;
                 name.fn.clear();
                 name.fn.add(fn);
-                name.fnGuard = new SwitchPoint();
-                if (guard != null) invalidateAll(new SwitchPoint[] {guard});
+                if (guard != null) {
+                    name.fnGuard = new SwitchPoint();
+                    invalidateAll(new SwitchPoint[] {guard});
+                }
                 return name;
             }
         }
