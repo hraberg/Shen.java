@@ -577,7 +577,7 @@ public class Shen {
                     debug("falling back to exception guard for %s", name);
                     match = relinkOn(ClassCastException.class, match, fallback);
                 } else
-                    match = guard(name, type, symbol.fn);
+                    match = guards.computeIfAbsent(asList(name, type, symbol.fn), key -> guard(type, symbol.fn));
                 debug("selected: %s", match);
             }
 
@@ -588,25 +588,23 @@ public class Shen {
             return match.invokeWithArguments(args);
         }
 
-        static MethodHandle guard(String name, MethodType type, List<MethodHandle> overloads) {
-            return guards.computeIfAbsent(asList(name, type, overloads), key -> {
-                List<MethodHandle> candidates = bestMatchingMethods(type, overloads);
-                debug("applicable candidates: %s", candidates);
-                MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
-                for (int i = candidates.size() - 1; i > 0; i--) {
-                    MethodHandle fallback = candidates.get(i);
-                    MethodHandle target = candidates.get(i - 1);
-                    Class<?> differentType = find(target.type().parameterList(), fallback.type().parameterList(), (x, y) -> !x.equals(y));
-                    int firstDifferent = target.type().parameterList().indexOf(differentType);
-                    debug("switching %s on %d argument type %s", name, firstDifferent, differentType);
-                    debug("target: %s ; fallback: %s", target, fallback);
-                    MethodHandle test = checkClass.bindTo(differentType);
-                    test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, type.parameterCount()).parameterList());
-                    test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
-                    match = guardWithTest(test, target.asType(type), match);
-                }
-                return match;
-            });
+        static MethodHandle guard(MethodType type, List<MethodHandle> candidates) {
+            candidates = bestMatchingMethods(type, candidates);
+            debug("applicable candidates: %s", candidates);
+            MethodHandle match = candidates.get(candidates.size() - 1).asType(type);
+            for (int i = candidates.size() - 1; i > 0; i--) {
+                MethodHandle fallback = candidates.get(i);
+                MethodHandle target = candidates.get(i - 1);
+                Class<?> differentType = find(target.type().parameterList(), fallback.type().parameterList(), (x, y) -> !x.equals(y));
+                int firstDifferent = target.type().parameterList().indexOf(differentType);
+                debug("switching on %d argument type %s", firstDifferent, differentType);
+                debug("target: %s ; fallback: %s", target, fallback);
+                MethodHandle test = checkClass.bindTo(differentType);
+                test = dropArguments(test, 0, type.dropParameterTypes(firstDifferent, type.parameterCount()).parameterList());
+                test = test.asType(test.type().changeParameterType(firstDifferent, type.parameterType(firstDifferent)));
+                match = guardWithTest(test, target.asType(type), match);
+            }
+            return match;
         }
 
         static List<MethodHandle> bestMatchingMethods(MethodType type, List<MethodHandle> candidates) {
