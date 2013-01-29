@@ -1,10 +1,10 @@
 package shen;
 
-import org.objectweb.asm.*;
-import org.objectweb.asm.commons.GeneratorAdapter;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.util.ASMifier;
-import org.objectweb.asm.util.TraceClassVisitor;
+import jdk.internal.org.objectweb.asm.*;
+import jdk.internal.org.objectweb.asm.commons.GeneratorAdapter;
+import jdk.internal.org.objectweb.asm.tree.ClassNode;
+import jdk.internal.org.objectweb.asm.util.ASMifier;
+import jdk.internal.org.objectweb.asm.util.TraceClassVisitor;
 import sun.invoke.anon.AnonymousClassLoader;
 import sun.invoke.util.Wrapper;
 import sun.misc.Unsafe;
@@ -45,9 +45,9 @@ import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Streams.*;
-import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
-import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
-import static org.objectweb.asm.Type.*;
+import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
+import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
+import static jdk.internal.org.objectweb.asm.Type.*;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
 import static shen.Shen.Primitives.*;
@@ -868,7 +868,7 @@ public class Shen {
         Object kl;
 
         Symbol self;
-        org.objectweb.asm.commons.Method method;
+        jdk.internal.org.objectweb.asm.commons.Method method;
         Map<Symbol, Integer> locals;
         List<Symbol> args;
         List<Type> argTypes;
@@ -888,13 +888,13 @@ public class Shen {
         }
 
         static ClassWriter classWriter(String name, Class<?> anInterface) {
-            ClassWriter cw = new ClassWriter(COMPUTE_FRAMES);
+            ClassWriter cw = new ClassWriter(COMPUTE_FRAMES) {}; // Needs to be in this package for some reason.
             cw.visit(V1_7, ACC_PUBLIC | ACC_FINAL, name, null, getInternalName(Object.class), new String[] {getInternalName(anInterface)});
             return cw;
         }
 
-        static org.objectweb.asm.commons.Method method(String name, String desc) {
-            return new org.objectweb.asm.commons.Method(name, desc);
+        static jdk.internal.org.objectweb.asm.commons.Method method(String name, String desc) {
+            return new jdk.internal.org.objectweb.asm.commons.Method(name, desc);
         }
 
 
@@ -936,7 +936,7 @@ public class Shen {
             }
         }
 
-        GeneratorAdapter generator(int access, org.objectweb.asm.commons.Method method) {
+        GeneratorAdapter generator(int access, jdk.internal.org.objectweb.asm.commons.Method method) {
             return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
         }
 

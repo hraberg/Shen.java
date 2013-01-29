@@ -105,7 +105,7 @@ The benchmarks can be run via:
 * The Shen test suite passes.
 * Different bootstrap methods for invoke, apply and symbols. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
-* Cons extending List.
+* Cons as persistent collection vs. cons pairs.
 
 
 ### Road Map
@@ -119,6 +119,8 @@ This is bound to change as we go:
 * Revisit how call sites are built and cached, see above.
 * Proper Java inter-op. Potentially using [Dynalink](https://github.com/szegedi/dynalink).
 * Reader macros/extension for [`edn`](https://github.com/edn-format/edn) to support embedded Clojure-like maps/sets.
+* Persistent collections for the above.
+* JSR-223 script engine
 
 
 ## References
