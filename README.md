@@ -17,7 +17,7 @@ See also: [shen.clj](https://github.com/hraberg/shen.clj)
 
 ## This Java Port
 
-**Shen.java is an [invokedynamic](http://www.slideshare.net/CharlesNutter/jax-2012-invoke-dynamic-keynote) based [K Lambda](http://www.shenlanguage.org/documentation/shendoc.htm) compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go. All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java). It now passes the Shen test suite except for one test (see below).
+**Shen.java is an [invokedynamic](http://www.slideshare.net/CharlesNutter/jax-2012-invoke-dynamic-keynote) based [K Lambda](http://www.shenlanguage.org/documentation/shendoc.htm) compiler.** I don't vouch for any of the implementation details regarding this - I'm learning as we go. All code lives in [`Shen.java`](https://github.com/hraberg/Shen.java/blob/master/src/shen/Shen.java). It passes the Shen test suite.
 
 The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) is done by Joel Shellman and might be used for [Babel](http://www.shenlanguage.org/babel/babel.htm), Mark's IDE project.
 
