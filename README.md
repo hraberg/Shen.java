@@ -144,7 +144,7 @@ This is bound to change as we go:
 
 [Nashorn](https://blogs.oracle.com/nashorn/entry/open_for_business) Jim Laskey et al, 2012 "ECMAScript 5.1 that runs on top of JVM."
 
-[Dynalink](https://github.com/szegedi/dynalink) Attila Szegedi, 2010-12 = "Dynamic Linker Framework for Languages on the JVM"
+[Dynalink](https://github.com/szegedi/dynalink) Attila Szegedi, 2010-12 "Dynamic Linker Framework for Languages on the JVM"
 
 [Invokedynamic them all](https://speakerdeck.com/forax/invokedynamic-them-all) Rémi Forax, 2012
 
