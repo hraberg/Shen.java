@@ -106,8 +106,9 @@ public class Shen {
 
     interface LLPredicate { boolean test(long a, long b); }
     interface DDPredicate { boolean test(double a, double b); }
+    interface Invokable { MethodHandle invoker() throws Exception; }
 
-    public final static class Symbol {
+    public final static class Symbol implements Invokable {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
@@ -133,6 +134,13 @@ public class Shen {
 
         public int hashCode() {
             return symbol.hashCode();
+        }
+
+        public MethodHandle invoker() throws IllegalAccessException {
+            if (fn.isEmpty()) return reLinker(symbol, 0);
+            MethodHandle mh = fn.get(0);
+            if (fn.size() > 1) return reLinker(symbol, mh.type().parameterCount());
+            return mh;
         }
     }
 
@@ -360,14 +368,11 @@ public class Shen {
             return set(intern(x), y);
         }
 
-        public static MethodHandle function(Symbol x) throws IllegalAccessException {
-            if (x.fn.isEmpty()) return reLinker(x.symbol, 0);
-            MethodHandle fn = x.fn.get(0);
-            if (x.fn.size() > 1) return reLinker(x.symbol, fn.type().parameterCount());
-            return fn;
+        public static MethodHandle function(Invokable x) throws Exception {
+            return x.invoker();
         }
 
-        static MethodHandle function(String x) throws IllegalAccessException {
+        static MethodHandle function(String x) throws Exception {
             return function(intern(x));
         }
 
@@ -678,8 +683,8 @@ public class Shen {
             });
         }
 
-        public static MethodHandle function(Object target) throws IllegalAccessException {
-            return target instanceof Symbol ? Primitives.function((Symbol) target) : (MethodHandle) target;
+        public static MethodHandle function(Object target) throws Exception {
+            return target instanceof Invokable ? Primitives.function((Invokable) target) : (MethodHandle) target;
         }
 
         static MethodHandle linker(MutableCallSite site, String name) {
