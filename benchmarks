@@ -1,5 +1,5 @@
 #!/bin/bash -e
 
-test_classpath="target/test-classes:`find . -name shen.java-*-standalone.jar`"
+test_classpath="target/test-classes:`find . -name shen.java-*.jar`"
 
 time java $JAVA_OPTS -Xss6m -cp $test_classpath shen.BenchmarksTest 2>&1 | tee benchmarks.log
