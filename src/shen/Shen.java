@@ -787,7 +787,7 @@ public class Shen {
             intern(name).fn.addAll(vec(stream(op).map(RT::findSAM)));
         }
 
-        static void register(Class<?> aClass, Block<? super Method> hook) {
+        static void register(Class<?> aClass, Consumer<? super Method> hook) {
             stream(aClass.getDeclaredMethods()).filter(m -> isPublic(m.getModifiers())).forEach(hook);
         }
 
@@ -1172,7 +1172,7 @@ public class Shen {
 
         void fn(String name, Object kl, Symbol... args) throws Throwable {
             String bytecodeName = toBytecodeName(name) + "_" + id++;
-            List<Symbol> scope = vec(closesOver(new HashSet<>(asList(args)), kl).uniqueElements());
+            List<Symbol> scope = vec(closesOver(new HashSet<>(asList(args)), kl).distinct());
             scope.retainAll(into(locals.keySet(), this.args));
 
             List<Type> types = into(vec(scope.stream().map(this::typeOf)), nCopies(args.length, getType(Object.class)));
