@@ -70,7 +70,6 @@ public class Shen {
 
     static final Map<String, Symbol> symbols = new HashMap<>();
     static Set<Object> builtins = new HashSet<>();
-    static final long fpBit = 1;
 
     static {
         set("*language*", "Java");
@@ -108,6 +107,8 @@ public class Shen {
     interface Invokable { MethodHandle invoker() throws Exception; }
 
     public static class Numbers {
+        static final long fpBit = 1;
+
         static Object maybeNumber(Object o) {
             return o instanceof Long ? asNumber((Long) o) : o;
         }
