@@ -8,6 +8,7 @@ import static shen.Shen.Compiler;
 import static shen.Shen.KLReader.read;
 import static shen.Shen.Primitives.set;
 import static shen.Shen.eval;
+import static shen.Shen.maybeDouble;
 
 public class MicroBench {
     public static void main(String[] args) throws Throwable {
@@ -22,6 +23,7 @@ public class MicroBench {
         bench("(fib 30.0)", times);
 
         bench(() -> fib(30), times); // Java
+        bench(() -> fibBoxed(30L), times); // Java Boxed
 
         eval("(defun my-cons (a b) (cons a b))");
         bench("(my-cons 1 2)", times);  // Will pick cons(Object, Object)
@@ -49,11 +51,14 @@ public class MicroBench {
         bench("(my-cons 1.0)", times);
     }
 
-
-
     private static long fib(long n) {
         if (n <= 1) return n;
         return fib(n - 1) + fib(n - 2);
+    }
+
+    private static Long fibBoxed(Long n) {
+        if (n <= 1) return n;
+        return fibBoxed(n - 1) + fibBoxed(n - 2);
     }
 
     static void bench(String test, int times) throws Throwable {
