@@ -26,6 +26,8 @@ import java.util.stream.Stream;
 
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
+import static java.lang.Double.doubleToLongBits;
+import static java.lang.Double.longBitsToDouble;
 import static java.lang.Math.floorMod;
 import static java.lang.String.format;
 import static java.lang.System.*;
@@ -48,8 +50,10 @@ import static java.util.stream.Streams.*;
 import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static jdk.internal.org.objectweb.asm.Type.*;
+import static shen.Shen.Compiler.typeHint;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
+import static shen.Shen.Numbers.*;
 import static shen.Shen.Primitives.*;
 import static shen.Shen.RT.*;
 import static shen.Shen.RT.lookup;
@@ -65,6 +69,8 @@ public class Shen {
     }
 
     static final Map<String, Symbol> symbols = new HashMap<>();
+    static Set<Object> builtins = new HashSet<>();
+    static final long fpBit = 1;
 
     static {
         set("*language*", "Java");
@@ -81,31 +87,66 @@ public class Shen {
         register(Primitives.class, RT::defun);
         register(Overrides.class, RT::override);
 
-        op("+", (LongBinaryOperator) (left, right) -> left + right,
-                (DoubleBinaryOperator) (left, right) -> left + right);
-        op("-", (LongBinaryOperator) (left, right) -> left - right,
-                (DoubleBinaryOperator) (left, right) -> left - right);
-        op("*", (LongBinaryOperator) (left, right) -> left * right,
-                (DoubleBinaryOperator) (left, right) -> left * right);
-        op("/", (DoubleBinaryOperator) (left, right) -> {
-            if (right == 0) throw new ArithmeticException("Division by zero");
-            return left / right;
-        });
-
-        op("<", (LLPredicate) (left, right) -> left < right,
-                (DDPredicate) (left, right) -> left < right);
-        op("<=",(LLPredicate) (left, right) -> left <= right,
-                (DDPredicate) (left, right) -> left <= right);
-        op(">", (LLPredicate) (left, right) -> left > right,
-                (DDPredicate) (left, right) -> left > right);
-        op(">=",(LLPredicate) (left, right) -> left >= right,
-                (DDPredicate) (left, right) -> left >= right);
+        // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 1 = double, 0 = long.
+        // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms
+        op("+", (l, r) -> isInteger(l) && isInteger(r) ? l + r : d2l(fp(l) + fp(r)));
+        op("-", (l, r) ->  isInteger(l) && isInteger(r) ? l - r : d2l(fp(l) - fp(r)));
+        op("*", (l, r) -> isInteger(l) && isInteger(r) ? l * r >> fpBit : d2l(fp(l) * fp(r)));
+        op("/", (l, r) -> {
+            if (r == 0 || r == fpBit) throw new ArithmeticException("Division by zero");
+            return d2l(fp(l) / fp(r));
+            });
+        op("<", (l, r) -> isInteger(l) && isInteger(r) ? l < r : fp(l) < fp(r));
+        op("<=", (l, r) -> isInteger(l) && isInteger(r) ? l <= r : fp(l) <= fp(r));
+        op(">", (l, r) -> isInteger(l) && isInteger(r) ? l > r : fp(l) > fp(r));
+        op(">=", (l, r) -> isInteger(l) && isInteger(r) ? l >= r : fp(l) >= fp(r));
 
         asList(Math.class, System.class).forEach(Primitives::KL_import);
     }
 
+    public static class Numbers {
+        static Object maybeNumber(Object o) {
+            if (o instanceof Long) {
+                long l = (Long) o;
+                return asNumber(l);
+            }
+            return o;
+        }
+
+        public static long real(double d) {
+            return d2l(d);
+        }
+
+        public static long integer(long l) {
+            return l << fpBit;
+        }
+
+        public static long asLong(long fp) {
+            return isInteger(fp) ? fp >> fpBit : (long) l2d(fp);
+        }
+
+        public static Number asNumber(long fp) { //noinspection RedundantCast
+            return isInteger(fp) ? (Number) asLong(fp) : (Number) fp(fp);
+        }
+
+        static double fp(long l) {
+            return isInteger(l) ? l >> fpBit : l2d(l);
+        }
+
+        static long d2l(double d) {
+            return fpBit | doubleToLongBits(d);
+        }
+
+        static double l2d(long fp) {
+            return longBitsToDouble(fp & ~fpBit);
+        }
+
+        public static boolean isInteger(long l) {
+            return (fpBit & l) == 0;
+        }
+    }
+
     interface LLPredicate { boolean test(long a, long b); }
-    interface DDPredicate { boolean test(double a, double b); }
     interface Invokable { MethodHandle invoker() throws Exception; }
 
     public final static class Symbol implements Invokable {
@@ -113,6 +154,7 @@ public class Shen {
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
         public Object var;
+        public List<Object> source;
 
         Symbol(String symbol) {
             this.symbol = symbol.intern();
@@ -156,11 +198,12 @@ public class Shen {
 
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (o instanceof List && isList()) return toList().equals(o);
+            if (o instanceof List && isList()) //noinspection unchecked
+                return vec(toList().stream().map(Numbers::maybeNumber)).equals(o);
             if (o == null || getClass() != o.getClass()) return false;
             //noinspection ConstantConditions
             Cons cons = (Cons) o;
-            return car.equals(cons.car) && cdr.equals(cons.cdr);
+            return EQ(car, cons.car) && cdr.equals(cons.cdr);
         }
 
         boolean isList() {
@@ -183,7 +226,7 @@ public class Shen {
 
         public String toString() {
             if (isList()) return super.toString();
-            return "[" + car + " | " + cdr + "]";
+            return "[" + str(car) + " | " + str(cdr) + "]";
         }
 
         public List toList() {
@@ -209,9 +252,24 @@ public class Shen {
     }
 
     public static final class Primitives {
-        public static boolean EQ(Object x, Object y) {
-            return Objects.equals(x, y) || x instanceof Number && y instanceof Number
-                    && ((Number) x).doubleValue() == ((Number) y).doubleValue();
+        public static boolean EQ(Object left, Object right) {
+            if (Objects.equals(left, right)) return true;
+            if (absvectorP(left) && absvectorP(right))  {
+                Object[] leftA = (Object[]) left;
+                Object[] rightA = (Object[]) right;
+                if (leftA.length != rightA.length) return false;
+                for (int i = 0; i < leftA.length; i++)
+                    if (!EQ(leftA[i], rightA[i]))
+                        return false;
+                return true;
+            }
+            if (numberP(left) && numberP(right)) {
+                long a = (Long) left;
+                long b = (Long) right;
+                return isInteger(a) && isInteger(b) ? a == b : fp(a) == fp(b);
+//                return isD(l) ? l2d(l) == ld(r) : isD(r) ? l == l2d(r) : l == r;
+            }
+            return false;
         }
 
         public static Class KL_import(Symbol s) throws ClassNotFoundException {
@@ -254,11 +312,12 @@ public class Shen {
         public static String str(Object x) {
             if (consP(x)) throw new IllegalArgumentException(x + " is not an atom; str cannot convert it to a string.");
             if (x != null && x.getClass().isArray()) return deepToString((Object[]) x);
+            if (x instanceof Long) x = asNumber((Long) x);
             return String.valueOf(x);
         }
 
         public static String pos(String x, long n) {
-            return str(x.charAt((int) n));
+            return str(x.charAt((int) asLong(n)));
         }
 
         public static String tlstr(String x) {
@@ -270,7 +329,7 @@ public class Shen {
         }
 
         public static Object[] absvector(long n) {
-            Object[] objects = new Object[(int) n];
+            Object[] objects = new Object[(int) asLong(n)];
             fill(objects, intern("fail!"));
             return objects;
         }
@@ -280,16 +339,16 @@ public class Shen {
         }
 
         public static Object LT_address(Object[] vector, long n) {
-            return vector[((int) n)];
+            return vector[((int) asLong(n))];
         }
 
         public static Object[] address_GT(Object[] vector, long n, Object value) {
-            vector[((int) n)] = value;
+            vector[((int) asLong(n))] = value;
             return vector;
         }
 
         public static boolean numberP(Object x) {
-            return x instanceof Number;
+            return x instanceof Long;
         }
 
         public static boolean stringP(Object x) {
@@ -297,24 +356,24 @@ public class Shen {
         }
 
         public static String n_GTstring(long n) {
-            if (n < 0) throw new IllegalArgumentException(n + " is not a valid character");
-            return Character.toString((char) n);
+            if (asLong(n) < 0) throw new IllegalArgumentException(n + " is not a valid character");
+            return Character.toString((char) asLong(n));
         }
 
         public static String byte_GTstring(long n) {
-            return n_GTstring(n);
+            return n_GTstring(asLong(n));
         }
 
         public static long string_GTn(String s) {
-            return (int) s.charAt(0);
+            return integer((int) s.charAt(0));
         }
 
         public static long read_byte(InputStream s) throws IOException {
-            return s.read();
+            return integer(s.read());
         }
 
         public static long read_byte(Reader s) throws IOException {
-            return s.read();
+            return integer(s.read());
         }
 
         public static <T> T pr(T x, OutputStream s) throws IOException {
@@ -343,10 +402,10 @@ public class Shen {
         }
 
         static long startTime = System.currentTimeMillis();
-        public static double get_time(Symbol time) {
+        public static long get_time(Symbol time) {
             switch (time.symbol) {
-                case "run": return (currentTimeMillis() - startTime) / 1000.0;
-                case "unix": return currentTimeMillis() / 1000;
+                case "run": return real((currentTimeMillis() - startTime) / 1000.0);
+                case "unix": return integer(currentTimeMillis() / 1000);
             }
             throw new IllegalArgumentException("get-time does not understand the parameter " + time);
         }
@@ -357,6 +416,10 @@ public class Shen {
 
         public static Symbol intern(String name) {
             return symbols.computeIfAbsent(name, Symbol::new);
+        }
+
+        public static <T> T value(Symbol x) {
+            return x.value();
         }
 
         @SuppressWarnings("unchecked")
@@ -405,7 +468,7 @@ public class Shen {
         }
 
         public static long length(Collection x) {
-            return x.size();
+            return integer(x.size());
         }
 
         public static Object[] ATp(Object x, Object y) {
@@ -415,11 +478,11 @@ public class Shen {
         public static long hash(Object s, long limit) {
             long hash = s.hashCode();
             if (hash == 0) return 1;
-            return floorMod(hash, limit);
+            return integer(floorMod(hash, asLong(limit)));
         }
 
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
-            fill(vector, (int) counter, (int) n + 1, x);
+            fill(vector, (int) asLong(counter), (int) asLong(n) + 1, x);
             return vector;
         }
     }
@@ -441,6 +504,8 @@ public class Shen {
         for (String file : asList("toplevel", "core", "sys", "sequent", "yacc", "reader",
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
+        set("shen-*installing-kl*", false);
+        builtins = symbols.values().stream().filter(s -> !s.fn.isEmpty()).collect(toSet());
     }
 
     @SuppressWarnings("unchecked")
@@ -500,8 +565,8 @@ public class Shen {
             if (find(sc, "\"")) return nextString(sc);
             if (find(sc, "\\)")) return null;
             if (sc.hasNextBoolean()) return sc.nextBoolean();
-            if (sc.hasNextLong()) return sc.nextLong();
-            if (sc.hasNextDouble()) return sc.nextDouble();
+            if (sc.hasNextLong()) return integer(sc.nextLong());
+            if (sc.hasNextDouble()) return real(sc.nextDouble());
             if (sc.hasNext()) return intern(sc.next());
             return null;
         }
@@ -547,7 +612,7 @@ public class Shen {
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
             name = toSourceName(name);
             MethodType type = site.type();
-            debug("LINKING: %s%s %s", name, type, args);
+            debug("LINKING: %s%s %s", name, type, vec(stream(args).map(Numbers::maybeNumber)));
             List<Class<?>> actualTypes = vec(stream(args).map(Object::getClass));
             debug("actual types: %s", actualTypes);
             Symbol symbol = intern(name);
@@ -576,12 +641,8 @@ public class Shen {
             debug("match based on argument types: %s", match);
 
             MethodHandle fallback = linker(site, toBytecodeName(name)).asType(type);
-            if (symbol.fn.size() >  1) {
-                if (match.type().changeReturnType(Object.class).hasPrimitives()) {
-                    debug("falling back to exception guard for %s", name);
-                    match = relinkOn(ClassCastException.class, match, fallback);
-                } else
-                    match = guards.computeIfAbsent(asList(type, symbol.fn), key -> guard(type, symbol.fn));
+            if (symbol.fn.size() >  1 && !match.type().parameterList().stream().allMatch(isEqual(long.class))) {
+                match = guards.computeIfAbsent(asList(type, symbol.fn), key -> guard(type, symbol.fn));
                 debug("selected: %s", match);
             }
 
@@ -589,7 +650,26 @@ public class Shen {
                 if (symbol.fnGuard == null) symbol.fnGuard = new SwitchPoint();
                 site.setTarget(symbol.fnGuard.guardWithTest(match.asType(type), fallback));
             }
-            return match.invokeWithArguments(args);
+            Object result = match.invokeWithArguments(args);
+            maybeRecompile(type, symbol, result == null ? Object.class : result.getClass());
+            return result;
+        }
+
+        static void maybeRecompile(MethodType type, Symbol symbol, Class returnType) throws Throwable {
+            type = type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType() : isPrimitiveType(returnType) ? returnType : Object.class);
+            if (symbol.source != null && !builtins.contains(symbol) && !booleanProperty("shen-*installing-kl*") && symbol.fn.stream().map(MethodHandle::type).noneMatch(isEqual(type))
+                    && type.changeReturnType(Object.class).hasPrimitives()) {
+                System.out.println(format("recompiling as %s: %s", type, symbol.source));
+                debug("recompiling as %s: %s", type, symbol.source);
+                List<MethodHandle> fn = new ArrayList<>(symbol.fn);
+                try {
+                    typeHint.set(type);
+                    eval_kl(symbol.source);
+                } finally {
+                    typeHint.remove();
+                    symbol.fn.addAll(fn);
+                }
+            }
         }
 
         static MethodHandle guard(MethodType type, List<MethodHandle> candidates) {
@@ -783,8 +863,12 @@ public class Shen {
             }
         }
 
-        static void op(String name, Object... op) {
-            intern(name).fn.addAll(vec(stream(op).map(RT::findSAM)));
+        static void op(String name, LongBinaryOperator op) {
+            intern(name).fn.add(findSAM(op));
+        }
+
+        static void op(String name, LLPredicate op) {
+            intern(name).fn.add(findSAM(op));
         }
 
         static void register(Class<?> aClass, Consumer<? super Method> hook) {
@@ -841,8 +925,7 @@ public class Shen {
     public static class Compiler implements Opcodes {
         static final AnonymousClassLoader loader = AnonymousClassLoader.make(unsafe(), RT.class);
         static final Map<Symbol, MethodHandle> macros = new HashMap<>();
-        static final List<Class<?>> literals =
-                asList(Double.class, Integer.class, Long.class, String.class, Boolean.class, Handle.class);
+        static final List<Class<?>> literals = asList(Long.class, String.class, Boolean.class, Handle.class);
         static final Handle
                 applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
                 symbolBSM = handle(mh(RT.class, "symbolBSM")), or = handle(RT.mh(Primitives.class, "or")),
@@ -860,6 +943,7 @@ public class Shen {
         byte[] bytes;
         GeneratorAdapter mv;
         Object kl;
+        static ThreadLocal<MethodType> typeHint = new ThreadLocal<>();
 
         Symbol self;
         jdk.internal.org.objectweb.asm.commons.Method method;
@@ -999,17 +1083,16 @@ public class Shen {
         }
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
-            List<Type> argumentTypes = vec(args.stream().map(o -> compile(o, getType(Object.class), false, false)));
-
+            Iterator<Type> selfCallTypes = asList(method.getArgumentTypes()).iterator();
+            List<Type> argumentTypes = vec(args.stream().map(o -> compile(o, isSelfCall(s, args) ? selfCallTypes.next() : getType(Object.class), false, false)));
             if (isSelfCall(s, args)) {
                 if (tail) {
                     debug("recur: %s", s);
                     recur(argumentTypes);
                 } else {
                     debug("can only recur from tail position: %s", s);
-                    mv.invokeStatic(getType(className), method);
-                    topOfStack = method.getReturnType();
-                    handlePrimitives(returnType);
+                    mv.invokeDynamic(toBytecodeName(s.symbol), method.getDescriptor(), invokeBSM);
+                    returnType = method.getReturnType();
                 }
             } else
                 mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), invokeBSM);
@@ -1017,8 +1100,8 @@ public class Shen {
         }
 
         void recur(List<Type> argumentTypes) {
-            for (int i = args.size() - 1; i >= 0; i--) {
-                mv.valueOf(argumentTypes.get(i));
+            for (int i = args.size()- 1; i >= 0; i--) {
+                if (!isPrimitive(method.getArgumentTypes()[i])) mv.valueOf(argumentTypes.get(i));
                 mv.storeArg(i);
             }
             mv.goTo(recur);
@@ -1116,13 +1199,6 @@ public class Shen {
                 }
             }
 
-            public void value(boolean tail, Type returnType, Object x) throws Throwable {
-                compile(x, false);
-                maybeCast(Symbol.class);
-                mv.invokeVirtual(getType(Symbol.class), method("value", desc(Object.class)));
-                topOfStack(Object.class);
-            }
-
             public void lambda(boolean tail, Type returnType, Symbol x, Object y) throws Throwable {
                 fn("__lambda__", y, x);
             }
@@ -1134,6 +1210,7 @@ public class Shen {
             public void defun(boolean tail, Type returnType, Symbol name, final List<Symbol> args, Object body) throws Throwable {
                 push(name);
                 debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
+                name.source = asList(intern("defun"), name, args, body);
                 fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
                 mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
                 topOfStack(Symbol.class);
@@ -1175,13 +1252,17 @@ public class Shen {
             List<Symbol> scope = vec(closesOver(new HashSet<>(asList(args)), kl).distinct());
             scope.retainAll(into(locals.keySet(), this.args));
 
-            List<Type> types = into(vec(scope.stream().map(this::typeOf)), nCopies(args.length, getType(Object.class)));
-            push(handle(className, bytecodeName, desc(getType(Object.class), types)));
+            if (name.startsWith("__")) typeHint.remove();
+            List<Type> types = into(vec(scope.stream().map(this::typeOf)), typeHint.get() != null
+                    ? vec(typeHint.get().parameterList().stream().map(Type::getType)) : nCopies(args.length, getType(Object.class)));
+            Type returnType = typeHint.get() != null ? getType(typeHint.get().returnType()) : getType(Object.class);
+            typeHint.remove();
+            push(handle(className, bytecodeName, desc(returnType, types)));
             insertArgs(0, scope);
 
             scope.addAll(asList(args));
             Compiler fn = new Compiler(cw, className, kl, scope.toArray(new Symbol[scope.size()]));
-            fn.method(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, intern(name), bytecodeName, getType(Object.class), types);
+            fn.method(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, intern(name), bytecodeName, returnType, types);
         }
 
         @SuppressWarnings({"unchecked"})
@@ -1301,8 +1382,7 @@ public class Shen {
             this.method = method(bytecodeName, desc(returnType, argumentTypes));
             mv = generator(modifiers, method);
             recur = mv.mark();
-            compile(kl);
-            if (isPrimitive(topOfStack)) box();
+            compile(kl, returnType, true);
             mv.returnValue();
             mv.endMethod();
         }
