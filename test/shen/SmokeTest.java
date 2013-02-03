@@ -51,9 +51,9 @@ public class SmokeTest {
 
         out.println(eval_kl(asList(intern("lambda"), intern("x"), intern("x"))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun"), asList(intern("x")), intern("x"))));
-        out.println(str(eval_kl(asList(intern("my-fun"), 3))));
+        out.println(str(eval_kl(asList(intern("my-fun"), 3L))));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun2"), asList(intern("x"), intern("y")), asList(intern("cons"), intern("y"), asList(intern("cons"), intern("x"), new LinkedList())))));
-        out.println(eval_kl(asList(intern("my-fun2"), 3, 5)));
+        out.println(eval_kl(asList(intern("my-fun2"), 3L, 5L)));
         out.println(eval_kl(asList(intern("defun"), intern("my-fun3"), asList(), "Hello")));
         out.println(str(eval_kl(asList(intern("my-fun3")))));
     }
