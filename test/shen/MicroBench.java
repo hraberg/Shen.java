@@ -6,6 +6,7 @@ import java.util.concurrent.Callable;
 import static java.lang.System.currentTimeMillis;
 import static shen.Shen.Compiler;
 import static shen.Shen.KLReader.read;
+import static shen.Shen.Numbers.maybeNumber;
 import static shen.Shen.Primitives.set;
 import static shen.Shen.eval;
 
@@ -67,7 +68,7 @@ public class MicroBench {
 
     static void bench(Callable<?> code, int times) throws Exception {
         long start = currentTimeMillis();
-        for (int i = 0; i < times; i++) System.out.println(code.call());
+        for (int i = 0; i < times; i++) System.out.println(maybeNumber(code.call()));
         System.out.println(times + ": "  + ((currentTimeMillis() - start) / ((double) times) + "ms."));
     }
 }

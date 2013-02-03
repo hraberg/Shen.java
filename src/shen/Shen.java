@@ -221,11 +221,11 @@ public class Shen {
         }
 
         public String toString() {
-            if (isList()) return super.toString();
+            if (isList()) return vec(toList().stream().map(Numbers::maybeNumber)).toString();
             return "[" + str(car) + " | " + str(cdr) + "]";
         }
 
-        public List toList() {
+        public List<Object> toList() {
             return new ArrayList<Object>(this);
         }
 
