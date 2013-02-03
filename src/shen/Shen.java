@@ -655,7 +655,6 @@ public class Shen {
             type = type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType() : isPrimitiveType(returnType) ? returnType : Object.class);
             if (symbol.source != null && !builtins.contains(symbol) && !booleanProperty("shen-*installing-kl*") && symbol.fn.stream().map(MethodHandle::type).noneMatch(isEqual(type))
                     && type.changeReturnType(Object.class).hasPrimitives()) {
-                System.out.println(format("recompiling as %s: %s", type, symbol.source));
                 debug("recompiling as %s: %s", type, symbol.source);
                 List<MethodHandle> fn = new ArrayList<>(symbol.fn);
                 try {
