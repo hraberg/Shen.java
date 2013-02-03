@@ -8,7 +8,6 @@ import static shen.Shen.Compiler;
 import static shen.Shen.KLReader.read;
 import static shen.Shen.Primitives.set;
 import static shen.Shen.eval;
-import static shen.Shen.maybeDouble;
 
 public class MicroBench {
     public static void main(String[] args) throws Throwable {
