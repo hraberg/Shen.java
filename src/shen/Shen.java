@@ -104,13 +104,12 @@ public class Shen {
         asList(Math.class, System.class).forEach(Primitives::KL_import);
     }
 
+    interface LLPredicate { boolean test(long a, long b); }
+    interface Invokable { MethodHandle invoker() throws Exception; }
+
     public static class Numbers {
         static Object maybeNumber(Object o) {
-            if (o instanceof Long) {
-                long l = (Long) o;
-                return asNumber(l);
-            }
-            return o;
+            return o instanceof Long ? asNumber((Long) o) : o;
         }
 
         public static long real(double d) {
@@ -145,9 +144,6 @@ public class Shen {
             return (fpBit & l) == 0;
         }
     }
-
-    interface LLPredicate { boolean test(long a, long b); }
-    interface Invokable { MethodHandle invoker() throws Exception; }
 
     public final static class Symbol implements Invokable {
         public final String symbol;
