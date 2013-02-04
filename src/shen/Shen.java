@@ -701,10 +701,8 @@ public class Shen {
             List<Object> shenTypes = shenTypeSignature(symbol);
             List<Class<?>> javaTypes = new ArrayList<>();
             for (Object argumentType : shenTypes) {
-                if (argumentType instanceof Cons) {
-                    List<Object> type = ((Cons) argumentType).toList();
-                    argumentType = type.get(0);
-                }
+                if (argumentType instanceof Cons)
+                    argumentType = ((Cons) argumentType).car;
                 javaTypes.add(types.containsKey(argumentType) ? types.get(argumentType) :
                         argumentType instanceof Class ? (Class<?>) argumentType : Object.class);
             }
@@ -718,8 +716,10 @@ public class Shen {
         }
 
         static List<Object> shenTypeSignature(Symbol symbol) throws Throwable {
-            List<Object> argumentTypes = new ArrayList<>();
             List<Object> signature = ((Cons) eval(format("(shen-typecheck %s (gensym A))", symbol))).toList();
+            if (signature.size() != 3)
+                return vec(signature.stream().filter(negate(isEqual(intern("-->")))));
+            List<Object> argumentTypes = new ArrayList<>();
             for (; signature.size() == 3; signature = ((Cons) signature.get(2)).toList()) {
                 argumentTypes.add(signature.get(0));
                 if (!(signature.get(2) instanceof Cons) || signature.get(2) instanceof Cons
@@ -728,8 +728,6 @@ public class Shen {
                     break;
                 }
             }
-            if (argumentTypes.isEmpty())
-                return vec(signature.stream().filter(negate(isEqual(intern("-->")))));
             return argumentTypes;
         }
 
