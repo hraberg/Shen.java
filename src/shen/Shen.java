@@ -528,7 +528,7 @@ public class Shen {
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
-        builtins .addAll(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
+        builtins.addAll(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
     }
 
     static void readTypes() throws Throwable {
