@@ -68,7 +68,7 @@ public class Shen {
     }
 
     static final Map<String, Symbol> symbols = new HashMap<>();
-    static Set<Symbol> builtins = new HashSet<>();
+    static final Set<Symbol> builtins = new HashSet<>();
 
     static {
         set("*language*", "Java");
@@ -85,36 +85,6 @@ public class Shen {
         register(Primitives.class, RT::defun);
         register(Overrides.class, RT::override);
 
-        // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 1 = double, 0 = long.
-        // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms
-        op("+", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) + ((fpBit & r) == 1
-                ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
-                ? fpBit | doubleToRawLongBits((l >> fpBit) + longBitsToDouble(r & ~fpBit)) : l + r);
-        op("-", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) - ((fpBit & r) == 1
-                ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
-                ? fpBit | doubleToRawLongBits((l >> fpBit) - longBitsToDouble(r & ~fpBit)) : l - r);
-        op("*", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) * ((fpBit & r) == 1
-                ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
-                ? fpBit | doubleToRawLongBits((l >> fpBit) * longBitsToDouble(r & ~fpBit)) : l * r >> fpBit);
-        op("/", (l, r) -> {
-            if (r == 0 || r == fpBit) throw new ArithmeticException("Division by zero");
-            return fpBit | doubleToRawLongBits(((fpBit & l) == 0
-                    ? l >> fpBit : longBitsToDouble(l & ~fpBit)) / ((fpBit & r) == 0
-                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)));
-        });
-        op("<", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) < ((fpBit & r) == 0
-                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                ? l >> fpBit < longBitsToDouble(r & ~fpBit) : l < r);
-        op("<=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) <= ((fpBit & r) == 0
-                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                ? l >> fpBit <= longBitsToDouble(r & ~fpBit) : l <= r);
-        op(">", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) > ((fpBit & r) == 0
-                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                ? l >> fpBit > longBitsToDouble(r & ~fpBit) : l > r);
-        op(">=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) >= ((fpBit & r) == 0
-                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                ? l >> fpBit >= longBitsToDouble(r & ~fpBit) : l >= r);
-
         asList(Math.class, System.class).forEach(Primitives::KL_import);
     }
 
@@ -123,6 +93,45 @@ public class Shen {
 
     public static class Numbers {
         static final long fpBit = 1;
+        static {
+            // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 1 = double, 0 = long.
+            // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms
+            op("+", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) + ((fpBit & r) == 1
+                    ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
+                    ? fpBit | doubleToRawLongBits((l >> fpBit) + longBitsToDouble(r & ~fpBit)) : l + r);
+            op("-", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) - ((fpBit & r) == 1
+                    ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
+                    ? fpBit | doubleToRawLongBits((l >> fpBit) - longBitsToDouble(r & ~fpBit)) : l - r);
+            op("*", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) * ((fpBit & r) == 1
+                    ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
+                    ? fpBit | doubleToRawLongBits((l >> fpBit) * longBitsToDouble(r & ~fpBit)) : l * r >> fpBit);
+            op("/", (l, r) -> {
+                if (r == 0 || r == fpBit) throw new ArithmeticException("Division by zero");
+                return fpBit | doubleToRawLongBits(((fpBit & l) == 0
+                        ? l >> fpBit : longBitsToDouble(l & ~fpBit)) / ((fpBit & r) == 0
+                        ? r >> fpBit : longBitsToDouble(r & ~fpBit)));
+            });
+            op("<", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) < ((fpBit & r) == 0
+                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                    ? l >> fpBit < longBitsToDouble(r & ~fpBit) : l < r);
+            op("<=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) <= ((fpBit & r) == 0
+                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                    ? l >> fpBit <= longBitsToDouble(r & ~fpBit) : l <= r);
+            op(">", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) > ((fpBit & r) == 0
+                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                    ? l >> fpBit > longBitsToDouble(r & ~fpBit) : l > r);
+            op(">=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) >= ((fpBit & r) == 0
+                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                    ? l >> fpBit >= longBitsToDouble(r & ~fpBit) : l >= r);
+        }
+
+        static void op(String name, LongBinaryOperator op) {
+            intern(name).fn.add(findSAM(op));
+        }
+
+        static void op(String name, LLPredicate op) {
+            intern(name).fn.add(findSAM(op));
+        }
 
         static Object maybeNumber(Object o) {
             return o instanceof Long ? asNumber((Long) o) : o;
@@ -956,14 +965,6 @@ public class Shen {
                 }
                 return name;
             }
-        }
-
-        static void op(String name, LongBinaryOperator op) {
-            intern(name).fn.add(findSAM(op));
-        }
-
-        static void op(String name, LLPredicate op) {
-            intern(name).fn.add(findSAM(op));
         }
 
         static void register(Class<?> aClass, Consumer<? super Method> hook) {
