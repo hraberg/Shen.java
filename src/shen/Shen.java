@@ -720,7 +720,7 @@ public class Shen {
             }
         }
 
-        static Map<Object, Class> types = new HashMap<>();
+        static final Map<Object, Class> types = new HashMap<>();
         static {
             types.put(intern("symbol"), Symbol.class);
             types.put(intern("number"), long.class);
