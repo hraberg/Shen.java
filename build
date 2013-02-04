@@ -2,8 +2,8 @@
 
 mvn clean
 
-echo "(System/exit 0)" | ./shen.java
-echo
+# echo "(System/exit 0)" | ./shen.java
+# echo
 
 mvn package -DskipTests=true
 
