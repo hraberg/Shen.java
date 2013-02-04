@@ -26,9 +26,7 @@ import java.util.stream.Stream;
 
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
-import static java.lang.Double.doubleToLongBits;
-import static java.lang.Double.doubleToRawLongBits;
-import static java.lang.Double.longBitsToDouble;
+import static java.lang.Double.*;
 import static java.lang.Math.floorMod;
 import static java.lang.String.format;
 import static java.lang.System.*;
@@ -81,7 +79,6 @@ public class Shen {
         set("*stoutput*", out);
         set("*debug*", Boolean.getBoolean("shen.debug"));
         set("*debug-asm*", Boolean.getBoolean("shen.debug.asm"));
-        set("*compile-aot*", Boolean.getBoolean("shen.compile.aot"));
         set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
@@ -168,7 +165,6 @@ public class Shen {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
-        public MethodType signature;
         public Object var;
         public List<Object> source;
 
@@ -514,14 +510,34 @@ public class Shen {
         return eval_kl(read(new StringReader(kl)).get(0));
     }
 
+    static Map<Symbol, MethodType> shenTypesForInstallation = new HashMap<>();
+
     static void install() throws Throwable {
+        readTypes();
         set("shen-*installing-kl*", true);
         for (String file : asList("toplevel", "core", "sys", "sequent", "yacc", "reader",
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
         builtins = new HashSet<>(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
-        for (Symbol s : builtins) recompile(typeSignature(s), s, true);
+    }
+
+    static void readTypes() throws Throwable {
+        try {
+            getSystemClassLoader().loadClass("klambda.types");
+        } catch (ClassNotFoundException ignored) {
+            try (Reader in = resource("klambda/types.kl")) {
+                List<Object> declarations = vec(read(in).stream().filter(instanceOf(List.class))
+                        .filter(c -> ((List) c).get(0).equals(intern("declare"))));
+                for (Object declaration : declarations) {
+                    List list = (List) declaration;
+                    Symbol symbol = (Symbol) list.get(1);
+                    if (!tooStrictTypes.contains(symbol))
+                        //noinspection unchecked
+                        shenTypesForInstallation.put(symbol, typeSignature(symbol, shenTypeSignature(((Cons) eval_kl(list.get(2))).toList())));
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -540,16 +556,14 @@ public class Shen {
             Compiler compiler = new Compiler(null, file, cons(intern("do"), read(in)));
             File compilePath = new File((String) intern("*compile-path*").value());
             File classFile = new File(compilePath, file + ".class");
-            if (booleanProperty("*compile-aot*"))
-                if (!(compilePath.mkdirs() || compilePath.isDirectory())) throw new IOException("could not make directory: " + compilePath);
+            if (!(compilePath.mkdirs() || compilePath.isDirectory())) throw new IOException("could not make directory: " + compilePath);
             try {
                 return compiler.load(classFile.getName().replaceAll(".class$", ".kl"), aClass);
             } finally {
                 lines.clear();
-                if (booleanProperty("*compile-aot*"))
-                    try (OutputStream out = new FileOutputStream(classFile)) {
-                        out.write(compiler.bytes);
-                    }
+                try (OutputStream out = new FileOutputStream(classFile)) {
+                    out.write(compiler.bytes);
+                }
             }
         }
     }
@@ -674,15 +688,15 @@ public class Shen {
         }
 
         static void maybeRecompile(MethodType type, Symbol symbol, Class returnType) throws Throwable {
-            if (symbol.source == null || booleanProperty("shen-*installing-kl*") || symbol.signature != null) return;
+            if (symbol.source == null || booleanProperty("shen-*installing-kl*")) return;
             MethodType signature = typeSignature(symbol);
             type = signature != null ? signature : type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType()
                     : isPrimitiveType(returnType) ? returnType : Object.class);
             if ((signature != null || (type.changeReturnType(Object.class).hasPrimitives() && !builtins.contains(symbol))))
-                recompile(type, symbol, false);
+                recompile(type, symbol);
         }
 
-        static void recompile(MethodType type, Symbol symbol, boolean purge) throws Throwable {
+        static void recompile(MethodType type, Symbol symbol) throws Throwable {
             if (type == null || symbol.source == null || symbol.fn.stream().map(MethodHandle::type).anyMatch(isEqual(type))) return;
             debug("recompiling as %s: %s", type, symbol.source);
             List<MethodHandle> fn = new ArrayList<>(symbol.fn);
@@ -691,7 +705,7 @@ public class Shen {
                 eval_kl(symbol.source);
             } finally {
                 typeHint.remove();
-                if (!purge) symbol.fn.addAll(fn);
+                symbol.fn.addAll(fn);
                 if (!type.returnType().equals(Object.class))
                     symbol.fn.removeAll(f -> f.type().equals(type.changeReturnType(Object.class)));
             }
@@ -708,13 +722,16 @@ public class Shen {
             types.put(intern("vector"), Object[].class);
         }
 
-        static Set<Symbol> tooStrictTypes = new HashSet<>(asList(intern("concat"), intern("fail-if"), intern("tail")));
+        static Set<Symbol> tooStrictTypes = new HashSet<>(asList(intern("concat"), intern("fail-if"),
+                intern("tail"), intern("systemf")));
 
         static MethodType typeSignature(Symbol symbol) throws Throwable {
-            if (symbol.signature != null) return symbol.signature;
             if (symbol.source == null || booleanProperty("shen-*installing-kl*")
                     || tooStrictTypes.contains(symbol) || !hasKnownSignature(symbol)) return null;
-            List<Object> shenTypes = shenTypeSignature(symbol);
+            return typeSignature(symbol, shenTypeSignature(symbol));
+        }
+
+        static MethodType typeSignature(Symbol symbol, List<Object> shenTypes) {
             List<Class<?>> javaTypes = new ArrayList<>();
             for (Object argumentType : shenTypes) {
                 if (argumentType instanceof Cons)
@@ -732,7 +749,10 @@ public class Shen {
         }
 
         static List<Object> shenTypeSignature(Symbol symbol) throws Throwable {
-            List<Object> signature = ((Cons) eval(format("(shen-typecheck %s (gensym A))", symbol))).toList();
+            return shenTypeSignature(((Cons) eval(format("(shen-typecheck %s (gensym A))", symbol))).toList());
+        }
+
+        static List<Object> shenTypeSignature(List<Object> signature) {
             if (signature.size() != 3)
                 return vec(signature.stream().filter(negate(isEqual(intern("-->")))));
             List<Object> argumentTypes = new ArrayList<>();
@@ -1286,6 +1306,8 @@ public class Shen {
                 push(name);
                 debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
                 name.source = asList(intern("defun"), name, args, body);
+                if (booleanProperty("shen-*installing-kl*") && shenTypesForInstallation.containsKey(name))
+                    Compiler.typeHint.set(shenTypesForInstallation.get(name));
                 fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
                 mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
                 topOfStack(Symbol.class);
