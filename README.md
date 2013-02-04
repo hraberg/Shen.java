@@ -115,6 +115,7 @@ The benchmarks can be run via:
   * 63 bit precision. bit 0 is a tag that's either 1 for double or 0 for long.
   * This is highly experimental, arithmetic with tagged longs is faster than boxed Java, doubles on par.
   * Mixing tagged longs/doubles is very slow - will needs to be fixed for this complexity to be worth it.
+  * I think there's some fundamental piece of InvokeDynamic and primitives I don't understand that led me down this road.
   * Would obviously prefer to use real doubles.
 
 
