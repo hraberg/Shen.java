@@ -659,8 +659,7 @@ public class Shen {
         static void maybeRecompile(MethodType type, Symbol symbol, Class returnType) throws Throwable {
             if (symbol.source == null || booleanProperty("shen-*installing-kl*") || symbol.signature != null) return;
             MethodType signature = typeSignature(symbol);
-            if (signature != null) type = signature;
-            else type = type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType()
+            type = signature != null ? signature : type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType()
                     : isPrimitiveType(returnType) ? returnType : Object.class);
             if ((signature != null || (type.changeReturnType(Object.class).hasPrimitives() && !builtins.contains(symbol))))
                 recompile(type, symbol, false);
