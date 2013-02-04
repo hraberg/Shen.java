@@ -113,8 +113,8 @@ The benchmarks can be run via:
   * This is primarily to narrow types down to primitives, but not sure typing `Object` arguments matter.
 * `long` reused as double via `doubleToLongBits` and a tag, as guards on primitives seems to require boxing.
   * 63 bit precision. bit 0 is a tag that's either 1 for double or 0 for long.
-  * This is highly experimental, some arithmetic is much faster, but it adds complexity.
-  * Some things also seem slower because of this.
+  * This is highly experimental, arithmetic with tagged longs is faster than boxed Java, doubles on par.
+  * Mixing tagged longs/doubles is very slow - will needs to be fixed for this complexity to be worth it.
   * Would obviously prefer to use real doubles.
 
 
