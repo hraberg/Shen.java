@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.doubleToLongBits;
+import static java.lang.Double.doubleToRawLongBits;
 import static java.lang.Double.longBitsToDouble;
 import static java.lang.Math.floorMod;
 import static java.lang.String.format;
@@ -89,17 +90,33 @@ public class Shen {
 
         // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 1 = double, 0 = long.
         // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms
-        op("+", (l, r) -> isInteger(l) && isInteger(r) ? l + r : d2l(fp(l) + fp(r)));
-        op("-", (l, r) ->  isInteger(l) && isInteger(r) ? l - r : d2l(fp(l) - fp(r)));
-        op("*", (l, r) -> isInteger(l) && isInteger(r) ? l * r >> fpBit : d2l(fp(l) * fp(r)));
+        op("+", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) + ((fpBit & r) == 1
+                ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
+                ? fpBit | doubleToRawLongBits((l >> fpBit) + longBitsToDouble(r & ~fpBit)) : l + r);
+        op("-", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) - ((fpBit & r) == 1
+                ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
+                ? fpBit | doubleToRawLongBits((l >> fpBit) - longBitsToDouble(r & ~fpBit)) : l - r);
+        op("*", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) * ((fpBit & r) == 1
+                ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
+                ? fpBit | doubleToRawLongBits((l >> fpBit) * longBitsToDouble(r & ~fpBit)) : l * r >> fpBit);
         op("/", (l, r) -> {
             if (r == 0 || r == fpBit) throw new ArithmeticException("Division by zero");
-            return d2l(fp(l) / fp(r));
-            });
-        op("<", (l, r) -> isInteger(l) && isInteger(r) ? l < r : fp(l) < fp(r));
-        op("<=", (l, r) -> isInteger(l) && isInteger(r) ? l <= r : fp(l) <= fp(r));
-        op(">", (l, r) -> isInteger(l) && isInteger(r) ? l > r : fp(l) > fp(r));
-        op(">=", (l, r) -> isInteger(l) && isInteger(r) ? l >= r : fp(l) >= fp(r));
+            return fpBit | doubleToRawLongBits(((fpBit & l) == 0
+                    ? l >> fpBit : longBitsToDouble(l & ~fpBit)) / ((fpBit & r) == 0
+                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)));
+        });
+        op("<", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) < ((fpBit & r) == 0
+                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                ? l >> fpBit < longBitsToDouble(r & ~fpBit) : l < r);
+        op("<=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) <= ((fpBit & r) == 0
+                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                ? l >> fpBit <= longBitsToDouble(r & ~fpBit) : l <= r);
+        op(">", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) > ((fpBit & r) == 0
+                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                ? l >> fpBit > longBitsToDouble(r & ~fpBit) : l > r);
+        op(">=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) >= ((fpBit & r) == 0
+                ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
+                ? l >> fpBit >= longBitsToDouble(r & ~fpBit) : l >= r);
 
         asList(Math.class, System.class).forEach(Primitives::KL_import);
     }

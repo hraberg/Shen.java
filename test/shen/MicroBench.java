@@ -56,7 +56,12 @@ public class MicroBench {
         return fib(n - 1) + fib(n - 2);
     }
 
-    private static Long fibBoxed(Long n) {
+    static double fibD(double n) {
+        if (n <= 1) return n;
+        return fibD(n - 1) + fibD(n - 2);
+    }
+
+    static Long fibBoxed(Long n) {
         if (n <= 1) return n;
         return fibBoxed(n - 1) + fibBoxed(n - 2);
     }
