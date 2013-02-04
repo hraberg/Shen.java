@@ -99,21 +99,31 @@ The benchmarks can be run via:
 * Partial application.
 * Implicit recur.
 * Simple Java inter-op (based on Clojure's syntax).
+  * This is pretty broken after changes to the number system, plan to revisit this entire area properly, see the road map below.
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
 * Pre-compilation of the `.kl` to `.class` files.
+  * This is currently turned off, as it clashes with the runtime type refinement.
+  * It speeds up start-up of the REPL by a factor of 2-3, but preferably I would like to avoid this step.
 * The Shen test suite passes.
 * Different bootstrap methods for invoke, apply and symbols. Evolving.
 * SwitchPoints for symbols - used when redefining functions.
 * Cons as persistent collection vs. cons pairs.
+* Recompilation of fns based on Shen types or runtime values.
+  * This is primarily to narrow types down to primitives, but not sure typing `Object` arguments matter.
+* `long` reused as double via `doubleToLongBits` and a tag, as guards on primitives seems to require boxing.
+  * 63 bit precision. bit 0 is a tag that's either 1 for double or 0 for long.
+  * This is highly experimental, some arithmetic is much faster, but it adds complexity.
+  * Some things also seem slower because of this.
+  * Would obviously prefer to use real doubles.
 
 
 ### Road Map
 
 This is bound to change as we go:
 
-* Saner choice of target method. Currently this is done by a mix of instanceof guards and fallback to `ClassCastException`. It's really only used for built-ins.
-* Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on.
+* Saner choice of target method. Currently this is done by a mix of instanceof guards and earlier also fallback to `ClassCastException`. It's really only used for built-ins.
+* Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on. Currently experimenting with long only, see the section above.
 * Adherence to Shen types when compiling typed Shen to Java.
 * Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
 * Revisit how call sites are built and cached, see above.
