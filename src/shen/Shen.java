@@ -69,7 +69,7 @@ public class Shen {
     }
 
     static final Map<String, Symbol> symbols = new HashMap<>();
-    static Set<Object> builtins = new HashSet<>();
+    static Set<Symbol> builtins = new HashSet<>();
 
     static {
         set("*language*", "Java");
@@ -80,6 +80,7 @@ public class Shen {
         set("*stoutput*", out);
         set("*debug*", Boolean.getBoolean("shen.debug"));
         set("*debug-asm*", Boolean.getBoolean("shen.debug.asm"));
+        set("*compile-aot*", Boolean.getBoolean("shen.compile.aot"));
         set("*compile-path*", getProperty("shen.compile.path", "target/classes"));
         set("*home-directory*", getProperty("user.dir"));
 
@@ -150,6 +151,7 @@ public class Shen {
         public final String symbol;
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
+        public MethodType signature;
         public Object var;
         public List<Object> source;
 
@@ -223,7 +225,7 @@ public class Shen {
 
         public String toString() {
             if (isList()) return vec(toList().stream().map(Numbers::maybeNumber)).toString();
-            return "[" + str(car) + " | " + str(cdr) + "]";
+            return "[" + maybeNumber(car) + " | " + maybeNumber(cdr) + "]";
         }
 
         public List<Object> toList() {
@@ -264,7 +266,6 @@ public class Shen {
                 long a = (Long) left;
                 long b = (Long) right;
                 return isInteger(a) && isInteger(b) ? a == b : fp(a) == fp(b);
-//                return isD(l) ? l2d(l) == ld(r) : isD(r) ? l == l2d(r) : l == r;
             }
             return false;
         }
@@ -502,7 +503,8 @@ public class Shen {
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
-        builtins = symbols.values().stream().filter(s -> !s.fn.isEmpty()).collect(toSet());
+        builtins = new HashSet<>(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
+        for (Symbol s : builtins) recompile(typeSignature(s), s, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -521,14 +523,16 @@ public class Shen {
             Compiler compiler = new Compiler(null, file, cons(intern("do"), read(in)));
             File compilePath = new File((String) intern("*compile-path*").value());
             File classFile = new File(compilePath, file + ".class");
-            if (!(compilePath.mkdirs() || compilePath.isDirectory())) throw new IOException("could not make directory: " + compilePath);
+            if (booleanProperty("*compile-aot*"))
+                if (!(compilePath.mkdirs() || compilePath.isDirectory())) throw new IOException("could not make directory: " + compilePath);
             try {
                 return compiler.load(classFile.getName().replaceAll(".class$", ".kl"), aClass);
             } finally {
                 lines.clear();
-                try (OutputStream out = new FileOutputStream(classFile)) {
-                    out.write(compiler.bytes);
-                }
+                if (booleanProperty("*compile-aot*"))
+                    try (OutputStream out = new FileOutputStream(classFile)) {
+                        out.write(compiler.bytes);
+                    }
             }
         }
     }
@@ -653,19 +657,80 @@ public class Shen {
         }
 
         static void maybeRecompile(MethodType type, Symbol symbol, Class returnType) throws Throwable {
-            type = type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType() : isPrimitiveType(returnType) ? returnType : Object.class);
-            if (symbol.source != null && !builtins.contains(symbol) && !booleanProperty("shen-*installing-kl*") && symbol.fn.stream().map(MethodHandle::type).noneMatch(isEqual(type))
-                    && type.changeReturnType(Object.class).hasPrimitives()) {
-                debug("recompiling as %s: %s", type, symbol.source);
-                List<MethodHandle> fn = new ArrayList<>(symbol.fn);
-                try {
-                    typeHint.set(type);
-                    eval_kl(symbol.source);
-                } finally {
-                    typeHint.remove();
-                    symbol.fn.addAll(fn);
+            if (symbol.source == null || booleanProperty("shen-*installing-kl*") || symbol.signature != null) return;
+            MethodType signature = typeSignature(symbol);
+            if (signature != null) type = signature;
+            else type = type.changeReturnType(isWrapperType(returnType) ? wrapper(returnType).primitiveType()
+                    : isPrimitiveType(returnType) ? returnType : Object.class);
+            if ((signature != null || (type.changeReturnType(Object.class).hasPrimitives() && !builtins.contains(symbol))))
+                recompile(type, symbol, false);
+        }
+
+        static void recompile(MethodType type, Symbol symbol, boolean purge) throws Throwable {
+            if (type == null || symbol.source == null || symbol.fn.stream().map(MethodHandle::type).anyMatch(isEqual(type))) return;
+            debug("recompiling as %s: %s", type, symbol.source);
+            List<MethodHandle> fn = new ArrayList<>(symbol.fn);
+            try {
+                typeHint.set(type);
+                eval_kl(symbol.source);
+            } finally {
+                typeHint.remove();
+                if (!purge) symbol.fn.addAll(fn);
+                if (!type.returnType().equals(Object.class))
+                    symbol.fn.removeAll(f -> f.type().equals(type.changeReturnType(Object.class)));
+            }
+        }
+
+        static Map<Object, Class> types = new HashMap<>();
+        static {
+            types.put(intern("symbol"), Symbol.class);
+            types.put(intern("number"), long.class);
+            types.put(intern("boolean"), boolean.class);
+            types.put(intern("string"), String.class);
+            types.put(intern("exception"), Exception.class);
+            types.put(intern("list"), Iterable.class);
+            types.put(intern("vector"), Object[].class);
+        }
+
+        static Set<Symbol> tooStrictTypes = new HashSet<>(asList(intern("concat"), intern("fail-if"), intern("tail")));
+
+        static MethodType typeSignature(Symbol symbol) throws Throwable {
+            if (symbol.signature != null) return symbol.signature;
+            if (symbol.source == null || booleanProperty("shen-*installing-kl*")
+                    || tooStrictTypes.contains(symbol) || !hasKnownSignature(symbol)) return null;
+            List<Object> shenTypes = shenTypeSignature(symbol);
+            List<Class<?>> javaTypes = new ArrayList<>();
+            for (Object argumentType : shenTypes) {
+                if (argumentType instanceof Cons) {
+                    List<Object> type = ((Cons) argumentType).toList();
+                    argumentType = type.get(0);
+                }
+                javaTypes.add(types.containsKey(argumentType) ? types.get(argumentType) :
+                        argumentType instanceof Class ? (Class<?>) argumentType : Object.class);
+            }
+            MethodType type = methodType(javaTypes.remove(javaTypes.size() - 1), javaTypes);
+            debug("%s has Shen type signature: %s mapped to Java %s", symbol, shenTypes, type);
+            return type;
+        }
+
+        static boolean hasKnownSignature(Symbol symbol) {
+            return intern("shen-*signedfuncs*").var instanceof Cons && ((Cons) intern("shen-*signedfuncs*").var).contains(symbol);
+        }
+
+        static List<Object> shenTypeSignature(Symbol symbol) throws Throwable {
+            List<Object> argumentTypes = new ArrayList<>();
+            List<Object> signature = ((Cons) eval(format("(shen-typecheck %s (gensym A))", symbol))).toList();
+            for (; signature.size() == 3; signature = ((Cons) signature.get(2)).toList()) {
+                argumentTypes.add(signature.get(0));
+                if (!(signature.get(2) instanceof Cons) || signature.get(2) instanceof Cons
+                        && !((Cons) signature.get(2)).contains(intern("-->"))) {
+                    argumentTypes.add(signature.get(2));
+                    break;
                 }
             }
+            if (argumentTypes.isEmpty())
+                return vec(signature.stream().filter(negate(isEqual(intern("-->")))));
+            return argumentTypes;
         }
 
         static MethodHandle guard(MethodType type, List<MethodHandle> candidates) {
@@ -1346,8 +1411,12 @@ public class Shen {
         }
 
         void maybeCast(Class<?> type) {
-            if (!getType(type).equals(topOfStack)) mv.checkCast(getType(type));
-            topOfStack(type);
+            maybeCast(getType(type));
+        }
+
+        void maybeCast(Type type) {
+            if (!type.equals(topOfStack)) mv.checkCast(type);
+            topOfStack = type;
         }
 
         void topOfStack(Class<?> aClass) {
@@ -1379,6 +1448,7 @@ public class Shen {
             mv = generator(modifiers, method);
             recur = mv.mark();
             compile(kl, returnType, true);
+            maybeCast(returnType);
             mv.returnValue();
             mv.endMethod();
         }
@@ -1440,7 +1510,8 @@ public class Shen {
 
     static void debug(String format, Object... args) {
         if (isDebug()) err.println(format(format,
-                stream(args).map(o -> o.getClass() == Object[].class ? deepToString((Object[]) o) : o).toArray()));
+                stream(args).map(o -> o != null && o.getClass() == Object[].class
+                        ? deepToString((Object[]) o) : o).toArray()));
     }
 
     @SafeVarargs
