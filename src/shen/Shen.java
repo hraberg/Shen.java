@@ -519,9 +519,6 @@ public class Shen {
         return eval_kl(read(new StringReader(kl)).get(0));
     }
 
-    static final Map<Symbol, MethodType> shenTypesForInstallation = new HashMap<>();
-    static final Set<Symbol> builtins = new HashSet<>();
-
     static void install() throws Throwable {
         readTypes();
         set("shen-*installing-kl*", true);
@@ -544,7 +541,7 @@ public class Shen {
                     Symbol symbol = (Symbol) list.get(1);
                     if (!tooStrictTypes.contains(symbol))
                         //noinspection unchecked
-                        shenTypesForInstallation.put(symbol, typeSignature(symbol, shenTypeSignature(((Cons) eval_kl(list.get(2))).toList())));
+                        typesForInstallation.put(symbol, typeSignature(symbol, shenTypeSignature(((Cons) eval_kl(list.get(2))).toList())));
                 }
             }
         }
@@ -643,6 +640,8 @@ public class Shen {
     public static class RT {
         static final Lookup lookup = lookup();
         static final Set<Symbol> overrides = new HashSet<>();
+        static final Set<Symbol> builtins = new HashSet<>();
+        static final Map<Symbol, MethodType> typesForInstallation = new HashMap<>();
         static final Map<Object, CallSite> sites = new HashMap<>();
         static final Map<Object, MethodHandle> guards = new HashMap<>();
 
@@ -1308,8 +1307,8 @@ public class Shen {
                 push(name);
                 debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
                 name.source = asList(intern("defun"), name, args, body);
-                if (booleanProperty("shen-*installing-kl*") && shenTypesForInstallation.containsKey(name))
-                    Compiler.typeHint.set(shenTypesForInstallation.get(name));
+                if (booleanProperty("shen-*installing-kl*") && typesForInstallation.containsKey(name))
+                    Compiler.typeHint.set(typesForInstallation.get(name));
                 fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
                 mv.invokeStatic(getType(RT.class), method("defun", desc(Symbol.class, Symbol.class, MethodHandle.class)));
                 topOfStack(Symbol.class);
