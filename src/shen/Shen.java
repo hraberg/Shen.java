@@ -897,7 +897,7 @@ public class Shen {
         }
 
         public static CallSite symbolBSM(Lookup lookup, String name, MethodType type) {
-            return new ConstantCallSite(constant(Symbol.class, intern(toSourceName(name))));
+            return sites.computeIfAbsent(name, key -> new ConstantCallSite(constant(Symbol.class, intern(toSourceName(name)))));
         }
 
         public static CallSite applyBSM(Lookup lookup, String name, MethodType type) throws Exception {
