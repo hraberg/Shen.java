@@ -167,6 +167,8 @@ This is bound to change as we go:
 
 [Dynamate: A Framework for Method Dispatch using invokedynamic](http://www.ec-spride.tu-darmstadt.de/media/ec_spride/secure_software_engineering/theses_1/kamil_erhard_master_thesis.pdf) Kamil Erhard, 2012
 
+[A Lisp compiler for the JVM](http://www.csc.kth.se/utbildning/kth/kurser/DD143X/dkand12/Group2Mads/report/AntonKindestam.pdf) Anton Kindestam, 2012
+
 
 ## License
 
