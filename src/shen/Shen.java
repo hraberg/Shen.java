@@ -68,7 +68,6 @@ public class Shen {
     }
 
     static final Map<String, Symbol> symbols = new HashMap<>();
-    static final Set<Symbol> builtins = new HashSet<>();
 
     static {
         set("*language*", "Java");
@@ -520,7 +519,8 @@ public class Shen {
         return eval_kl(read(new StringReader(kl)).get(0));
     }
 
-    static Map<Symbol, MethodType> shenTypesForInstallation = new HashMap<>();
+    static final Map<Symbol, MethodType> shenTypesForInstallation = new HashMap<>();
+    static final Set<Symbol> builtins = new HashSet<>();
 
     static void install() throws Throwable {
         readTypes();
