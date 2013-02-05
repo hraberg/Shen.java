@@ -103,7 +103,6 @@ The benchmarks can be run via:
 * [Dominik's tests](https://github.com/hraberg/Shen.java/blob/master/test/shen/PrimitivesTest.java) from [Shen to Clojure](http://code.google.com/p/shen-to-clojure/).
 * The REPL.
 * Pre-compilation of the `.kl` to `.class` files.
-  * This is currently turned off, as it clashes with the runtime type refinement.
   * It speeds up start-up of the REPL by a factor of 2-3, but preferably I would like to avoid this step.
 * The Shen test suite passes.
 * Different bootstrap methods for invoke, apply and symbols. Evolving.
@@ -114,7 +113,6 @@ The benchmarks can be run via:
 * `long` reused as double via `doubleToLongBits` and a tag, as guards on primitives seems to require boxing.
   * 63 bit precision. bit 0 is a tag that's either 1 for double or 0 for long.
   * This is highly experimental, arithmetic with tagged longs is faster than boxed Java, doubles on par.
-  * Mixing tagged longs/doubles is very slow - will needs to be fixed for this complexity to be worth it.
   * I think there's some fundamental piece of InvokeDynamic and primitives I don't understand that led me down this road.
   * Would obviously prefer to use real doubles.
 
