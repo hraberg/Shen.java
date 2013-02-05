@@ -92,37 +92,38 @@ public class Shen {
     interface Invokable { MethodHandle invoker() throws Exception; }
 
     public static class Numbers {
-        static final long fpBit = 1;
+        static final long tag = 1, real = 0, integer = 1;
+
         static {
-            // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 1 = double, 0 = long.
+            // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 0 = double, 1 = long.
             // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms
-            op("+", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) + ((fpBit & r) == 1
-                    ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
-                    ? fpBit | doubleToRawLongBits((l >> fpBit) + longBitsToDouble(r & ~fpBit)) : l + r);
-            op("-", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) - ((fpBit & r) == 1
-                    ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
-                    ? fpBit | doubleToRawLongBits((l >> fpBit) - longBitsToDouble(r & ~fpBit)) : l - r);
-            op("*", (l, r) -> (fpBit & l) == 1 ? fpBit | doubleToRawLongBits(longBitsToDouble(l & ~fpBit) * ((fpBit & r) == 1
-                    ? longBitsToDouble(r & ~fpBit) : r >> fpBit)) : (fpBit & r) == 1
-                    ? fpBit | doubleToRawLongBits((l >> fpBit) * longBitsToDouble(r & ~fpBit)) : l * r >> fpBit);
+            op("+", (l, r) -> (tag & l) == real ? ~tag & doubleToRawLongBits(longBitsToDouble(l) + ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag)) : (tag & r) == real
+                    ? ~tag & doubleToRawLongBits((l >> tag) + longBitsToDouble(r)) : l + (r & ~tag));
+            op("-", (l, r) -> (tag & l) == real ? ~tag & doubleToRawLongBits(longBitsToDouble(l) - ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag)) : (tag & r) == real
+                    ? ~tag & doubleToRawLongBits((l >> tag) - longBitsToDouble(r)) : l - (r & ~tag));
+            op("*", (l, r) -> (tag & l) == real ? ~tag & doubleToRawLongBits(longBitsToDouble(l) * ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag)) : (tag & r) == real
+                    ? ~tag & doubleToRawLongBits((l >> tag) * longBitsToDouble(r)) : (l & ~tag) * (r & ~tag) >> tag | tag);
             op("/", (l, r) -> {
-                if (r == 0 || r == fpBit) throw new ArithmeticException("Division by zero");
-                return fpBit | doubleToRawLongBits(((fpBit & l) == 0
-                        ? l >> fpBit : longBitsToDouble(l & ~fpBit)) / ((fpBit & r) == 0
-                        ? r >> fpBit : longBitsToDouble(r & ~fpBit)));
+                if (r == real || r == tag) throw new ArithmeticException("Division by zero");
+                return ~tag & doubleToRawLongBits(((tag & l) == real
+                        ? longBitsToDouble(l) : l >> tag) / ((tag & r) == real
+                        ? longBitsToDouble(r) : r >> tag));
             });
-            op("<", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) < ((fpBit & r) == 0
-                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                    ? l >> fpBit < longBitsToDouble(r & ~fpBit) : l < r);
-            op("<=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) <= ((fpBit & r) == 0
-                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                    ? l >> fpBit <= longBitsToDouble(r & ~fpBit) : l <= r);
-            op(">", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) > ((fpBit & r) == 0
-                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                    ? l >> fpBit > longBitsToDouble(r & ~fpBit) : l > r);
-            op(">=", (l, r) -> (fpBit & l) == 1 ? longBitsToDouble(l & ~fpBit) >= ((fpBit & r) == 0
-                    ? r >> fpBit : longBitsToDouble(r & ~fpBit)) : (fpBit & r) == 1
-                    ? l >> fpBit >= longBitsToDouble(r & ~fpBit) : l >= r);
+            op("<", (l, r) -> (tag & l) == real ? longBitsToDouble(l) < ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
+                    ? l >> tag < longBitsToDouble(r) : l < r);
+            op("<=", (l, r) -> (tag & l) == real ? longBitsToDouble(l) <= ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
+                    ? l >> tag <= longBitsToDouble(r) : l <= r);
+            op(">", (l, r) -> (tag & l) == real ? longBitsToDouble(l) > ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
+                    ? l >> tag > longBitsToDouble(r) : l > r);
+            op(">=", (l, r) -> (tag & l) == real ? longBitsToDouble(l) >= ((tag & r) == real
+                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
+                    ? l >> tag >= longBitsToDouble(r) : l >= r);
         }
 
         static void op(String name, LongBinaryOperator op) {
@@ -142,11 +143,11 @@ public class Shen {
         }
 
         public static long integer(long l) {
-            return l << fpBit;
+            return l << tag | tag;
         }
 
         public static long asLong(long fp) {
-            return isInteger(fp) ? fp >> fpBit : (long) l2d(fp);
+            return isInteger(fp) ? fp >> tag : (long) l2d(fp);
         }
 
         public static Number asNumber(long fp) { //noinspection RedundantCast
@@ -154,19 +155,19 @@ public class Shen {
         }
 
         static double fp(long l) {
-            return isInteger(l) ? l >> fpBit : l2d(l);
+            return isInteger(l) ? l >> tag : l2d(l);
         }
 
         static long d2l(double d) {
-            return fpBit | doubleToLongBits(d);
+            return ~tag & doubleToLongBits(d);
         }
 
         static double l2d(long fp) {
-            return longBitsToDouble(fp & ~fpBit);
+            return longBitsToDouble(fp);
         }
 
         public static boolean isInteger(long l) {
-            return (fpBit & l) == 0;
+            return (tag & l) == integer;
         }
     }
 
