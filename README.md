@@ -111,7 +111,7 @@ The benchmarks can be run via:
 * Recompilation of fns based on Shen types or runtime values.
   * This is primarily to narrow types down to primitives, but not sure typing `Object` arguments matter.
 * `long` reused as double via `doubleToLongBits` and a tag, as guards on primitives seems to require boxing.
-  * 63 bit precision. bit 0 is a tag that's either 1 for double or 0 for long.
+  * 63 bit precision. bit 0 is a tag that's either 0 for double or 1 for long.
   * This is highly experimental, arithmetic with tagged longs is faster than boxed Java, doubles on par.
   * I think there's some fundamental piece of InvokeDynamic and primitives I don't understand that led me down this road.
   * Would obviously prefer to use real doubles.
