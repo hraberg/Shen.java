@@ -50,6 +50,7 @@ import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static jdk.internal.org.objectweb.asm.Type.*;
 import static shen.Shen.Compiler.typeHint;
+import static shen.Shen.Cons.toCons;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
 import static shen.Shen.Numbers.*;
@@ -93,44 +94,44 @@ public class Shen {
     public static class Numbers {
         static final long tag = 1, real = 0, integer = 1;
 
+        static final Set<Symbol> operators = new HashSet<>();
+
         static {
             // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 0 = double, 1 = long.
-            // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms
-            op("+", (l, r) -> (tag & l) == real ? ~tag & doubleToRawLongBits(longBitsToDouble(l) + ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag)) : (tag & r) == real
-                    ? ~tag & doubleToRawLongBits((l >> tag) + longBitsToDouble(r)) : l + (r & ~tag));
-            op("-", (l, r) -> (tag & l) == real ? ~tag & doubleToRawLongBits(longBitsToDouble(l) - ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag)) : (tag & r) == real
-                    ? ~tag & doubleToRawLongBits((l >> tag) - longBitsToDouble(r)) : l - (r & ~tag));
-            op("*", (l, r) -> (tag & l) == real ? ~tag & doubleToRawLongBits(longBitsToDouble(l) * ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag)) : (tag & r) == real
-                    ? ~tag & doubleToRawLongBits((l >> tag) * longBitsToDouble(r)) : (l & ~tag) * (r & ~tag) >> tag | tag);
+            // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms. Which ever branch that starts will be faster for some reason.
+            op("+", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ~tag & doubleToRawLongBits(((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) + ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag))
+                    : l + (r & ~tag));
+            op("-", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ~tag & doubleToRawLongBits(((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) - ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag))
+                    : l - (r & ~tag));
+            op("*", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ~tag & doubleToRawLongBits(((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) * ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag))
+                    : (l & ~tag) * (r & ~tag) >> tag | tag);
             op("/", (l, r) -> {
                 if (r == real || r == tag) throw new ArithmeticException("Division by zero");
                 return ~tag & doubleToRawLongBits(((tag & l) == real
                         ? longBitsToDouble(l) : l >> tag) / ((tag & r) == real
                         ? longBitsToDouble(r) : r >> tag));
             });
-            op("<", (l, r) -> (tag & l) == real ? longBitsToDouble(l) < ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
-                    ? l >> tag < longBitsToDouble(r) : l < r);
-            op("<=", (l, r) -> (tag & l) == real ? longBitsToDouble(l) <= ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
-                    ? l >> tag <= longBitsToDouble(r) : l <= r);
-            op(">", (l, r) -> (tag & l) == real ? longBitsToDouble(l) > ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
-                    ? l >> tag > longBitsToDouble(r) : l > r);
-            op(">=", (l, r) -> (tag & l) == real ? longBitsToDouble(l) >= ((tag & r) == real
-                    ? longBitsToDouble(r) : r >> tag) : (tag & r) == real
-                    ? l >> tag >= longBitsToDouble(r) : l >= r);
+            op("<", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) < ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l < r);
+            op("<=", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) <= ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l <= r);
+            op(">", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) > ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l > r);
+            op(">=", (l, r) -> (tag & l) == 0 || (tag & r) == 0
+                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) >= ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l >= r);
         }
 
         static void op(String name, LongBinaryOperator op) {
             intern(name).fn.add(findSAM(op));
+            operators.add(intern(name));
         }
 
         static void op(String name, LLPredicate op) {
             intern(name).fn.add(findSAM(op));
+            operators.add(intern(name));
         }
 
         static Object maybeNumber(Object o) {
@@ -175,7 +176,7 @@ public class Shen {
         public List<MethodHandle> fn = new ArrayList<>();
         public SwitchPoint fnGuard;
         public Object var;
-        public List<Object> source;
+        public Collection source;
 
         Symbol(String symbol) {
             this.symbol = symbol.intern();
@@ -252,6 +253,19 @@ public class Shen {
 
         public List<Object> toList() {
             return new ArrayList<Object>(this);
+        }
+
+        public static Collection toCons(List<?> list) {
+            if (list.isEmpty()) return list;
+            Cons cons = null;
+            list = new ArrayList<>(list);
+            reverse(list);
+            for (Object o : list) {
+                if (o instanceof List) o = toCons((List<?>) o);
+                if (cons == null) cons = new Cons(o, EMPTY_LIST);
+                else cons = new Cons(o, cons);
+            }
+            return cons;
         }
 
         class ConsIterator implements Iterator {
@@ -1049,6 +1063,16 @@ public class Shen {
         Type topOfStack;
         Label recur;
 
+        static class TypedValue {
+            final Type type;
+            final Object value;
+
+            TypedValue(Type type, Object value) {
+                this.type = type;
+                this.value = value;
+            }
+        }
+
         public Compiler(Object kl, Symbol... args) throws Throwable {
             this(null, "shen/ShenEval" + id++, kl, args);
         }
@@ -1114,19 +1138,19 @@ public class Shen {
             return new GeneratorAdapter(access, method, cw.visitMethod(access, method.getName(), method.getDescriptor(), null, null));
         }
 
-        Type compile(Object kl) {
+        TypedValue compile(Object kl) {
             return compile(kl, true);
         }
 
-        Type compile(Object kl, boolean tail) {
+        TypedValue compile(Object kl, boolean tail) {
             return compile(kl, getType(Object.class), tail);
         }
 
-        Type compile(Object kl, Type returnType, boolean tail) {
+        TypedValue compile(Object kl, Type returnType, boolean tail) {
             return compile(kl, returnType, true, tail);
         }
 
-        Type compile(Object kl, Type returnType, boolean handlePrimitives, boolean tail) {
+        TypedValue compile(Object kl, Type returnType, boolean handlePrimitives, boolean tail) {
             try {
                 Class literalClass = find(literals.stream(), c -> c.isInstance(kl));
                 if (literalClass != null) push(literalClass, kl);
@@ -1151,7 +1175,7 @@ public class Shen {
                 } else
                     throw new IllegalArgumentException("Cannot compile: " + kl + " (" + kl.getClass() + ")");
                 if (handlePrimitives) handlePrimitives(returnType);
-                return topOfStack;
+                return new TypedValue(topOfStack, kl);
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable t) {
@@ -1180,18 +1204,23 @@ public class Shen {
 
         void indy(Symbol s, List<Object> args, Type returnType, boolean tail) throws ReflectiveOperationException {
             Iterator<Type> selfCallTypes = asList(method.getArgumentTypes()).iterator();
-            List<Type> argumentTypes = vec(args.stream().map(o -> compile(o, isSelfCall(s, args) ? selfCallTypes.next() : getType(Object.class), false, false)));
+            List<TypedValue> typedValues = vec(args.stream().map(o -> compile(o, isSelfCall(s, args)
+                    ? selfCallTypes.next() : getType(Object.class), false, false)));
+            List<Type> argumentTypes = vec(typedValues.stream().map(t -> t.type));
             if (isSelfCall(s, args)) {
                 if (tail) {
                     debug("recur: %s", s);
                     recur(argumentTypes);
                 } else {
                     debug("can only recur from tail position: %s", s);
-                    mv.invokeDynamic(toBytecodeName(s.symbol), method.getDescriptor(), invokeBSM);
+                    mv.invokeDynamic(toBytecodeName(s.symbol), desc(method.getReturnType(), argumentTypes), invokeBSM);
                     returnType = method.getReturnType();
                 }
-            } else
+            } else {
+                if (operators.contains(s) && returnType.equals(getType(Object.class)) && argumentTypes.size() == 2)
+                    returnType = getType(s.fn.get(0).type().returnType());
                 mv.invokeDynamic(toBytecodeName(s.symbol), desc(returnType, argumentTypes), invokeBSM);
+            }
             topOfStack = returnType;
         }
 
@@ -1210,7 +1239,7 @@ public class Shen {
         void apply(Type returnType, List<Object> args) throws ReflectiveOperationException {
             if (!topOfStack.equals(getType(MethodHandle.class)))
                 mv.invokeStatic(getType(RT.class), method("function", desc(MethodHandle.class, Object.class)));
-            List<Type> argumentTypes = cons(getType(MethodHandle.class), vec(args.stream().map(o -> compile(o, false))));
+            List<Type> argumentTypes = cons(getType(MethodHandle.class), vec(args.stream().map(o -> compile(o, false).type)));
             mv.invokeDynamic("__apply__", desc(returnType, argumentTypes), applyBSM);
             topOfStack = returnType;
         }
@@ -1306,7 +1335,7 @@ public class Shen {
             public void defun(boolean tail, Type returnType, Symbol name, final List<Symbol> args, Object body) throws Throwable {
                 push(name);
                 debug("compiling: %s%s in %s", name, args, getObjectType(className).getClassName());
-                name.source = asList(intern("defun"), name, args, body);
+                name.source = toCons(asList(intern("defun"), name, args, body));
                 if (booleanProperty("shen-*installing-kl*") && typesForInstallation.containsKey(name))
                     Compiler.typeHint.set(typesForInstallation.get(name));
                 fn(name.symbol, body, args.toArray(new Symbol[args.size()]));
