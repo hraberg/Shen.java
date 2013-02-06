@@ -138,35 +138,23 @@ public class Shen {
             return o instanceof Long ? asNumber((Long) o) : o;
         }
 
-        public static long real(double d) {
-            return d2l(d);
-        }
-
-        public static long integer(long l) {
-            return l << tag | tag;
-        }
-
-        public static long asLong(long fp) {
-            return isInteger(fp) ? fp >> tag : (long) l2d(fp);
-        }
-
-        public static Number asNumber(long fp) { //noinspection RedundantCast
-            return isInteger(fp) ? (Number) asLong(fp) : (Number) fp(fp);
-        }
-
-        static double fp(long l) {
-            return isInteger(l) ? l >> tag : l2d(l);
-        }
-
-        static long d2l(double d) {
+        static long real(double d) {
             return ~tag & doubleToLongBits(d);
         }
 
-        static double l2d(long fp) {
-            return longBitsToDouble(fp);
+        static long integer(long l) {
+            return l << tag | tag;
         }
 
-        public static boolean isInteger(long l) {
+        static double asDouble(long l) {
+            return isInteger(l) ? l >> tag : longBitsToDouble(l);
+        }
+
+        static Number asNumber(long fp) { //noinspection RedundantCast
+            return isInteger(fp) ? (Number) (fp >> tag) : (Number) longBitsToDouble(fp);
+        }
+
+        static boolean isInteger(long l) {
             return (tag & l) == integer;
         }
     }
@@ -302,7 +290,7 @@ public class Shen {
             if (numberP(left) && numberP(right)) {
                 long a = (Long) left;
                 long b = (Long) right;
-                return isInteger(a) && isInteger(b) ? a == b : fp(a) == fp(b);
+                return isInteger(a) && isInteger(b) ? a == b : asDouble(a) == asDouble(b);
             }
             return false;
         }
@@ -352,7 +340,7 @@ public class Shen {
         }
 
         public static String pos(String x, long n) {
-            return str(x.charAt((int) asLong(n)));
+            return str(x.charAt((int) (n >> tag)));
         }
 
         public static String tlstr(String x) {
@@ -364,7 +352,7 @@ public class Shen {
         }
 
         public static Object[] absvector(long n) {
-            Object[] objects = new Object[(int) asLong(n)];
+            Object[] objects = new Object[(int) (n >> tag)];
             fill(objects, intern("fail!"));
             return objects;
         }
@@ -374,11 +362,11 @@ public class Shen {
         }
 
         public static Object LT_address(Object[] vector, long n) {
-            return vector[((int) asLong(n))];
+            return vector[((int) (n >> tag))];
         }
 
         public static Object[] address_GT(Object[] vector, long n, Object value) {
-            vector[((int) asLong(n))] = value;
+            vector[((int) (n >> tag))] = value;
             return vector;
         }
 
@@ -391,12 +379,12 @@ public class Shen {
         }
 
         public static String n_GTstring(long n) {
-            if (asLong(n) < 0) throw new IllegalArgumentException(n + " is not a valid character");
-            return Character.toString((char) asLong(n));
+            if (n >> tag < 0) throw new IllegalArgumentException(n + " is not a valid character");
+            return Character.toString((char) (n >> tag));
         }
 
         public static String byte_GTstring(long n) {
-            return n_GTstring(asLong(n));
+            return n_GTstring(n >> tag);
         }
 
         public static long string_GTn(String s) {
@@ -513,11 +501,11 @@ public class Shen {
         public static long hash(Object s, long limit) {
             long hash = s.hashCode();
             if (hash == 0) return 1;
-            return integer(floorMod(hash, asLong(limit)));
+            return integer(floorMod(hash, limit >> tag));
         }
 
         public static Object[] shen_fillvector(Object[] vector, long counter, long n, Object x) {
-            fill(vector, (int) asLong(counter), (int) asLong(n) + 1, x);
+            fill(vector, (int) (counter >> tag), (int) (n >> tag) + 1, x);
             return vector;
         }
     }
