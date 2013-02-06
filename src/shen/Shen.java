@@ -290,7 +290,7 @@ public class Shen {
             if (numberP(left) && numberP(right)) {
                 long a = (Long) left;
                 long b = (Long) right;
-                return isInteger(a) && isInteger(b) ? a == b : asDouble(a) == asDouble(b);
+                return (tag & a) == integer && (tag & b) == integer ? a == b : asDouble(a) == asDouble(b);
             }
             return false;
         }
@@ -358,7 +358,7 @@ public class Shen {
         }
 
         public static boolean absvectorP(Object x) {
-            return x != null && x.getClass() == Object[].class;
+            return x.getClass() == Object[].class;
         }
 
         public static Object LT_address(Object[] vector, long n) {
