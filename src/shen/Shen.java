@@ -709,7 +709,7 @@ public class Shen {
         }
 
         static void recompile(MethodType type, Symbol symbol) throws Throwable {
-            if (type == null || symbol.source == null || symbol.fn.stream().map(MethodHandle::type).anyMatch(isEqual(type))) return;
+            if (symbol.source == null || symbol.fn.stream().map(MethodHandle::type).anyMatch(isEqual(type))) return;
             debug("recompiling as %s: %s", type, symbol.source);
             List<MethodHandle> fn = new ArrayList<>(symbol.fn);
             try {
@@ -738,8 +738,7 @@ public class Shen {
                 intern("tail"), intern("systemf")));
 
         static MethodType typeSignature(Symbol symbol) throws Throwable {
-            if (symbol.source == null || booleanProperty("shen-*installing-kl*")
-                    || tooStrictTypes.contains(symbol) || !hasKnownSignature(symbol)) return null;
+            if (tooStrictTypes.contains(symbol) || !hasKnownSignature(symbol)) return null;
             return typeSignature(symbol, shenTypeSignature(symbol));
         }
 
