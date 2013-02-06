@@ -8,10 +8,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.FutureTask;
 
 import static java.util.Arrays.asList;
@@ -20,9 +17,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.*;
 import static shen.Shen.*;
-import static shen.Shen.Numbers.asNumber;
-import static shen.Shen.Numbers.integer;
-import static shen.Shen.Numbers.isInteger;
+import static shen.Shen.Numbers.*;
 import static shen.Shen.Primitives.intern;
 import static shen.Shen.RT.canCast;
 
@@ -218,7 +213,7 @@ public class PrimitivesTest {
         assertTrue(cons.contains(2));
         assertFalse(cons.contains(3));
         cons = new Cons(3, cons);
-        assertEquals(asList(3, 2, 1), cons.toList());
+        assertEquals(Arrays.<Object>asList(3, 2, 1), cons.toList());
         try {
             new Cons(1, 2).toList();
             fail();

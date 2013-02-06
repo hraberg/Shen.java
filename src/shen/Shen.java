@@ -278,9 +278,10 @@ public class Shen {
             public Object next() {
                 if (cons == null) throw new NoSuchElementException();
                 try {
+                    if (!cons.isList()) return cons;
                     return cons.car;
                 } finally {
-                    cons = EMPTY_LIST.equals(cons.cdr) ? null : (Cons) cons.cdr;
+                    cons =!cons.isList() || EMPTY_LIST.equals(cons.cdr) ? null : (Cons) cons.cdr;
                 }
             }
          }
