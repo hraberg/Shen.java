@@ -28,6 +28,7 @@ import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.Double.*;
 import static java.lang.Math.floorMod;
+import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
 import static java.lang.System.*;
 import static java.lang.invoke.MethodHandleProxies.asInterfaceInstance;
@@ -49,7 +50,8 @@ import static java.util.stream.Streams.*;
 import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static jdk.internal.org.objectweb.asm.Type.*;
-import static shen.Shen.Compiler.typeHint;
+import static jdk.internal.org.objectweb.asm.commons.GeneratorAdapter.*;
+import static shen.Shen.Compiler.*;
 import static shen.Shen.Cons.toCons;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
@@ -91,51 +93,166 @@ public class Shen {
     interface LLPredicate { boolean test(long a, long b); }
     interface Invokable { MethodHandle invoker() throws Exception; }
 
-    public static class Numbers {
+    public static class Numbers implements Opcodes {
         static final long tag = 1, real = 0, integer = 1;
-
         static final Set<Symbol> operators = new HashSet<>();
 
+        // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 0 = double, 1 = long.
+        // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms. Which ever branch that starts will be faster for some reason.
         static {
-            // longs are either 63 bit signed integers or doubleToLongBits with bit 0 used as tag, 0 = double, 1 = long.
-            // Java: 5ms, Shen.java: 10ms, Boxed Java: 15ms. Which ever branch that starts will be faster for some reason.
-            op("+", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ~tag & doubleToRawLongBits(((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) + ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag))
-                    : l + (r & ~tag));
-            op("-", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ~tag & doubleToRawLongBits(((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) - ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag))
-                    : l - (r & ~tag));
-            op("*", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ~tag & doubleToRawLongBits(((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) * ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag))
-                    : (l & ~tag) * (r & ~tag) >> tag | tag);
-            op("/", (l, r) -> {
-                if (r == real || r == tag) throw new ArithmeticException("Division by zero");
-                return ~tag & doubleToRawLongBits(((tag & l) == real
-                        ? longBitsToDouble(l) : l >> tag) / ((tag & r) == real
-                        ? longBitsToDouble(r) : r >> tag));
-            });
-            op("<", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) < ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l < r);
-            op("<=", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) <= ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l <= r);
-            op(">", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) > ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l > r);
-            op(">=", (l, r) -> (tag & l) == 0 || (tag & r) == 0
-                    ? ((tag & l) == 0 ? longBitsToDouble(l) : l >> tag) >= ((tag & r) == 0 ? longBitsToDouble(r) : r >> tag) : l >= r);
+            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+            cw.visit(V1_7, ACC_PUBLIC | ACC_FINAL, "shen/Shen$Operators", null, getInternalName(Object.class), null);
+
+            binaryOp(cw, "+", ADD);
+            binaryOp(cw, "-", SUB);
+            binaryOp(cw, "*", MUL);
+            binaryOp(cw, "/", realOp(DIV), integerDivision());
+            binaryComp(cw, "<", LT);
+            binaryComp(cw, "<=", LE);
+            binaryComp(cw, ">", GT);
+            binaryComp(cw, ">=", GE);
+
+            register(loader.loadClass(cw.toByteArray()), Numbers::op);
         }
 
-        static void op(String name, LongBinaryOperator op) {
-            intern(name).fn.add(findSAM(op));
-            operators.add(intern(name));
+        static Consumer<GeneratorAdapter> integerOp(int op) {
+            return mv -> toInteger(mv, op);
         }
 
-        static void op(String name, LLPredicate op) {
-            intern(name).fn.add(findSAM(op));
-            operators.add(intern(name));
+        static Consumer<GeneratorAdapter> realOp(int op) {
+            return mv -> toReal(mv, op);
+        }
+
+        static Consumer<GeneratorAdapter> integerDivision() {
+            return mv -> {
+                Label notZero = new Label();
+                mv.dup2();
+                mv.visitInsn(L2I);
+                mv.ifZCmp(IFNE, notZero);
+                mv.newInstance(getType(ArithmeticException.class));
+                mv.dup();
+                mv.push("Division by zero");
+                mv.invokeConstructor(getType(ArithmeticException.class), method("<init>", desc(void.class, String.class)));
+                mv.throwException();
+                mv.visitLabel(notZero);
+                mv.visitInsn(L2D);
+                mv.swap(DOUBLE_TYPE, LONG_TYPE);
+                mv.visitInsn(L2D);
+                mv.swap(DOUBLE_TYPE, DOUBLE_TYPE);
+                toReal(mv, DIV);
+            };
+        }
+
+        static void toInteger(GeneratorAdapter mv, int op) {
+            mv.math(op, LONG_TYPE);
+            mv.push((int) tag);
+            mv.visitInsn(LSHL);
+            mv.push(integer);
+            mv.visitInsn(LOR);
+        }
+
+        static void toReal(GeneratorAdapter mv, int op) {
+            mv.math(op, DOUBLE_TYPE);
+            mv.invokeStatic(getType(Double.class), method("doubleToRawLongBits", desc(long.class, double.class)));
+            mv.push(~integer);
+            mv.visitInsn(LAND);
+        }
+
+        static void binaryComp(ClassWriter cw, String op, int test) {
+            binaryOp(cw, op, boolean.class, comparison(DOUBLE_TYPE, test), comparison(LONG_TYPE, test));
+        }
+
+        static Consumer<GeneratorAdapter> comparison(Type type, int test) {
+            return mv -> {
+                Label _else = new Label();
+                mv.ifCmp(type, test, _else);
+                mv.push(false);
+                mv.returnValue();
+                mv.visitLabel(_else);
+                mv.push(true);
+                mv.returnValue();
+            };
+        }
+
+        static void binaryOp(ClassWriter cw, String op, int instruction) {
+            binaryOp(cw, op, long.class, realOp(instruction), integerOp(instruction));
+        }
+
+        static void binaryOp(ClassWriter cw, String op, Consumer<GeneratorAdapter> realOp, Consumer<GeneratorAdapter> longOp) {
+            binaryOp(cw, op, long.class, realOp, longOp);
+        }
+
+        static void binaryOp(ClassWriter cw, String op, Class<?> returnType, Consumer<GeneratorAdapter> realOp,
+                             Consumer<GeneratorAdapter> integerOp) {
+            GeneratorAdapter mv = new GeneratorAdapter(ACC_PUBLIC + ACC_STATIC,
+                    method(toBytecodeName(op), desc(returnType, long.class, long.class)), null, null, cw);
+
+            isInteger(mv, 0);
+            Label argOneIsLong = new Label();
+            mv.ifZCmp(IFNE, argOneIsLong);
+            asDouble(mv, 0);
+            isInteger(mv, 1);
+            Label argTwoIsLong = new Label();
+            mv.ifZCmp(IFNE, argTwoIsLong);
+            asDouble(mv, 1);
+            Label doubleOperation = new Label();
+            mv.goTo(doubleOperation);
+            mv.visitLabel(argTwoIsLong);
+            asLong(mv, 1);
+            mv.visitInsn(L2D);
+            mv.goTo(doubleOperation);
+            mv.visitLabel(argOneIsLong);
+            isInteger(mv, 1);
+            Label longOperation = new Label();
+            mv.ifZCmp(IFNE, longOperation);
+            asLong(mv, 0);
+            mv.visitInsn(L2D);
+            asDouble(mv, 1);
+            mv.visitLabel(doubleOperation);
+            realOp.accept(mv);
+            mv.returnValue();
+            mv.visitLabel(longOperation);
+            asLong(mv, 0);
+            asLong(mv, 1);
+            integerOp.accept(mv);
+            mv.returnValue();
+            mv.endMethod();
+        }
+
+        static void asDouble(GeneratorAdapter mv, int arg) {
+            mv.loadArg(arg);
+            mv.invokeStatic(getType(Double.class), method("longBitsToDouble", desc(double.class, long.class)));
+        }
+
+        static void asLong(GeneratorAdapter mv, int arg) {
+            mv.loadArg(arg);
+            mv.push((int) tag);
+            mv.visitInsn(LSHR);
+        }
+
+        static void isInteger(GeneratorAdapter mv, int arg) {
+            mv.loadArg(arg);
+            mv.visitInsn(L2I);
+            mv.push((int) tag);
+            mv.visitInsn(IAND);
+        }
+
+        static void op(Method op) {
+            try {
+                Symbol symbol = intern(toSourceName(op.getName()));
+                symbol.fn.add(lookup.unreflect(op));
+                operators.add(symbol);
+            } catch (IllegalAccessException e) {
+                throw uncheck(e);
+            }
         }
 
         static Object maybeNumber(Object o) {
             return o instanceof Long ? asNumber((Long) o) : o;
+        }
+
+        public static long number(Number n) {
+            return n instanceof Double ? real(n.doubleValue()) : integer(n.longValue());
         }
 
         static long real(double d) {
@@ -150,7 +267,11 @@ public class Shen {
             return isInteger(l) ? l >> tag : longBitsToDouble(l);
         }
 
-        static Number asNumber(long fp) { //noinspection RedundantCast
+        public static int asInt(long l) {
+            return toIntExact(asNumber(l).longValue());
+        }
+
+        public static Number asNumber(long fp) { //noinspection RedundantCast
             return isInteger(fp) ? (Number) (fp >> tag) : (Number) longBitsToDouble(fp);
         }
 
@@ -651,6 +772,8 @@ public class Shen {
         static final MethodHandle
                 link = mh(RT.class, "link"), proxy = mh(RT.class, "proxy"),
                 checkClass = mh(RT.class, "checkClass"), toIntExact = mh(Math.class, "toIntExact"),
+                asNumber = mh(Numbers.class, "asNumber"), number = mh(Numbers.class, "number"),
+                asInt = mh(Numbers.class, "asInt"), toList = mh(Cons.class, "toList"),
                 partial = mh(RT.class, "partial"), arityCheck = mh(RT.class, "arityCheck");
 
         public static Object link(MutableCallSite site, String name, Object... args) throws Throwable {
@@ -846,10 +969,11 @@ public class Shen {
                     filters[i] = proxy.bindTo(findSAM(method.type().parameterType(i)))
                             .asType(methodType(method.type().parameterType(i), Object.class));
                 else  if (canCast(method.type().parameterType(i), int.class))
-                    filters[i] = toIntExact.asType(methodType(method.type().parameterType(i), Object.class));
-            if (canCast(method.type().returnType(), int.class))
-                method = method.asType(method.type()
-                        .changeReturnType(method.type().returnType().isPrimitive() ? long.class : Long.class));
+                    filters[i] = asInt.asType(methodType(method.type().parameterType(i), Object.class));
+                else  if (canCast(method.type().wrap().parameterType(i), Number.class))
+                        filters[i] = asNumber.asType(methodType(method.type().parameterType(i), Object.class));
+            if (canCast(method.type().wrap().returnType(), Number.class))
+                method = filterReturnValue(method, number.asType(methodType(long.class, method.type().returnType())));
             return filterArguments(method, 0, filters);
         }
 
@@ -1615,7 +1739,7 @@ public class Shen {
 
     static RuntimeException uncheck(Throwable t) {
         return uncheckAndThrow(t);
-   }
+    }
 
     static <T extends Throwable> T uncheckAndThrow(Throwable t) throws T { //noinspection unchecked
         throw (T) t;
