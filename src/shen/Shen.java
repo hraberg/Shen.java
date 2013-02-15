@@ -178,8 +178,8 @@ public class Shen {
             binaryOp(cw, op, long.class, realOp(instruction), integerOp(instruction));
         }
 
-        static void binaryOp(ClassWriter cw, String op, Consumer<GeneratorAdapter> realOp, Consumer<GeneratorAdapter> longOp) {
-            binaryOp(cw, op, long.class, realOp, longOp);
+        static void binaryOp(ClassWriter cw, String op, Consumer<GeneratorAdapter> realOp, Consumer<GeneratorAdapter> integerOp) {
+            binaryOp(cw, op, long.class, realOp, integerOp);
         }
 
         static void binaryOp(ClassWriter cw, String op, Class<?> returnType, Consumer<GeneratorAdapter> realOp,
