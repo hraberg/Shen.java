@@ -109,10 +109,11 @@ The benchmarks can be run via:
 * SwitchPoints for symbols - used when redefining functions.
 * Cons as persistent collection vs. cons pairs.
 * Recompilation of fns based on Shen types or runtime values.
-  * This is primarily to narrow types down to primitives, but not sure typing `Object` arguments matter.
+  * This is primarily to narrow types down to primitives, but not sure typing `Object` arguments matter - all calls are linked via indy anyway.
 * `long` reused as double via `doubleToLongBits` and a tag, as guards on primitives seems to require boxing.
   * 63 bit precision. bit 0 is a tag that's either 0 for double or 1 for long.
   * This is highly experimental, arithmetic with tagged longs is faster than boxed Java, doubles on par.
+  * There's some wonderful potential inlining issue making the first branch taken (long vs. double) faster, and potentially destroys performance of the other one.
   * I think there's some fundamental piece of InvokeDynamic and primitives I don't understand that led me down this road.
   * Would obviously prefer to use real doubles.
 
@@ -123,7 +124,6 @@ This is bound to change as we go:
 
 * Saner choice of target method. Currently this is done by a mix of instanceof guards and earlier also fallback to `ClassCastException`. It's really only used for built-ins.
 * Proper arithmetic. Shen.java uses long and double, but currently there's probably a lot of boxing going on. Currently experimenting with long only, see the section above.
-* Adherence to Shen types when compiling typed Shen to Java.
 * Performance. My use of invokedynamic is pretty naive so far, so there's a lot of work to be done here.
 * Revisit how call sites are built and cached, see above.
 * Proper Java inter-op. Potentially using [Dynalink](https://github.com/szegedi/dynalink).

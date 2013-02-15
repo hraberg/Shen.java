@@ -1392,7 +1392,7 @@ public class Shen {
                         case "lambda": return closesOver(conj(scope, list.get(2)), list.get(2));
                         case "defun": return closesOver(into(scope, (Collection) list.get(2)), list.get(3));
                     }
-                    return mapcat(list.stream(), o -> closesOver(scope, o));
+                    return list.stream().flatMap(o -> closesOver(scope, o));
             }
             return emptyStream();
         }
@@ -1584,10 +1584,6 @@ public class Shen {
 
     static <T, R> R some(Stream<T> coll, Function<? super T, ? extends R> pred) {
         return coll.map(pred).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
-    }
-
-    static <T, R> Stream<R> mapcat(Stream<? extends T> coll, Function<? super T, ? extends Stream<R>> f) {
-        return coll.explode((Stream.Downstream<R> downstream, T x) -> downstream.send(f.apply(x)));
     }
 
     static <T, C extends Collection<T>> C into(C to, Collection<? extends T> from) {
