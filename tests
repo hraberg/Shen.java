@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
+java="$rlwrap $JAVA_HOME/bin/java $JAVA_OPTS"
 test_classpath="target/test-classes:`find . -name shen.java-*.jar`"
 
-time yes | java $JAVA_OPTS -Xss4m -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log
+time yes | $java -Xss4m -cp $test_classpath shen.TestProgramsTest 2>&1 | tee test.log
 grep -q "failed; continue? (y/n)" test.log && exit 1
