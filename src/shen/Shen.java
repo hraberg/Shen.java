@@ -658,7 +658,7 @@ public class Shen {
             getSystemClassLoader().loadClass("klambda.types");
         } catch (ClassNotFoundException ignored) {
             try (Reader in = resource("klambda/types.kl")) {
-                List<Object> declarations = vec(read(in).stream().filter(instanceOf(List.class))
+                List<Object> declarations = vec(read(in).stream().filter(List.class::isInstance)
                         .filter(c -> ((List) c).get(0).equals(intern("declare"))));
                 for (Object declaration : declarations) {
                     List list = (List) declaration;
@@ -888,7 +888,7 @@ public class Shen {
 
         static List<Object> shenTypeSignature(List<Object> signature) {
             if (signature.size() != 3)
-                return vec(signature.stream().filter(negate(isEqual(intern("-->")))));
+                return vec(signature.stream().filter(isEqual(intern("-->")).negate()));
             List<Object> argumentTypes = new ArrayList<>();
             for (; signature.size() == 3; signature = ((Cons) signature.get(2)).toList()) {
                 argumentTypes.add(signature.get(0));
@@ -1703,11 +1703,11 @@ public class Shen {
     }
 
     static <T> T find(Stream<T> coll, Predicate<? super T> pred) {
-        return coll.filter(pred).findFirst().orElse((T) null);
+        return coll.filter(pred).findFirst().orElse(null);
     }
 
     static <T, R> R some(Stream<T> coll, Function<? super T, ? extends R> pred) {
-        return coll.map(pred).filter(nonNull().or(isSame(true))).findFirst().orElse((R) null);
+        return coll.map(pred).filter(isSame(true).or(Objects::nonNull)).findFirst().orElse(null);
     }
 
     static <T, C extends Collection<T>> C into(C to, Collection<? extends T> from) {
@@ -1730,7 +1730,7 @@ public class Shen {
 
     static <T> T find(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
         return zip(c1.stream(), c2.stream(), (x, y) -> pred.test(x, y) ? x : null)
-                .filter(nonNull()).findFirst().orElse((T) null);
+                .filter(Objects::nonNull).findFirst().orElse(null);
     }
 
     static <T> List<T> rest(List<T> coll) {
