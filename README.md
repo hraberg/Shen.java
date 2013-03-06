@@ -139,6 +139,8 @@ This is bound to change as we go:
 
 [LISP in Small Pieces](http://pagesperso-systeme.lip6.fr/Christian.Queinnec/WWW/LiSP.html) Christian Queinnec, 1996 "The aim of this book is to cover, in widest possible scope, the semantics and implementations of interpreters and compilers for applicative languages."
 
+[Performance and Evaluation of Lisp Systems](http://dreamsongs.org/Files/Timrep.pdf) Richard P. Gabriel, 1985
+
 [Asm 4.0](http://asm.ow2.org/index.html) Eric Bruneton, 2007-12 -"A Java bytecode engineering library"
 
 [JDK 8 with Lambda support](http://jdk8.java.net/lambda/)
