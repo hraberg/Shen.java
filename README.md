@@ -159,6 +159,8 @@ This is bound to change as we go:
 
 [Invokedynamic them all](https://speakerdeck.com/forax/invokedynamic-them-all) Rémi Forax, 2012
 
+[Golo, a lightweight dynamic language for the JVM](http://golo-lang.org/) Julien Ponge, 2013 - "Golo is a simple dynamic, weakly-typed language for the JVM. Built from day 1 with `invokedynamic`."
+
 [Runtime metaprogramming via java.lang.invoke.MethodHandle](http://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/2012Q2/RuntimeMP.pdf) Miguel Garcia, 2012 - The idea of building the AST from MethodHandles without using ASM did occur to me, and looks like it could be possible. Not sure you can actually create a fn definition though (see above). Did a spike, doesn't seem easy/worth the hassle, may revisit.
 
 [Patterns and Performance of InvokeDynamic in JRuby](http://bit.ly/jjug-indy-jruby-en) Hiroshi Nakamura, 2012
