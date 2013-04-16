@@ -12,7 +12,7 @@ Shen is a portable functional programming language by [Mark Tarver](http://www.l
 * an integrated fully functional Prolog,
 * and an inbuilt compiler-compiler.
 
-See also: [shen.clj](https://github.com/hraberg/shen.clj) | <iframe style="border: 0; margin: 0; padding: 0;" src="https://www.gittip.com/hraberg/widget.html" width="48pt" height="22pt"></iframe>
+See also: [shen.clj](https://github.com/hraberg/shen.clj) | [Gittip](https://www.gittip.com/hraberg/)
 
 
 ## This Java Port
