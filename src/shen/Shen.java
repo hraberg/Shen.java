@@ -46,6 +46,7 @@ import static java.util.Objects.deepEquals;
 import static java.util.function.Predicates.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toSet;
+import static java.util.stream.Stream.empty;
 import static java.util.stream.Streams.*;
 import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
@@ -842,7 +843,7 @@ public class Shen {
                 typeHint.remove();
                 symbol.fn.addAll(fn);
                 if (!type.returnType().equals(Object.class))
-                    symbol.fn.removeAll(f -> f.type().equals(type.changeReturnType(Object.class)));
+                    symbol.fn.removeIf(f -> f.type().equals(type.changeReturnType(Object.class)));
             }
         }
 
@@ -1217,12 +1218,8 @@ public class Shen {
         }
 
         static Handle handle(MethodHandle handle) {
-            try {
-                MethodHandleInfo info = new MethodHandleInfo(handle);
-                return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
-            } catch (ReflectiveOperationException e) {
-                throw uncheck(e);
-            }
+            MethodHandleInfo info = new MethodHandleInfo(handle);
+            return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
         }
 
         static Handle handle(String className, String name, String desc) {
@@ -1518,7 +1515,7 @@ public class Shen {
                     }
                     return list.stream().flatMap(o -> closesOver(scope, o));
             }
-            return emptyStream();
+            return empty();
         }
 
         void emptyList() {
@@ -1699,7 +1696,7 @@ public class Shen {
 
     @SuppressWarnings("unchecked")
     static <T> List<T> vec(Stream<T> coll) {
-        return (List<T>) coll.collect(Collectors.toList());
+        return (List<T>) new ArrayList<>(coll.collect(Collectors.toList()));
     }
 
     static <T> T find(Stream<T> coll, Predicate<? super T> pred) {
@@ -1707,7 +1704,7 @@ public class Shen {
     }
 
     static <T, R> R some(Stream<T> coll, Function<? super T, ? extends R> pred) {
-        return coll.map(pred).filter(isSame(true).or(Objects::nonNull)).findFirst().orElse(null);
+        return coll.map(pred).filter(isEqual(true).or(Objects::nonNull)).findFirst().orElse(null);
     }
 
     static <T, C extends Collection<T>> C into(C to, Collection<? extends T> from) {
