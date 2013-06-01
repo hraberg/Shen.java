@@ -43,7 +43,7 @@ import static java.util.Arrays.fill;
 import static java.util.Arrays.stream;
 import static java.util.Collections.*;
 import static java.util.Objects.deepEquals;
-import static java.util.function.Predicates.*;
+import static java.util.function.Predicate.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Stream.empty;
