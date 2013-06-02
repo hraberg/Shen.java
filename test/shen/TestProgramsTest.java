@@ -10,7 +10,7 @@ public class TestProgramsTest {
     @Test @Ignore
     public void test_programs() throws Throwable {
         install();
-        eval("(cd \"shen/test-programs\")");
+        eval("(cd \"shen/Test Programs\")");
         eval("(load \"README.shen\")");
         eval("(load \"tests.shen\")");
     }

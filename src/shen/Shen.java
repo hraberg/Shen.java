@@ -68,7 +68,7 @@ import static sun.invoke.util.Wrapper.*;
 public class Shen {
     public static void main(String... args) throws Throwable {
         install();
-        eval("(shen-shen)");
+        eval("(shen.shen)");
     }
 
     static final Map<String, Symbol> symbols = new HashMap<>();
@@ -598,7 +598,7 @@ public class Shen {
     }
 
     public static final class Overrides {
-        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen-tuple");
+        static final Symbol _true = intern("true"), _false = intern("false"), shen_tuple = intern("shen.tuple");
 
         public static boolean variableP(Object x) {
             return x instanceof Symbol && isUpperCase(((Symbol) x).symbol.charAt(0));
@@ -880,7 +880,7 @@ public class Shen {
         }
 
         static boolean hasKnownSignature(Symbol symbol) {
-            return intern("shen-*signedfuncs*").var instanceof Cons && ((Cons) intern("shen-*signedfuncs*").var).contains(symbol);
+            return intern("shen.*signedfuncs*").var instanceof Cons && ((Cons) intern("shen.*signedfuncs*").var).contains(symbol);
         }
 
         static List<Object> shenTypeSignature(Symbol symbol) throws Throwable {
