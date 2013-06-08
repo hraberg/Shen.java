@@ -535,15 +535,11 @@ public class Shen {
             if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
             //noinspection RedundantCast
 
-            //If "string" contains a separator, then we assume that the absolute
-            //path of the file has been specified. Otherwise we assume that the file
-            //resides in the home directory
-            File file;
-            if(string.contains(File.separator)){
-                file = new File("", string);
-            }else{
+            File file = new File(string);
+            if(!file.isAbsolute()){
                 file = new File((String) intern("*home-directory*").value(), string);
             }
+
             switch (direction.symbol) {
                 case "in": return new BufferedInputStream(new FileInputStream(file));
                 case "out": return new BufferedOutputStream(new FileOutputStream(file));
