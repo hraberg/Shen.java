@@ -43,7 +43,12 @@
         <outputDirectory>target/classes</outputDirectory>
         <resources>
             <resource>
-                <directory>resources</directory>
+                <directory>shen</directory>
+                <excludes>
+                    <exclude>benchmarks/</exclude>
+                    <exclude>src/</exclude>
+                    <exclude>Test Programs/</exclude>
+                </excludes>
             </resource>
         </resources>
         <plugins>

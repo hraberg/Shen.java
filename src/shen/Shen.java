@@ -694,7 +694,15 @@ public class Shen {
             } finally {
                 lines.clear();
                 try (OutputStream out = new FileOutputStream(classFile)) {
-                    out.write(compiler.bytes);
+                    if(compiler.bytes == null){
+                        out.close();
+                        classFile.delete();
+                        throw new Exception("Shen.compile : trying to write zero bytes out to the file " + file +
+                        ".class. This has happened because a stackoverflow has taken place." +
+                        " Try increasing default stack size via the -Xss option.");
+                    }else{
+                        out.write(compiler.bytes);
+                    }
                 }
             }
         }

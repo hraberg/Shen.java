@@ -5,4 +5,4 @@ java="$rlwrap $JAVA_HOME/bin/java $JAVA_OPTS"
 shen="find . -name shen.java-*.jar"
 
 test -z `$shen` && mvn package
-$java -jar `$shen`
+$java -Xss500k -jar `$shen`
