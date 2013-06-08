@@ -533,6 +533,7 @@ public class Shen {
 
         public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
             if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
+            //noinspection RedundantCast
             File file = new File((String) intern("*home-directory*").value(), string);
             switch (direction.symbol) {
                 case "in": return new BufferedInputStream(new FileInputStream(file));
@@ -686,6 +687,7 @@ public class Shen {
         try (Reader in = resource(format("%s.kl", file))) {
             debug("loading: %s", file);
             Compiler compiler = new Compiler(null, file, cons(intern("do"), read(in)));
+            //noinspection RedundantCast
             File compilePath = new File((String) intern("*compile-path*").value());
             File classFile = new File(compilePath, file + ".class");
             if (!(compilePath.mkdirs() || compilePath.isDirectory())) throw new IOException("could not make directory: " + compilePath);
@@ -693,17 +695,10 @@ public class Shen {
                 return compiler.load(classFile.getName().replaceAll(".class$", ".kl"), aClass);
             } finally {
                 lines.clear();
-                try (OutputStream out = new FileOutputStream(classFile)) {
-                    if(compiler.bytes == null){
-                        out.close();
-                        classFile.delete();
-                        throw new Exception("Shen.compile : trying to write zero bytes out to the file " + file +
-                        ".class. This has happened because a stackoverflow has taken place." +
-                        " Try increasing default stack size via the -Xss option.");
-                    }else{
+                if (compiler.bytes != null)
+                    try (OutputStream out = new FileOutputStream(classFile)) {
                         out.write(compiler.bytes);
                     }
-                }
             }
         }
     }
@@ -1704,7 +1699,7 @@ public class Shen {
 
     @SuppressWarnings("unchecked")
     static <T> List<T> vec(Stream<T> coll) {
-        return (List<T>) new ArrayList<>(coll.collect(Collectors.toList()));
+        return new ArrayList<>(coll.collect(Collectors.<T>toList()));
     }
 
     static <T> T find(Stream<T> coll, Predicate<? super T> pred) {
