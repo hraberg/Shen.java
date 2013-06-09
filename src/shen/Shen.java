@@ -534,7 +534,12 @@ public class Shen {
         public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
             if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
             //noinspection RedundantCast
-            File file = new File((String) intern("*home-directory*").value(), string);
+
+            File file = new File(string);
+            if(!file.isAbsolute()){
+                file = new File((String) intern("*home-directory*").value(), string);
+            }
+
             switch (direction.symbol) {
                 case "in": return new BufferedInputStream(new FileInputStream(file));
                 case "out": return new BufferedOutputStream(new FileOutputStream(file));
@@ -652,6 +657,7 @@ public class Shen {
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
+        set("*home-directory*", getProperty("user.dir"));//Resetting it because it gets overwritten in declarations.kl
         builtins.addAll(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
     }
 
