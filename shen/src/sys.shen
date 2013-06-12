@@ -64,7 +64,7 @@
                 (eval-without-macros Macroexpand))))
 
 (define eval-without-macros 
-  X -> (eval-kl (elim-define (proc-input+ X)))) 
+  X -> (eval-kl (elim-def (proc-input+ X)))) 
 
 (define proc-input+ 
   [input+ Colon Type] -> [input+ Colon (rcons_form Type)]
@@ -72,11 +72,18 @@
   [X | Y] -> (map (function proc-input+) [X | Y])
   X -> X) 
   
-(define elim-define
+(define elim-def
   [define F | Rest] -> (shen->kl F Rest)
-  [defcc F | X] -> (elim-define (yacc [defcc F | X]))
-  [X | Y] -> (map (function elim-define) [X | Y])
+  [defmacro F | Rest] -> (let Default [(protect X) -> (protect X)]
+                              Def (elim-def [define F | (append Rest Default)]) 
+                              MacroAdd (add-macro F) 
+                              Def)
+  [defcc F | X] -> (elim-def (yacc [defcc F | X]))
+  [X | Y] -> (map (function elim-def) [X | Y])
   X -> X)
+
+(define add-macro
+  F -> (set *macros* (adjoin F (value *macros*))))
                 
 (define packaged?
   [package P E | _] -> true
@@ -107,7 +114,7 @@
   X Y -> (cn X Y))
 
 (define tc?
-  _ -> (value *tc*))
+  -> (value *tc*))
  
 (define ps
   Name -> (trap-error (get Name source) (/. E (error "~A not found.~%" Name))))
