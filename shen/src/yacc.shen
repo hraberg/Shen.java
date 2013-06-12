@@ -59,40 +59,47 @@
   [defcc S | CC_Stuff] -> (yacc->shen S CC_Stuff))
 
 (define yacc->shen
-  S CC_Stuff -> [define S | (yacc_cases (map (function cc_body) 
-                                             (split_cc_rules CC_Stuff [])))])
-
-(define yacc_cases
-  Cases -> (append (mapcan (/. Case [(protect Stream) <- Case]) Cases) [_ -> [fail]]))
- 
-(define first_n
-  0 _ -> []
-  _ [] -> []
-  N [X | Y] -> [X | (first_n (- N 1) Y)])
-
+  S CC_Stuff -> (let CCRules (split_cc_rules CC_Stuff [])
+                     CCBody (map (function cc_body) CCRules)
+                     YaccCases (yacc_cases CCBody)
+                     CatchKill (catchkill YaccCases)
+                     [define S (protect Stream) -> CatchKill]))
+                     
 (define split_cc_rules
   [] [] -> []
   [] RevRule -> [(split_cc_rule (reverse RevRule) [])]
   [; | CC_Stuff] RevRule 
    -> [(split_cc_rule (reverse RevRule) []) | (split_cc_rules CC_Stuff [])]
   [X | CC_Stuff] RevRule -> (split_cc_rules CC_Stuff [X | RevRule]))
-
+  
 (define split_cc_rule 
-   [:= Semantics] RevSyntax -> [(reverse RevSyntax) Semantics]
-   [:= Semantics where Guard] RevSyntax 
+   [:= Semantics] RevSyntax -> [(reverse RevSyntax) Semantics]   	
+   [:= Semantics where Guard] RevSyntax 				
     -> [(reverse RevSyntax) [where Guard Semantics]]
    [] RevSyntax 
    -> (do (output "warning: ")
           (map (/. X (output "~A " X)) (reverse RevSyntax))
           (output "has no semantics.~%")
           (split_cc_rule [:= (default_semantics (reverse RevSyntax))] RevSyntax))
-   [Syntax | Rule] RevSyntax -> (split_cc_rule Rule [Syntax | RevSyntax]))
-
+   [Syntax | Rule] RevSyntax -> (split_cc_rule Rule [Syntax | RevSyntax])) 
+   
 (define default_semantics 
   [] -> []
-  [S | Syntax] -> [append S (default_semantics Syntax)]	
-                                   where (grammar_symbol? S)
-  [S | Syntax] -> [cons S (default_semantics Syntax)])
+  [S | Syntax] -> [append S (default_semantics Syntax)]	  where (grammar_symbol? S)
+  [S | Syntax] -> [cons S (default_semantics Syntax)]) 
+  
+(define grammar_symbol?
+  S -> (and (symbol? S) 
+            (let Cs (strip-pathname (explode S)) 
+                (and (= (hd Cs) "<") (= (hd (reverse Cs)) ">")))))                          
+
+(define yacc_cases
+  [Case] -> Case
+  [Case | Cases] -> (let P (protect YaccParse)
+                       [let P Case
+                         [if [= P [fail]]
+                             (yacc_cases Cases)
+                             P]]))
 
 (define cc_body 
   [Syntax Semantics] -> (syntax Syntax (protect Stream) Semantics))
@@ -103,17 +110,12 @@
                                            [fail]]
   [] Stream Semantics -> [pair [hd Stream] (semantics Semantics)]
   [S | Syntax] Stream Semantics 
-    -> (if (grammar_symbol? S) 
-           (recursive_descent [S | Syntax] Stream Semantics)
-           (if (variable? S)
-               (variable-match [S | Syntax] Stream Semantics)
-               (if (terminal? S)       
-                   (check_stream [S | Syntax] Stream Semantics)
-                   (if (jump_stream? S)    
-                       (jump_stream [S | Syntax] Stream Semantics)
-                       (if (list_stream? S)    
-                           (list_stream (decons S) Syntax Stream Semantics)
-	                   (error "~A is not legal syntax~%" S)))))))	       
+    -> (cases (grammar_symbol? S) (recursive_descent [S | Syntax] Stream Semantics)
+              (variable? S) (variable-match [S | Syntax] Stream Semantics)
+              (jump_stream? S) (jump_stream [S | Syntax] Stream Semantics)
+              (terminal? S) (check_stream [S | Syntax] Stream Semantics)              
+              (list_stream? S) (list_stream (decons S) Syntax Stream Semantics)
+	            true (error "~A is not legal syntax~%" S)))       
 
 (define list_stream?
   [_ | _] -> true
@@ -139,11 +141,6 @@
   [_ Y] -> Y
   _ -> (fail))          
    
-(define grammar_symbol?
-  S -> (and (symbol? S) 
-            (let Cs (strip-pathname (explode S)) 
-                (and (= (hd Cs) "<") (= (hd (reverse Cs)) ">")))))
-
 (define strip-pathname
   Cs -> Cs 		where (not (element? "." Cs))
   [_ | Cs] -> (strip-pathname Cs))				
@@ -215,5 +212,17 @@
 
 (define <e>
   [X _] -> [X []])
+  
+(define catchkill
+  Code -> [trap-error Code [lambda (protect E) [analyse-kill (protect E)]]])
+  
+(define analyse-kill
+  Exception -> (let String (error-to-string Exception)
+                    (if (= String "Shen YACC kill")
+                        (fail)
+                        (simple-error String))))
+                        
+(define kill
+  -> (simple-error "Shen YACC kill"))                            
 
 )

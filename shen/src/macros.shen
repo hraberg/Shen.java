@@ -59,12 +59,12 @@
   X -> (let Y (compose (value *macros*) X)
             (if (= X Y)
                 X
-                (walk macroexpand Y))))
+                (walk (function macroexpand) Y))))
 
 (set *macros* [timer-macro cases-macro abs-macro put/get-macro compile-macro 
                datatype-macro let-macro assoc-macro make-string-macro output-macro 
                error-macro prolog-macro synonyms-macro nl-macro @s-macro 
-               defmacro-macro defprolog-macro function-macro])
+               defprolog-macro function-macro])
 
 
 (define error-macro
@@ -110,14 +110,7 @@
 (define intern-type
   F -> (intern (cn "type#" (str F))))
 
-(define defmacro-macro
-  [defmacro F | Rules] -> (let Macro [define F | (append Rules [(protect X) -> (protect X)])]
-                               Declare [do [set *macros* [adjoin F [value *macros*]]] macro]
-                               Package [package null [] Declare Macro]
-                               Package)
-  X -> X)
-
-(defcc <defmacro>
+"(defcc <defmacro>
  <name> <macrorules> := [define <name> | <macrorules>];)
 
 (defcc <macrorules>
@@ -131,7 +124,7 @@
   <patterns> <- <macroaction>;)
 
 (defcc <macroaction>
-  <action> := [[walk [function macroexpand] <action>]];)
+  <action> := [[walk [function macroexpand] <action>]];)"
 
 (define @s-macro
   [@s W X Y | Z] -> [@s W (@s-macro [@s X Y | Z])]

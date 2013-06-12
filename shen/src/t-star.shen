@@ -136,6 +136,7 @@
    X A Hyp <-- (t*-hyps Hyp NewHyp) (th* X A NewHyp);
   (mode [define F | X] -) A Hyp <-- ! (t*-def [define F | X] A Hyp);
   (mode [defcc F | X] -) A Hyp <-- ! (t*-defcc [defcc F | X] A Hyp);
+  (mode [defmacro | _] -) unit Hyp <-- !;
   (mode [process-datatype | _] -) symbol _ <--;
   (mode [synonyms-help | _] -) symbol _ <--;
   X A Hyp <-- (bind Datatypes (value *datatypes*))  
