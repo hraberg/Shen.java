@@ -108,6 +108,7 @@ public class Shen {
             binaryOp(cw, "-", SUB);
             binaryOp(cw, "*", MUL);
             binaryOp(cw, "/", realOp(DIV), integerDivision());
+            binaryOp(cw, "%", REM);
             binaryComp(cw, "<", LT);
             binaryComp(cw, "<=", LE);
             binaryComp(cw, ">", GT);
@@ -656,6 +657,9 @@ public class Shen {
         for (String file : asList("toplevel", "core", "sys", "sequent", "yacc", "reader",
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
+	//Loading custom klambda files
+        for (String file : asList("types"))	
+	    load("klambda-custom/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
         set("*home-directory*", getProperty("user.dir")); //Resetting it because it gets overwritten in declarations.kl
         builtins.addAll(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));

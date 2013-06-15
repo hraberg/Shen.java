@@ -1,0 +1,1 @@
+(declare % (cons number (cons --> (cons (cons number (cons --> (cons number ()))) ()))))
