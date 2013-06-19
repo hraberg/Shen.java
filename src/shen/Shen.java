@@ -657,9 +657,9 @@ public class Shen {
         for (String file : asList("toplevel", "core", "sys", "sequent", "yacc", "reader",
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
-	//Loading custom klambda files
+	    //Loading custom klambda files
         for (String file : asList("types"))	
-	    load("klambda-custom/" + file, Callable.class).newInstance().call();
+	      load("klambda-custom/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
         set("*home-directory*", getProperty("user.dir")); //Resetting it because it gets overwritten in declarations.kl
         builtins.addAll(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
