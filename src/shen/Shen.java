@@ -658,7 +658,7 @@ public class Shen {
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
 	//Loading custom klambda files
-        for (String file : asList("types"))	
+        for (String file : asList("types"))
 	    load("klambda-custom/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
         set("*home-directory*", getProperty("user.dir")); //Resetting it because it gets overwritten in declarations.kl
@@ -1721,7 +1721,7 @@ public class Shen {
     }
 
     static <T, C extends Collection<T>> C into(C to, Collection<? extends T> from) {
-        Collector<Object,? extends Collection<Object>> collector = to instanceof Set ? toSet() : Collectors.toList();
+        Collector<Object, ?, ? extends Collection<Object>> collector = to instanceof Set ? toSet() : Collectors.toList();
         //noinspection unchecked
         return (C) concat(to.stream(), from.stream()).collect(collector);
     }
