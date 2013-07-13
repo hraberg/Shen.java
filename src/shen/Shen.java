@@ -23,6 +23,7 @@ import java.util.jar.Manifest;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
@@ -47,7 +48,7 @@ import static java.util.function.Predicate.*;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Stream.empty;
-import static java.util.stream.Streams.*;
+//import static java.util.stream.Streams.*;
 import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static jdk.internal.org.objectweb.asm.Type.*;
@@ -1735,12 +1736,37 @@ public class Shen {
     }
 
     static <T> boolean every(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
-        return zip(c1.stream(), c2.stream(), pred::test).allMatch(isEqual(true));
+        //return zip(c1.stream(), c2.stream(), pred::test).allMatch(isEqual(true));
+        Iterator<T> it1 = c1.iterator();
+        Iterator<T> it2 = c2.iterator();
+        List<Boolean> result= new ArrayList<Boolean>();
+        while(it1.hasNext() && it2.hasNext()) {
+            T value1 = it1.next();
+            T value2 = it2.next();
+            result.add(pred.test(value1,value2));
+        }
+        boolean ret = !result.contains(false);
+        return ret;
     }
 
     static <T> T find(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
-        return zip(c1.stream(), c2.stream(), (x, y) -> pred.test(x, y) ? x : null)
-                .filter(Objects::nonNull).findFirst().orElse(null);
+        //return zip(c1.stream(), c2.stream(), (x, y) -> pred.test(x, y) ? x : null)
+        //        .filter(Objects::nonNull).findFirst().orElse(null);
+        Iterator<T> it1 = c1.iterator();
+        Iterator<T> it2 = c2.iterator();
+        Collection<T> result =  new ArrayList<T>(c1);
+        result.clear();
+        while(it1.hasNext() && it2.hasNext()) {
+            T value1 = it1.next();
+            T value2 = it2.next();
+            if(pred.test(value1, value2) == true){
+                result.add(value1);
+            }else{
+                result.add(null);
+            }
+        }
+
+        return result.stream().filter(Objects::nonNull).findFirst().orElse(null);
     }
 
     static <T> List<T> rest(List<T> coll) {
@@ -1753,5 +1779,173 @@ public class Shen {
 
     static <T extends Throwable> T uncheckAndThrow(Throwable t) throws T { //noinspection unchecked
         throw (T) t;
+    }
+    //*****************************************************************
+    //*****************************************************************
+    //*****************************************************************
+    //*****************************************************************
+    //*****************************************************************
+    //Stuff taken out of b93 and modified appropriately
+    /**
+     * Creates a lazy concatenated {@code Stream} whose elements are all the
+     * elements of a first {@code Stream} succeeded by all the elements of the
+     * second {@code Stream}. The resulting stream is ordered if both
+     * of the input streams are ordered, and parallel if either of the input
+     * streams is parallel.
+     *
+     * @param <T> The type of stream elements
+     * @param a the first stream
+     * @param b the second stream to concatenate on to end of the first
+     *        stream
+     * @return the concatenation of the two input streams
+     */
+    public static <T> Stream<T> concat(Stream<? extends T> a, Stream<? extends T> b) {
+        Objects.requireNonNull(a);
+        Objects.requireNonNull(b);
+
+        @SuppressWarnings("unchecked")
+        Spliterator<T> split = new ConcatSpliterator.OfRef<>((Spliterator<T>) a.spliterator(),
+                (Spliterator<T>) b.spliterator());
+        /*return (a.isParallel() || b.isParallel())
+                ? StreamSupport.parallelStream(split)
+                : StreamSupport.stream(split);*/
+        return (a.isParallel() || b.isParallel())
+                ? StreamSupport.stream(split,true)
+                : StreamSupport.stream(split,false);
+    }
+
+    private abstract static class ConcatSpliterator<T, T_SPLITR extends Spliterator<T>>
+            implements Spliterator<T> {
+        protected final T_SPLITR aSpliterator;
+        protected final T_SPLITR bSpliterator;
+        // True when no split has occurred, otherwise false
+        boolean beforeSplit;
+
+        public ConcatSpliterator(T_SPLITR aSpliterator, T_SPLITR bSpliterator) {
+            this.aSpliterator = aSpliterator;
+            this.bSpliterator = bSpliterator;
+            beforeSplit = true;
+        }
+
+        @Override
+        public T_SPLITR trySplit() {
+            T_SPLITR ret = beforeSplit ? aSpliterator : (T_SPLITR) bSpliterator.trySplit();
+            beforeSplit = false;
+            return ret;
+        }
+
+        @Override
+        public boolean tryAdvance(Consumer<? super T> consumer) {
+            boolean hasNext;
+            if (beforeSplit) {
+                hasNext = aSpliterator.tryAdvance(consumer);
+                if (!hasNext) {
+                    beforeSplit = false;
+                    hasNext = bSpliterator.tryAdvance(consumer);
+                }
+            }
+            else
+                hasNext = bSpliterator.tryAdvance(consumer);
+            return hasNext;
+        }
+
+        @Override
+        public void forEachRemaining(Consumer<? super T> consumer) {
+            if (beforeSplit)
+                aSpliterator.forEachRemaining(consumer);
+            bSpliterator.forEachRemaining(consumer);
+        }
+
+        @Override
+        public long estimateSize() {
+            if (beforeSplit) {
+                // If one or both estimates are Long.MAX_VALUE then the sum
+                // will either be Long.MAX_VALUE or overflow to a negative value
+                long size = aSpliterator.estimateSize() + bSpliterator.estimateSize();
+                return (size >= 0) ? size : Long.MAX_VALUE;
+            }
+            else {
+                return bSpliterator.estimateSize();
+            }
+        }
+
+        @Override
+        public int characteristics() {
+            if (beforeSplit) {
+                // Concatenation loses DISTINCT and SORTED characteristics
+                return aSpliterator.characteristics() & bSpliterator.characteristics() &
+                        ~(Spliterator.DISTINCT | Spliterator.SORTED);
+            }
+            else {
+                return bSpliterator.characteristics();
+            }
+        }
+
+        @Override
+        public Comparator<? super T> getComparator() {
+            if (beforeSplit)
+                throw new IllegalStateException();
+            return bSpliterator.getComparator();
+        }
+
+        private static class OfRef<T> extends ConcatSpliterator<T, Spliterator<T>> {
+            private OfRef(Spliterator<T> aSpliterator, Spliterator<T> bSpliterator) {
+                super(aSpliterator, bSpliterator);
+            }
+        }
+
+        private static abstract class OfPrimitive<T, T_CONS, T_SPLITR extends Spliterator.OfPrimitive<T, T_CONS, T_SPLITR>>
+                extends ConcatSpliterator<T, T_SPLITR>
+                implements Spliterator.OfPrimitive<T, T_CONS, T_SPLITR> {
+            private OfPrimitive(T_SPLITR aSpliterator, T_SPLITR bSpliterator) {
+                super(aSpliterator, bSpliterator);
+            }
+
+            @Override
+            public boolean tryAdvance(T_CONS action) {
+                boolean hasNext;
+                if (beforeSplit) {
+                    hasNext = aSpliterator.tryAdvance(action);
+                    if (!hasNext) {
+                        beforeSplit = false;
+                        hasNext = bSpliterator.tryAdvance(action);
+                    }
+                }
+                else
+                    hasNext = bSpliterator.tryAdvance(action);
+                return hasNext;
+            }
+
+            @Override
+            public void forEachRemaining(T_CONS action) {
+                if (beforeSplit)
+                    aSpliterator.forEachRemaining(action);
+                bSpliterator.forEachRemaining(action);
+            }
+        }
+
+        private static class OfInt
+                extends ConcatSpliterator.OfPrimitive<Integer, IntConsumer, Spliterator.OfInt>
+                implements Spliterator.OfInt {
+            private OfInt(Spliterator.OfInt aSpliterator, Spliterator.OfInt bSpliterator) {
+                super(aSpliterator, bSpliterator);
+            }
+        }
+
+        private static class OfLong
+                extends ConcatSpliterator.OfPrimitive<Long, LongConsumer, Spliterator.OfLong>
+                implements Spliterator.OfLong {
+            private OfLong(Spliterator.OfLong aSpliterator, Spliterator.OfLong bSpliterator) {
+                super(aSpliterator, bSpliterator);
+            }
+        }
+
+        private static class OfDouble
+                extends ConcatSpliterator.OfPrimitive<Double, DoubleConsumer, Spliterator.OfDouble>
+                implements Spliterator.OfDouble {
+            private OfDouble(Spliterator.OfDouble aSpliterator, Spliterator.OfDouble bSpliterator) {
+                super(aSpliterator, bSpliterator);
+            }
+        }
     }
 }
