@@ -27,10 +27,8 @@ Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/2359095c59
 This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff. There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/) (b92 - there are often small but  breaking changes). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
 
 JDK 8 with lamdba can be downloaded at the following locations : 
-
-[Latest JK8 with lambda](https://jdk8.java.net/lambda/)
-
-[Older releases of JDK with lamdba](http://download.java.net/lambda/)
+* [Latest JK8 with lambda](https://jdk8.java.net/lambda/)
+* [Older releases of JDK with lamdba](http://download.java.net/lambda/)
 
 ### To run the REPL:
 
