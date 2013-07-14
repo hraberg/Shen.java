@@ -290,10 +290,11 @@ public class PrimitivesTest {
     @Test
     public void streams() {
         is(String.class, "(set fileName (cn (str (get-time run)) \".txt\"))");
-        is(OutputStream.class, "(set writeFile (open file (value fileName) out))");
-        is("foobar", "(pr \"foobar\" (value writeFile))");
+        is(OutputStream.class, "(set writeFile (open (value fileName) out))");
+        is(102L, "(write-byte 102 (value writeFile))");
+        is(111L, "(write-byte 111 (value writeFile))");
         is(asList(), "(close (value writeFile))");
-        is(InputStream.class, "(set readFile (open file (value fileName) in))");
+        is(InputStream.class, "(set readFile (open (value fileName) in))");
         is(102L, "(read-byte (value readFile))");
         is(111L, "(read-byte (value readFile))");
         is(false, "(= 102 (read-byte (value readFile)))");

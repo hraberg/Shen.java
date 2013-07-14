@@ -519,23 +519,18 @@ public class Shen {
             return integer(s.read());
         }
 
-        public static long read_byte(Reader s) throws IOException {
-            return integer(s.read());
+        public static Long convertToLong(Object x) {
+            if (x instanceof Long) x = asNumber((Long) x);
+            return Long.valueOf((Long) x);
         }
 
-        public static <T> T pr(T x, OutputStream s) throws IOException {
-            return pr(x, new OutputStreamWriter(s));
-        }
-
-        public static <T> T pr(T x, Writer s) throws IOException {
-            s.write(str(x));
+        public static <T> T write_byte(T x, OutputStream s) throws IOException {
+            s.write(convertToLong(x).byteValue());
             s.flush();
             return x;
         }
 
-        public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
-            if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
-
+        public static Closeable open(String string, Symbol direction) throws IOException {
             File file = new File(string);
             if (!file.isAbsolute()) {
                 //noinspection RedundantCast
