@@ -54,21 +54,79 @@
 
 (package shen. []
 
+(define read-file-as-bytelist
+ File -> (let Stream (open File in)
+               Byte (read-byte Stream)
+               Bytes (read-file-as-bytelist-help Stream Byte [])
+               Close (close Stream)
+               (reverse Bytes)))  
+
+(define read-file-as-bytelist-help
+  Stream -1 Bytes -> Bytes
+  Stream Byte Bytes -> (read-file-as-bytelist-help Stream (read-byte Stream) [Byte | Bytes]))
+
+(define read-file-as-string
+   File -> (let Stream (open File in) 
+               (rfas-h Stream (read-byte Stream) "")))
+               
+(define rfas-h
+  Stream -1 String -> (do (close Stream) String)
+  Stream N String -> (rfas-h Stream (read-byte Stream) (cn String (n->string N))))  
+
+(define input
+  Stream -> (eval-kl (read Stream)))
+
+(define input+ 
+  Type Stream -> (let Mono? (monotype Type)
+                      Input (read Stream)                      
+                      (if (= false (typecheck Input Type))
+                          (error "type error: ~R is not of type ~R~%" Input Type)
+                          (eval-kl Input))))
+
+(define monotype
+  [X | Y] -> (map (function monotype) [X | Y])
+  X -> (if (variable? X) (error "input+ expects a monotype: not ~A~%" X) X))
+
+(define read
+  Stream -> (hd (read-loop Stream (read-byte Stream) [])))
+
+(define read-loop
+  _ -1 Bytes -> (if (empty? Bytes)
+                    (simple-error "error: empty stream")
+                    (compile (function <st_input>) Bytes (/. E E)))
+  Stream Byte Bytes -> (let AllBytes (append Bytes [Byte])
+                            Read (compile (function <st_input>) AllBytes (/. E nextbyte))
+                            (if (or (= Read nextbyte) (empty? Read))
+                                (read-loop Stream (read-byte Stream) AllBytes)
+                                Read))    where (terminator? Byte) 
+  Stream Byte Bytes -> (read-loop Stream (read-byte Stream) (append Bytes [Byte])))   
+  
+(define terminator?
+  Byte -> (element? Byte [9 10 13 32 34 41 93]))           
+
 (define lineread
-  -> (lineread-loop (read-byte (stinput)) []))
+  Stream -> (lineread-loop (read-byte Stream) [] Stream))
 
 (define lineread-loop
-  Byte _ -> (error "line read aborted")  where (= Byte (hat))
-  Byte Bytes -> (let Line (compile (function <st_input>) Bytes (/. E nextline))
-                      (if (or (= Line nextline) (empty? Line))
-                          (lineread-loop (read-byte (stinput)) (append Bytes [Byte]))
-                          Line))	where (element? Byte 
-                                                        [(newline) (carriage-return)])
-  Byte Bytes -> (lineread-loop (read-byte (stinput)) (append Bytes [Byte])))
+  -1 Bytes Stream -> (if (empty? Bytes)
+                         (simple-error "empty stream")
+                         (compile (function <st_input>) Bytes (/. E E)))
+  Byte _ Stream -> (error "line read aborted")  where (= Byte (hat))
+  Byte Bytes Stream -> (let Line (compile (function <st_input>) Bytes (/. E nextline))
+                           (if (or (= Line nextline) (empty? Line))
+                               (lineread-loop (read-byte Stream) (append Bytes [Byte]) Stream)
+                               Line))	where (element? Byte [(newline) (carriage-return)])
+  Byte Bytes Stream -> (lineread-loop (read-byte Stream) (append Bytes [Byte]) Stream))
 
 (define read-file
   File -> (let Bytelist (read-file-as-bytelist File)
                (compile (function <st_input>) Bytelist (function read-error))))
+
+(define read-from-string
+  S -> (let Ns (map (function string->n) (explode S))
+            (compile (function <st_input>) 
+                     Ns 
+                     (function read-error))))
 
 (define read-error
   [[Byte | Bytes] _] -> (error "read error here:~%~% ~A~%" (compress-50 50 [Byte | Bytes]))
@@ -368,10 +426,5 @@
                            (doubleunderline? X) (singleunderline? X))
     PackageName Exceptions X -> (concat PackageName X)   
              where (and (symbol? X) (not (prefix? [($ shen.)] (explode X))))
-    _ _ X -> X) 
+    _ _ X -> X) )
 
-(define read-from-string
-  S -> (let Ns (map (function string->n) (explode S))
-            (compile (function <st_input>) 
-                     Ns 
-                     (function read-error)))))

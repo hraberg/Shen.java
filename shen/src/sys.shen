@@ -67,8 +67,8 @@
   X -> (eval-kl (elim-def (proc-input+ X)))) 
 
 (define proc-input+ 
-  [input+ Colon Type] -> [input+ Colon (rcons_form Type)]
-  [read+ Colon Type] -> [read+ Colon (rcons_form Type)]
+  [input+ Type Stream] -> [input+ (rcons_form Type) Stream]
+  [read+ Type Stream] -> [read+ (rcons_form Type) Stream]
   [X | Y] -> (map (function proc-input+) [X | Y])
   X -> X) 
   
@@ -363,7 +363,7 @@
 (define y-or-n?
   String -> (let Message (output String)
                  Y-or-N (output " (y/n) ")
-                 Input (make-string "~S" (input))
+                 Input (make-string "~S" (read (stinput)))
                  (cases (= "y" Input) true 
                         (= "n" Input) false 
                         true (do (output "please answer y or n~%")
@@ -434,54 +434,13 @@
   _ [] -> []
   F [X | Y] -> (append (F X) (mapcan F Y)))
 
-(define read-file-as-bytelist
- File -> (let Stream (open file File in)
-               Byte (read-byte Stream)
-               Bytes (read-file-as-bytelist-help Stream Byte [])
-               Close (close Stream)
-               (reverse Bytes)))  
-
-(define read-file-as-bytelist-help
-  Stream -1 Bytes -> Bytes
-  Stream Byte Bytes -> (read-file-as-bytelist-help Stream (read-byte Stream) [Byte | Bytes]))
-
-(define read-file-as-string
-   File -> (let Stream (open file File in) 
-               (rfas-h Stream (read-byte Stream) "")))
-               
-(define rfas-h
-  Stream -1 String -> (do (close Stream) String)
-  Stream N String -> (rfas-h Stream (read-byte Stream) (cn String (n->string N))))  
-
 (define ==
   X X -> true
   _ _ -> false)
 
 (define abort
   -> (simple-error ""))
-
-(define read
-  -> (hd (lineread)))
-
-(define input
-  -> (eval (read)))
-
-(define input+ 
-  _ Type -> (let Input (read)
-                 Check (typecheck Input Type)
-                 (if (= false Check)
-                     (do (output "input is not of type ~R: please re-enter " Type)
-                         (input+ : Type))
-                     (eval Input))))
-
-(define read+ 
-  _ Type -> (let Input (read)
-                 Check (typecheck (rcons_form Input) Type)
-                 (if (= false Check)
-                     (do (output "input is not of type ~R: please re-enter " Type)
-                         (read+ : Type))
-                     Input)))
-
+    
 (define bound? 
   Sym -> (and (symbol? Sym) 
               (let Val (trap-error (value Sym) (/. E this-symbol-is-unbound))

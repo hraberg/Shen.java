@@ -53,6 +53,15 @@
 *\
 (package shen. []
 
+(define pr
+  String Sink -> (trap-error (prh String Sink 0) (/. E String)))
+
+(define prh
+  String Sink N -> (prh String Sink (write-char-and-inc String Sink N)))
+
+(define write-char-and-inc
+  String Sink N -> (do (write-byte (string->n (pos String N)) Sink) (+ N 1)))
+
 (define print 
   X -> (let String (insert X "~S")
             Print (prhush String (stoutput))
