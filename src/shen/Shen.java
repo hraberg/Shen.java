@@ -1733,23 +1733,22 @@ public class Shen {
         return into(singletonList(x), seq);
     }
 
-    static <T, R> Stream<R> zip(Stream<T> c1, Stream<T> c2, BiFunction<T, T, R> pred) {
+    static <T, R> Stream<R> map(Stream<T> c1, Stream<T> c2, BiFunction<T, T, R> f) {
         Iterator<T> it1 = c1.iterator();
         Iterator<T> it2 = c2.iterator();
         List<R> result= new ArrayList<R>();
-        while(it1.hasNext() && it2.hasNext()) {
-            result.add(pred.apply(it1.next(), it2.next()));
+        while (it1.hasNext() && it2.hasNext()) {
+            result.add(f.apply(it1.next(), it2.next()));
         }
         return result.stream();
     }
 
     static <T> boolean every(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
-        return zip(c1.stream(), c2.stream(), pred::test).allMatch(isEqual(true));
+        return map(c1.stream(), c2.stream(), pred::test).allMatch(isEqual(true));
     }
 
     static <T> T find(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {
-        return zip(c1.stream(), c2.stream(), (x, y) -> pred.test(x, y) ? x : null)
-                .filter(Objects::nonNull).findFirst().orElse(null);
+        return find(map(c1.stream(), c2.stream(), (x, y) -> pred.test(x, y) ? x : null), Objects::nonNull);
     }
 
     static <T> List<T> rest(List<T> coll) {
