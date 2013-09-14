@@ -64,6 +64,7 @@
 (define curry
   [F | X] -> [F | (map (function curry) X)]   where (special? F)
   [Def F | X] -> [Def F | X] where (extraspecial? Def)
+  [type X A] -> [type (curry X) A]
   [F X Y | Z] -> (curry [[F X] Y | Z])
   [F X] -> [(curry F) (curry X)]
   X -> X)  
@@ -116,14 +117,13 @@
                                            (bind X&& (placeholder)) 
                                            (bind Z (ebr X&& X Y))
                                            (th* Z B [[X&& : A] | Hyp]); 
-  (mode [let X Y Z] -) A Hyp <-- ! (th* Y B Hyp) 
+  (mode [let X Y Z] -) A Hyp <--    (th* Y B Hyp) 
                                     (bind X&& (placeholder))
                                     (bind W (ebr X&& X Z))
                                     (th* W A [[X&& : B] | Hyp]);
   (mode [open FileName Direction] -) [stream Direction] Hyp <-- ! (th* FileName string Hyp);
   (mode [type X A] -) B Hyp <-- ! (unify A B) (th* X A Hyp);
   (mode [input+ A Stream] -) B Hyp <-- (bind C (demodulate A)) (unify B C) (th* Stream [stream in] Hyp);
-  (mode [read+ : A Stream] -) B Hyp <-- (bind C (demodulate A)) (unify B C) (th* Stream [stream in] Hyp);
   (mode [set Var Val] -) A Hyp <-- ! (th* Var symbol Hyp) ! (th* [value Var] A Hyp) (th* Val A Hyp);
   (mode [<-sem F] -) C Hyp <-- ! 
                                (th* F [A ==> B] Hyp)
@@ -180,7 +180,7 @@
   
 \* Pauses for user *\
 (define pause-for-user
-   -> (let Byte (read-byte (stinput)) 
+   -> (let Byte (do (read-byte (stinput)) (read-byte (stinput)))
              (if (= Byte 94) 
                  (error "input aborted~%") 
                  (nl)))) 
@@ -212,7 +212,7 @@
   (mode [define F | X] -) A Hyp <-- (t*-defh (compile (function <sig+rules>) X) F A Hyp);)
 
 (defprolog t*-defh
-  (mode [Sig | Rules] -) F A Hyp <-- (t*-defhh Sig (ue Sig) F A Hyp Rules);)
+  (mode [Sig | Rules] -) F A Hyp <-- (t*-defhh Sig (ue-sig Sig) F A Hyp Rules);)
 
 (defprolog t*-defhh 
   Sig Sig&& F A Hyp Rules <-- (t*-rules Rules Sig&& 1 F [[F : Sig&&] | Hyp])
@@ -228,6 +228,11 @@
   [P X] -> [P X]	where (= P protect)
   [X | Y] -> (map (function ue) [X | Y])  
   X -> (concat && X)        where (variable? X)
+  X -> X)
+
+(define ue-sig
+  [X | Y] -> (map (function ue-sig) [X | Y])  
+  X -> (concat &&& X)        where (variable? X)
   X -> X)
 
 (define ues

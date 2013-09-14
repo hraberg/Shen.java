@@ -105,7 +105,7 @@
   <signature> <!> := <signature>;) 
                    
 (define write-to-file
-   File Text -> (let Stream (open file File out)
+   File Text -> (let Stream (open File out)
                      String (if (string? Text) 
                                 (make-string "~A~%~%" Text) 
                                 (make-string "~S~%~%" Text))

@@ -475,6 +475,24 @@
   - -> (set *optimise* false)
   _ -> (error "optimise expects a + or a -.~%")))
 
+(define os
+  -> (value *os*))
 
+(define language
+  -> (value *language*))
 
+(define version
+  -> (value *version*))
+
+(define port
+  -> (value *port*))
+
+(define porters
+  -> (value *porters*))
+
+(define implementation
+  -> (value *implementation*))
+
+(define release
+  -> (value *release*))
 

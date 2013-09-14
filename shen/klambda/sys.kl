@@ -253,5 +253,19 @@
 (defun shen.optimise (V2061) (cond ((= + V2061) (set shen.*optimise* true)) ((= - V2061) (set shen.*optimise* false)) (true (simple-error "optimise expects a + or a -.
 "))))
 
+(defun os () (value *os*))
+
+(defun language () (value *language*))
+
+(defun version () (value *version*))
+
+(defun port () (value *port*))
+
+(defun porters () (value *porters*))
+
+(defun implementation () (value *implementation*))
+
+(defun release () (value *release*))
+
 
 

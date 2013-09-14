@@ -138,6 +138,8 @@
 
 (declare if (cons boolean (cons --> (cons (cons A (cons --> (cons (cons A (cons --> (cons A ()))) ()))) ()))))
 
+(declare implementation (cons --> (cons string ())))
+
 (declare include (cons (cons list (cons symbol ())) (cons --> (cons (cons list (cons symbol ())) ()))))
 
 (declare include-all-but (cons (cons list (cons symbol ())) (cons --> (cons (cons list (cons symbol ())) ()))))
@@ -151,6 +153,8 @@
 (declare intersection (cons (cons list (cons A ())) (cons --> (cons (cons (cons list (cons A ())) (cons --> (cons (cons list (cons A ())) ()))) ()))))
 
 (declare kill (cons --> (cons A ())))
+
+(declare language (cons --> (cons string ())))
 
 (declare length (cons (cons list (cons A ())) (cons --> (cons number ()))))
 
@@ -181,6 +185,12 @@
 (declare optimise (cons symbol (cons --> (cons boolean ()))))
 
 (declare or (cons boolean (cons --> (cons (cons boolean (cons --> (cons boolean ()))) ()))))
+
+(declare os (cons --> (cons string ())))
+
+(declare port (cons --> (cons string ())))
+
+(declare porters (cons --> (cons string ())))
 
 (declare pos (cons string (cons --> (cons (cons number (cons --> (cons string ()))) ()))))
 
@@ -213,6 +223,8 @@
 (declare read-file (cons string (cons --> (cons (cons list (cons unit ())) ()))))
 
 (declare read-from-string (cons string (cons --> (cons (cons list (cons unit ())) ()))))
+
+(declare release (cons --> (cons string ())))
 
 (declare remove (cons A (cons --> (cons (cons (cons list (cons A ())) (cons --> (cons (cons list (cons A ())) ()))) ()))))
 
@@ -280,7 +292,7 @@
 
 (declare vector? (cons A (cons --> (cons boolean ()))))
 
-(declare version (cons string (cons --> (cons string ()))))
+(declare version (cons --> (cons string ())))
 
 (declare write-to-file (cons string (cons --> (cons (cons A (cons --> (cons A ()))) ()))))
 
