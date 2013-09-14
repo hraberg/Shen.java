@@ -24,8 +24,7 @@ The main [Shen JVM port](https://www.assembla.com/code/shen-on-java/git/nodes) i
 This port is loosely based on [`shen.clj`](https://github.com/hraberg/shen.clj), but has no dependency on Clojure.
 Started as an [interpreter](https://github.com/hraberg/Shen.java/blob/2359095c59435597e5761c72dbe9f0246fad0864/src/shen/Shen.java) using [MethodHandles](http://docs.oracle.com/javase/7/docs/api/java/lang/invoke/MethodHandle.html) as a primitive. It's about 2x faster than `shen.clj`.
 
-This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff. There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](http://jdk8.java.net/lambda/) (b92 - there are often small but  breaking changes). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
-
+This is pretty experimental, and this entire project acts as a playground for various JDK 8 and JVM language stuff. There's an IntelliJ project, which requires [IDEA 12](http://www.jetbrains.com/idea/download/index.html) and [JDK 8 with Lambda support](https://jdk8.java.net/download.html) (b106, the Developer Preview of JDK8 now has lambda support). It's based on this [Maven project](https://github.com/hraberg/Shen.java/blob/master/pom.xml).
 
 ### To run the REPL:
 
@@ -33,9 +32,10 @@ This is pretty experimental, and this entire project acts as a playground for va
     ./shen.java
 
     Shen 2010, copyright (C) 2010 Mark Tarver
-    www.shenlanguage.org, version 8
-    running under Java, implementation: [jvm 1.8.0-ea]
-    port 0.1.0-SNAPSHOT ported by Håkan Råberg
+    released under the Shen license
+    www.shenlanguage.org, version 13
+    running under Java, implementation: Java(TM) SE Runtime Environment (build 1.8.0-ea-b106)
+    port <unknown> ported by Håkan Råberg
 
 
     (0-) (define super

@@ -77,7 +77,6 @@
 
 (define curry-type
   [A --> B --> | C] -> (curry-type [A --> [B --> | C]])
-  [cons A _] -> [list (curry-type A)]
   [A * B * | C] -> (curry-type [A * [B * | C]])
   [X | Y] -> (map (function curry-type) [X | Y])
   X -> X) 

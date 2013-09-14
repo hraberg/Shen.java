@@ -63,7 +63,7 @@
 
 (set *macros* [timer-macro cases-macro abs-macro put/get-macro compile-macro 
                datatype-macro let-macro assoc-macro make-string-macro output-macro 
-               error-macro prolog-macro synonyms-macro nl-macro @s-macro 
+               input-macro error-macro prolog-macro synonyms-macro nl-macro @s-macro 
                defprolog-macro function-macro])
 
 
@@ -73,10 +73,19 @@
   
 (define output-macro
   [output String | Args] -> [prhush (mkstr String Args) [stoutput]]
+  [pr String] -> [pr String [stoutput]]
   X -> X)  
 
 (define make-string-macro
   [make-string String | Args] -> (mkstr String Args)
+  X -> X)
+
+(define input-macro
+  [lineread] -> [lineread [stinput]]
+  [input] -> [input [stinput]]
+  [read] -> [read [stinput]]
+  [input+ Type] -> [input+ Type [stinput]]
+  [read+ Type] -> [read+ Type [stinput]]
   X -> X)
   
 (define compose

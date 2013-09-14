@@ -15,6 +15,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.Charset;
 import java.util.*;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
@@ -26,7 +27,9 @@ import java.util.stream.Stream;
 
 import static java.lang.Character.isUpperCase;
 import static java.lang.ClassLoader.getSystemClassLoader;
-import static java.lang.Double.*;
+import static java.lang.ClassLoader.getSystemResources;
+import static java.lang.Double.doubleToLongBits;
+import static java.lang.Double.longBitsToDouble;
 import static java.lang.Math.floorMod;
 import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
@@ -40,14 +43,13 @@ import static java.lang.invoke.SwitchPoint.invalidateAll;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.util.Arrays.*;
 import static java.util.Arrays.fill;
-import static java.util.Arrays.stream;
 import static java.util.Collections.*;
 import static java.util.Objects.deepEquals;
-import static java.util.function.Predicate.*;
+import static java.util.function.Predicate.isEqual;
 import static java.util.jar.Attributes.Name.IMPLEMENTATION_VERSION;
 import static java.util.stream.Collectors.toSet;
+import static java.util.stream.Stream.concat;
 import static java.util.stream.Stream.empty;
-import static java.util.stream.Streams.*;
 import static jdk.internal.org.objectweb.asm.ClassReader.SKIP_DEBUG;
 import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static jdk.internal.org.objectweb.asm.Type.*;
@@ -57,6 +59,8 @@ import static shen.Shen.Cons.toCons;
 import static shen.Shen.KLReader.lines;
 import static shen.Shen.KLReader.read;
 import static shen.Shen.Numbers.*;
+import static shen.Shen.Numbers.asNumber;
+import static shen.Shen.Primitives.EQ;
 import static shen.Shen.Primitives.*;
 import static shen.Shen.RT.*;
 import static shen.Shen.RT.lookup;
@@ -76,7 +80,7 @@ public class Shen {
     static {
         set("*language*", "Java");
         set("*implementation*", format("%s (build %s)", getProperty("java.runtime.name"), getProperty("java.runtime.version")));
-        set("*porters*", "Håkan Råberg");
+        set("*porters*", new String("Håkan Råberg".getBytes(), Charset.forName("ISO-8859-1")));
         set("*port*", version());
         set("*stinput*", in);
         set("*stoutput*", out);
@@ -518,23 +522,17 @@ public class Shen {
             return integer(s.read());
         }
 
-        public static long read_byte(Reader s) throws IOException {
-            return integer(s.read());
+        public static Long convertToLong(Object x) {
+            return (Long) asNumber((Long) x);
         }
 
-        public static <T> T pr(T x, OutputStream s) throws IOException {
-            return pr(x, new OutputStreamWriter(s));
-        }
-
-        public static <T> T pr(T x, Writer s) throws IOException {
-            s.write(str(x));
+        public static <T> T write_byte(T x, OutputStream s) throws IOException {
+            s.write(convertToLong(x).byteValue());
             s.flush();
             return x;
         }
 
-        public static Closeable open(Symbol type, String string, Symbol direction) throws IOException {
-            if (!"file".equals(type.symbol)) throw new IllegalArgumentException("invalid stream type");
-
+        public static Closeable open(String string, Symbol direction) throws IOException {
             File file = new File(string);
             if (!file.isAbsolute()) {
                 //noinspection RedundantCast
@@ -657,9 +655,8 @@ public class Shen {
         for (String file : asList("toplevel", "core", "sys", "sequent", "yacc", "reader",
                 "prolog", "track", "load", "writer", "macros", "declarations", "types", "t-star"))
             load("klambda/" + file, Callable.class).newInstance().call();
-	    //Loading custom klambda files
-        for (String file : asList("types"))	
-	      load("klambda-custom/" + file, Callable.class).newInstance().call();
+        for (String file : asList("types"))
+	        load("klambda-custom/" + file, Callable.class).newInstance().call();
         set("shen-*installing-kl*", false);
         set("*home-directory*", getProperty("user.dir")); //Resetting it because it gets overwritten in declarations.kl
         builtins.addAll(vec(symbols.values().stream().filter(s -> !s.fn.isEmpty())));
@@ -718,12 +715,12 @@ public class Shen {
     }
 
     static String version() {
-        String version = null;
-        try (InputStream manifest = getSystemClassLoader().getResourceAsStream("META-INF/MANIFEST.MF")) {
-                version = new Manifest(manifest).getMainAttributes().getValue(IMPLEMENTATION_VERSION);
-        } catch (IOException ignored) {
+        try (InputStream manifest = find(Collections.list(getSystemResources("META-INF/MANIFEST.MF")).stream(),
+                                            u -> u.getPath().matches(".*shen.java.*?.jar!.*")).openStream()) {
+                return new Manifest(manifest).getMainAttributes().getValue(IMPLEMENTATION_VERSION);
+        } catch (IOException | NullPointerException ignored) {
         }
-        return version != null ? version : "<unknown>";
+        return "<unknown>";
     }
 
     public static class KLReader {
@@ -924,6 +921,7 @@ public class Shen {
                 MethodHandle target = candidates.get(i - 1);
                 Class<?> differentType = find(target.type().parameterList(), fallback.type().parameterList(), (x, y) -> !x.equals(y));
                 int firstDifferent = target.type().parameterList().indexOf(differentType);
+                if (firstDifferent == -1) firstDifferent = 0;
                 debug("switching on %d argument type %s", firstDifferent, differentType);
                 debug("target: %s ; fallback: %s", target, fallback);
                 MethodHandle test = checkClass.bindTo(differentType);
@@ -942,7 +940,7 @@ public class Shen {
         }
 
         public static boolean checkClass(Class<?> xClass, Object x) {
-            return canCastStrict(x.getClass(), xClass);
+            return xClass != null && canCastStrict(x.getClass(), xClass);
         }
 
         static MethodHandle relinkOn(Class<? extends Throwable> exception, MethodHandle fn, MethodHandle fallback) {
@@ -1163,9 +1161,9 @@ public class Shen {
         static final Map<Symbol, MethodHandle> macros = new HashMap<>();
         static final List<Class<?>> literals = asList(Long.class, String.class, Boolean.class, Handle.class);
         static final Handle
-                applyBSM = handle(mh(RT.class, "applyBSM")), invokeBSM = handle(mh(RT.class, "invokeBSM")),
-                symbolBSM = handle(mh(RT.class, "symbolBSM")), or = handle(RT.mh(Primitives.class, "or")),
-                and = handle(RT.mh(Primitives.class, "and"));
+                applyBSM = handle(RT.class, "applyBSM"), invokeBSM = handle(RT.class, "invokeBSM"),
+                symbolBSM = handle(RT.class, "symbolBSM"), or = handle(Primitives.class, "or"),
+                and = handle(Primitives.class, "and");
         static final Map<Class, MethodHandle> push = new HashMap<>();
         static {
             register(Macros.class, Compiler::macro);
@@ -1230,9 +1228,8 @@ public class Shen {
             return getMethodDescriptor(returnType, argumentTypes.toArray(new Type[argumentTypes.size()]));
         }
 
-        static Handle handle(MethodHandle handle) {
-            MethodHandleInfo info = new MethodHandleInfo(handle);
-            return handle(getInternalName(info.getDeclaringClass()), info.getName(), handle.type().toMethodDescriptorString());
+        static Handle handle(Class<?> declaringClass, String name) {
+            return handle(getInternalName(declaringClass), name, mh(declaringClass, name).type().toMethodDescriptorString());
         }
 
         static Handle handle(String className, String name, String desc) {
@@ -1475,8 +1472,10 @@ public class Shen {
                 compile(z, returnType, tail);
                 if (hidden != null) locals.put(x, hidden);
                 else  locals.remove(x);
-                mv.push((String) null);
-                mv.storeLocal(let);
+                if (!tail) {
+                    mv.push((String) null);
+                    mv.storeLocal(let);
+                }
                 mv.visitLocalVariable(x.symbol, mv.getLocalType(let).getDescriptor(), null, start, mv.mark(), let);
             }
 
@@ -1721,7 +1720,7 @@ public class Shen {
     }
 
     static <T, C extends Collection<T>> C into(C to, Collection<? extends T> from) {
-        Collector<Object,? extends Collection<Object>> collector = to instanceof Set ? toSet() : Collectors.toList();
+        Collector<Object, ?, ? extends Collection<Object>> collector = to instanceof Set ? toSet() : Collectors.toList();
         //noinspection unchecked
         return (C) concat(to.stream(), from.stream()).collect(collector);
     }
@@ -1732,6 +1731,16 @@ public class Shen {
 
     static <T> List<T> cons(T x, List<T> seq) {
         return into(singletonList(x), seq);
+    }
+
+    static <T, R> Stream<R> zip(Stream<T> c1, Stream<T> c2, BiFunction<T, T, R> pred) {
+        Iterator<T> it1 = c1.iterator();
+        Iterator<T> it2 = c2.iterator();
+        List<R> result= new ArrayList<R>();
+        while(it1.hasNext() && it2.hasNext()) {
+            result.add(pred.apply(it1.next(), it2.next()));
+        }
+        return result.stream();
     }
 
     static <T> boolean every(Collection<T> c1, Collection<T> c2, BiPredicate<T, T> pred) {

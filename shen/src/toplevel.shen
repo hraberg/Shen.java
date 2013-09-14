@@ -66,7 +66,7 @@
 (define version
   S -> (set *version* S))
 
-(version "version 12")
+(version "version 13")
 
 (define credits
  -> (do (output "~%Shen 2010, copyright (C) 2010 Mark Tarver~%")
@@ -96,6 +96,8 @@
           (toplevel Parsed)))
 
 (define retrieve-from-history-if-needed
+   (@p Line [C | Cs]) H -> (retrieve-from-history-if-needed (@p Line Cs) H)  
+						where (element? C [(space) (newline)]) 
    (@p _ [C1 C2]) [H | _] -> (let PastPrint (prbytes (snd H))
                                     H)  where (and (= C1 (exclamation)) (= C2 (exclamation)))
    (@p _ [C | Key]) H -> (let Key? (make-key Key H)

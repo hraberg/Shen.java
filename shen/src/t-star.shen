@@ -120,11 +120,10 @@
                                     (bind X&& (placeholder))
                                     (bind W (ebr X&& X Z))
                                     (th* W A [[X&& : B] | Hyp]);
-  (mode [open file FileName Direction] -) [stream Direction] Hyp 
-   <-- ! (th* FileName string Hyp);
+  (mode [open FileName Direction] -) [stream Direction] Hyp <-- ! (th* FileName string Hyp);
   (mode [type X A] -) B Hyp <-- ! (unify A B) (th* X A Hyp);
-  (mode [input+ : A] -) B Hyp <-- (bind C (demodulate A)) (unify B C);
-  (mode [read+ : A] -) B Hyp <-- (bind C (demodulate A)) (unify B C);
+  (mode [input+ A Stream] -) B Hyp <-- (bind C (demodulate A)) (unify B C) (th* Stream [stream in] Hyp);
+  (mode [read+ : A Stream] -) B Hyp <-- (bind C (demodulate A)) (unify B C) (th* Stream [stream in] Hyp);
   (mode [set Var Val] -) A Hyp <-- ! (th* Var symbol Hyp) ! (th* [value Var] A Hyp) (th* Val A Hyp);
   (mode [<-sem F] -) C Hyp <-- ! 
                                (th* F [A ==> B] Hyp)
@@ -161,7 +160,7 @@
           (nl)
           (show-assumptions (deref Hyps ProcessN) 1)
           (output "~%> ") 
-          (pause-for-user (value *language*))
+          (pause-for-user)
           (thaw Continuation))   where (value *spy*)
    _ _ _ Continuation -> (thaw Continuation))
 
@@ -179,22 +178,12 @@
   [] _ -> skip
   [X | Y] N -> (do (output "~A. " N) (show-p X) (nl) (show-assumptions Y (+ N 1))))
   
-\* Have to parameterise to language because CL does not behave well with read-byte. :< *\
+\* Pauses for user *\
 (define pause-for-user
-  "Common Lisp" 
-   -> (let I ((protect FORMAT) [] "~C" ((protect READ-CHAR))) (if (= I "a") (error "input aborted~%") (nl)))
-   _ -> (let I (read-char) (if (= I "a") (error "input aborted~%") (nl)))) 
-
-(define read-char
-  -> (read-char-h (read-byte (stinput)) 0))
-  
-(define read-char-h
-  \* State 0; read until the stinput is empty - emptying any buffered bytes. *\
-  -1 0 -> (read-char-h (read-byte (stinput)) 1)
-  _ 0 -> (read-char-h (read-byte (stinput)) 0)
-  -1 1 -> (read-char-h (read-byte (stinput)) 1)
-  \* State 1; read until the stinput is not empty - returning the byte as a string. *\
-  N 1 -> (n->string N))   
+   -> (let Byte (read-byte (stinput)) 
+             (if (= Byte 94) 
+                 (error "input aborted~%") 
+                 (nl)))) 
 
 \* Does the function have a type? *\
 (define typedf?
@@ -236,7 +225,8 @@
   <signature> <rules> := [<signature> | <rules>];)
 
 (define ue
-  [X | Y] -> (map (function ue) [X | Y])
+  [P X] -> [P X]	where (= P protect)
+  [X | Y] -> (map (function ue) [X | Y])  
   X -> (concat && X)        where (variable? X)
   X -> X)
 

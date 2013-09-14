@@ -290,10 +290,11 @@ public class PrimitivesTest {
     @Test
     public void streams() {
         is(String.class, "(set fileName (cn (str (get-time run)) \".txt\"))");
-        is(OutputStream.class, "(set writeFile (open file (value fileName) out))");
-        is("foobar", "(pr \"foobar\" (value writeFile))");
+        is(OutputStream.class, "(set writeFile (open (value fileName) out))");
+        is(102L, "(write-byte 102 (value writeFile))");
+        is(111L, "(write-byte 111 (value writeFile))");
         is(asList(), "(close (value writeFile))");
-        is(InputStream.class, "(set readFile (open file (value fileName) in))");
+        is(InputStream.class, "(set readFile (open (value fileName) in))");
         is(102L, "(read-byte (value readFile))");
         is(111L, "(read-byte (value readFile))");
         is(false, "(= 102 (read-byte (value readFile)))");
@@ -521,6 +522,18 @@ public class PrimitivesTest {
         assertTrue(canCast(String.class, Object.class));
         assertTrue(canCast(Object.class, String.class));
         assertFalse(canCast(Long.class, List.class));
+    }
+
+    @Test @Ignore("Reported by Artella.")
+    public void let_and_recur() throws Throwable {
+        is(intern("fun"),
+                "(defun fun (V503) (let Z (- V503 1) (if (= Z 1) (* 3 V503) (fun Z))))");
+        is(6L, "(fun 10)");
+        is(6L, "(fun 10)");
+
+        is(intern("fun"),
+                "(defun fun (V503) (let Z (- V503 1) (if (= Z 1) (* 2 V503) (fun Z))))");
+        is(4L, "(fun 10)");
     }
 
     void is(Object expected, String actual) {
